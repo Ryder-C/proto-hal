@@ -2,11 +2,15 @@
 
 pub mod stm32;
 
+/// Types that encapsulate a resource that can be configured to be
+/// in an "inactive" state implement this trait.
 pub trait IntoInactive: Into<Self::Inactive> {
     /// The type-state representing an "inactive" mode.
     type Inactive;
 }
 
+/// Types that encapsulate a resource with events that can be "listened"
+/// for (i.e. related interrupts) implement this trait.
 pub trait Listen {
     /// The events available to listen for.
     type Events;
@@ -24,6 +28,8 @@ pub trait Listen {
     fn unpend(&mut self, event: Self::Events);
 }
 
+/// Types that encapsulate a resource implement this trait
+/// to release the resource.
 pub trait Release {
     /// The enclosed resource to be released.
     type Resource: IntoInactive;
