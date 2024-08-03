@@ -1,5 +1,6 @@
 #![no_std]
 
+#[cfg(feature = "stm32")]
 pub mod stm32;
 
 /// Types that encapsulate a resource that can be configured to be
@@ -70,19 +71,6 @@ pub mod gpio {
     pub mod digital {
         use core::{fmt::Debug, marker::PhantomData};
 
-        /// Type-state for a pin configured in input mode.
-        pub struct Input<Mode: InputMode> {
-            _mode: PhantomData<Mode>,
-        }
-
-        /// Type-state for a pin configured in output mode.
-        pub struct Output<Mode: OutputMode> {
-            _mode: PhantomData<Mode>,
-        }
-
-        impl<Mode: InputMode> super::PinMode for Input<Mode> {}
-        impl<Mode: OutputMode> super::PinMode for Output<Mode> {}
-
         /// Represents the possible levels of a digital pin's value.
         #[derive(Debug, PartialEq)]
         pub enum Level {
@@ -96,6 +84,19 @@ pub mod gpio {
         pub trait InputMode {}
         /// Types implement this trait to be a type-state for a digital output pin's mode.
         pub trait OutputMode {}
+
+        /// Type-state for a pin configured in input mode.
+        pub struct Input<Mode: InputMode> {
+            _mode: PhantomData<Mode>,
+        }
+
+        /// Type-state for a pin configured in output mode.
+        pub struct Output<Mode: OutputMode> {
+            _mode: PhantomData<Mode>,
+        }
+
+        impl<Mode: InputMode> super::PinMode for Input<Mode> {}
+        impl<Mode: OutputMode> super::PinMode for Output<Mode> {}
 
         /// Pin types implement this trait to convert into an input mode.
         pub trait IntoInput<Mode>: super::IntoMode<Input<Mode>>
@@ -207,6 +208,7 @@ pub mod gpio {
         }
     }
 
+    /// Analog specific traits and structures.
     pub mod analog {
         /// Type-state for a pin configured in analog mode.
         pub struct Analog;
@@ -228,6 +230,32 @@ pub mod gpio {
         pub trait AnalogPin: super::Pin<Analog> {}
     }
 
+    /// Alternate Function specific traits and structures.
+    #[cfg(feature = "pin_alternates")]
+    pub mod alternate {
+        use core::marker::PhantomData;
+
+        /// Types implement this trait to be a type-state for an alternate function pin's mode.
+        pub trait AlternateMode {}
+
+        /// Type-state for a pin configured in an alternate function mode.
+        pub struct Alternate<Mode: AlternateMode> {
+            _mode: PhantomData<Mode>,
+        }
+
+        impl<Mode: AlternateMode> super::PinMode for Alternate<Mode> {}
+
+        /// Pin types implement this trait to convert into an alternate function mode.
+        pub trait IntoAlternate<Mode: AlternateMode>: super::IntoMode<Alternate<Mode>> {
+            fn into_alternate(self) -> Self::Into
+            where
+                Self: Sized,
+            {
+                self.into_mode()
+            }
+        }
+    }
+
     #[cfg(test)]
     mod tests {
         use core::{convert::Infallible, marker::PhantomData};
@@ -246,11 +274,18 @@ pub mod gpio {
         struct OpenDrain;
         struct PushPull;
 
+        // alternate modes
+        #[cfg(feature = "pin_alternates")]
+        struct AF0;
+
         impl gpio::digital::InputMode for Floating {}
         impl gpio::digital::InputMode for PullUp {}
         impl gpio::digital::InputMode for PullDown {}
         impl gpio::digital::OutputMode for OpenDrain {}
         impl gpio::digital::OutputMode for PushPull {}
+
+        #[cfg(feature = "pin_alternates")]
+        impl gpio::alternate::AlternateMode for AF0 {}
 
         /// Dummy pin.
         struct PA0<Mode: gpio::PinMode> {
@@ -369,6 +404,19 @@ pub mod gpio {
             }
         }
 
+        // impl alternate modes and conversions
+
+        #[cfg(feature = "pin_alternates")]
+        impl<Mode: gpio::PinMode> gpio::IntoMode<gpio::alternate::Alternate<AF0>> for PA0<Mode> {
+            type Into = PA0<gpio::alternate::Alternate<AF0>>;
+
+            fn into_mode(self) -> Self::Into {
+                PA0 { _mode: PhantomData }
+            }
+        }
+        #[cfg(feature = "pin_alternates")]
+        impl<Mode: gpio::PinMode> gpio::alternate::IntoAlternate<AF0> for PA0<Mode> {}
+
         // Explicit conversions.
         impl<Mode: gpio::PinMode> PA0<Mode> {
             fn into_input_floating(self) -> PA0<gpio::digital::Input<Floating>> {
@@ -390,6 +438,11 @@ pub mod gpio {
             fn into_output_push_pull(self) -> PA0<gpio::digital::Output<PushPull>> {
                 <Self as gpio::digital::IntoOutput<PushPull>>::into_output(self)
             }
+
+            #[cfg(feature = "pin_alternates")]
+            fn into_alternate_af0(self) -> PA0<gpio::alternate::Alternate<AF0>> {
+                <Self as gpio::alternate::IntoAlternate<AF0>>::into_alternate(self)
+            }
         }
 
         #[test]
@@ -400,6 +453,12 @@ pub mod gpio {
             let input_pull_down = input_pull_up.into_input_pull_down();
             let output_open_drain = input_pull_down.into_output_open_drain();
             let output_push_pull = output_open_drain.into_output_push_pull();
+            #[cfg(feature = "pin_alternates")]
+            {
+                let af0 = output_push_pull.into_alternate_af0();
+                let _analog = af0.into_analog();
+            }
+            #[cfg(not(feature = "pin_alternates"))]
             let _analog = output_push_pull.into_analog();
         }
 
