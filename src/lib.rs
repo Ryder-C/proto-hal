@@ -98,34 +98,6 @@ pub mod gpio {
         impl<Mode: InputMode> super::PinMode for Input<Mode> {}
         impl<Mode: OutputMode> super::PinMode for Output<Mode> {}
 
-        /// Pin types implement this trait to convert into an input mode.
-        pub trait IntoInput<Mode>: super::IntoMode<Input<Mode>>
-        where
-            Mode: InputMode,
-        {
-            /// Put the pin into an input mode.
-            fn into_input(self) -> Self::Into
-            where
-                Self: Sized,
-            {
-                self.into_mode()
-            }
-        }
-
-        /// Pin types implement this trait to convert into an output mode.
-        pub trait IntoOutput<Mode>: super::IntoMode<Output<Mode>>
-        where
-            Mode: OutputMode,
-        {
-            /// Put the pin into an output mode.
-            fn into_output(self) -> Self::Into
-            where
-                Self: Sized,
-            {
-                self.into_mode()
-            }
-        }
-
         /// Input pin types implement this trait to represent a digital input.
         pub trait InputPin<Mode: InputMode>: super::Pin<Input<Mode>> {
             /// Encapsulates the error variants that can occur
@@ -133,11 +105,11 @@ pub mod gpio {
             type Error: Debug;
 
             /// Get the measured level of this pin.
-            fn level(&self) -> Result<Level, Self::Error>;
+            fn input_level(&self) -> Result<Level, Self::Error>;
 
             /// Determine whether the measured level on this pin is `Low`.
             fn is_low(&self) -> Result<bool, Self::Error> {
-                Ok(match self.level()? {
+                Ok(match self.input_level()? {
                     Level::Low => true,
                     Level::High => false,
                 })
@@ -156,17 +128,18 @@ pub mod gpio {
             type Error;
 
             /// Output a level on this pin.
-            fn set_level(&mut self, level: Level) -> Result<(), Self::Error>;
+            fn set_level(&mut self, level: Level) -> Result<(), Self::Error> {
+                match level {
+                    Level::Low => self.set_low(),
+                    Level::High => self.set_high(),
+                }
+            }
 
             /// Output `Low` on this pin.
-            fn set_low(&mut self) -> Result<(), Self::Error> {
-                self.set_level(Level::Low)
-            }
+            fn set_low(&mut self) -> Result<(), Self::Error>;
 
             /// Output `High` on this pin.
-            fn set_high(&mut self) -> Result<(), Self::Error> {
-                self.set_level(Level::High)
-            }
+            fn set_high(&mut self) -> Result<(), Self::Error>;
         }
 
         /// Digital output pin types implement this trait to represent a stateful digital output.
@@ -177,11 +150,11 @@ pub mod gpio {
             type Error: From<<Self as OutputPin<Mode>>::Error>;
 
             /// Get the currently outputted level on this pin.
-            fn level(&self) -> Result<Level, <Self as StatefulOutputPin<Mode>>::Error>;
+            fn output_level(&self) -> Result<Level, <Self as StatefulOutputPin<Mode>>::Error>;
 
             /// Determine whether the outputted level on this pin is `Low`.
             fn is_set_low(&self) -> Result<bool, <Self as StatefulOutputPin<Mode>>::Error> {
-                Ok(match self.level()? {
+                Ok(match self.output_level()? {
                     Level::Low => true,
                     Level::High => false,
                 })
@@ -194,7 +167,7 @@ pub mod gpio {
 
             /// Toggle the output level of this pin.
             fn toggle(&mut self) -> Result<(), <Self as StatefulOutputPin<Mode>>::Error> {
-                match self.level()? {
+                match self.output_level()? {
                     Level::Low => {
                         self.set_high()?;
                     }
@@ -215,17 +188,6 @@ pub mod gpio {
 
         impl super::PinMode for Analog {}
 
-        /// Pin types implement this trait to convert into analog mode.
-        pub trait IntoAnalog: super::IntoMode<Analog> {
-            /// Put the pin into analog mode.
-            fn into_analog(self) -> Self::Into
-            where
-                Self: Sized,
-            {
-                self.into_mode()
-            }
-        }
-
         /// Analog pin types implement this trait to represent an analog pin.
         pub trait AnalogPin: super::Pin<Analog> {}
     }
@@ -236,7 +198,10 @@ pub mod gpio {
         use core::marker::PhantomData;
 
         /// Types implement this trait to be a type-state for an alternate function pin's mode.
-        pub trait AlternateMode {}
+        pub trait AlternateMode {
+            type Word;
+            const RAW: Self::Word;
+        }
 
         /// Type-state for a pin configured in an alternate function mode.
         pub struct Alternate<Mode: AlternateMode> {
@@ -245,22 +210,15 @@ pub mod gpio {
 
         impl<Mode: AlternateMode> super::PinMode for Alternate<Mode> {}
 
-        /// Pin types implement this trait to convert into an alternate function mode.
-        pub trait IntoAlternate<Mode: AlternateMode>: super::IntoMode<Alternate<Mode>> {
-            fn into_alternate(self) -> Self::Into
-            where
-                Self: Sized,
-            {
-                self.into_mode()
-            }
-        }
+        /// Analog pin types implement this trait to represent an analog pin.
+        pub trait AlternatePin<Mode: AlternateMode>: super::Pin<Alternate<Mode>> {}
     }
 
     #[cfg(test)]
     mod tests {
         use core::{convert::Infallible, marker::PhantomData};
 
-        use crate::gpio::{self, analog::IntoAnalog as _};
+        use crate::gpio;
 
         // it is the HAL's responsibility
         // to do the following implementations
@@ -285,7 +243,10 @@ pub mod gpio {
         impl gpio::digital::OutputMode for PushPull {}
 
         #[cfg(feature = "pin_alternates")]
-        impl gpio::alternate::AlternateMode for AF0 {}
+        impl gpio::alternate::AlternateMode for AF0 {
+            type Word = u8;
+            const RAW: Self::Word = 0;
+        }
 
         /// Dummy pin.
         struct PA0<Mode: gpio::PinMode> {
@@ -308,8 +269,6 @@ pub mod gpio {
             }
         }
 
-        impl<Mode: gpio::PinMode> gpio::analog::IntoAnalog for PA0<Mode> {}
-
         // impl input modes and conversions
 
         impl<Mode: gpio::digital::InputMode> gpio::digital::InputPin<Mode>
@@ -317,7 +276,7 @@ pub mod gpio {
         {
             type Error = Infallible;
 
-            fn level(&self) -> Result<gpio::digital::Level, Self::Error> {
+            fn input_level(&self) -> Result<gpio::digital::Level, Self::Error> {
                 Ok(gpio::digital::Level::High)
             }
         }
@@ -331,8 +290,6 @@ pub mod gpio {
             }
         }
 
-        impl<Mode: gpio::PinMode> gpio::digital::IntoInput<Floating> for PA0<Mode> {}
-
         impl<Mode: gpio::PinMode> gpio::IntoMode<gpio::digital::Input<PullUp>> for PA0<Mode> {
             type Into = PA0<gpio::digital::Input<PullUp>>;
 
@@ -342,8 +299,6 @@ pub mod gpio {
             }
         }
 
-        impl<Mode: gpio::PinMode> gpio::digital::IntoInput<PullUp> for PA0<Mode> {}
-
         impl<Mode: gpio::PinMode> gpio::IntoMode<gpio::digital::Input<PullDown>> for PA0<Mode> {
             type Into = PA0<gpio::digital::Input<PullDown>>;
 
@@ -352,8 +307,6 @@ pub mod gpio {
                 PA0 { _mode: PhantomData }
             }
         }
-
-        impl<Mode: gpio::PinMode> gpio::digital::IntoInput<PullDown> for PA0<Mode> {}
 
         // impl output modes and conersions
 
@@ -366,8 +319,6 @@ pub mod gpio {
             }
         }
 
-        impl<Mode: gpio::PinMode> gpio::digital::IntoOutput<OpenDrain> for PA0<Mode> {}
-
         impl<Mode: gpio::PinMode> gpio::IntoMode<gpio::digital::Output<PushPull>> for PA0<Mode> {
             type Into = PA0<gpio::digital::Output<PushPull>>;
 
@@ -377,14 +328,17 @@ pub mod gpio {
             }
         }
 
-        impl<Mode: gpio::PinMode> gpio::digital::IntoOutput<PushPull> for PA0<Mode> {}
-
         impl<Mode: gpio::digital::OutputMode> gpio::digital::OutputPin<Mode>
             for PA0<gpio::digital::Output<Mode>>
         {
             type Error = Infallible;
 
-            fn set_level(&mut self, _level: gpio::digital::Level) -> Result<(), Self::Error> {
+            fn set_low(&mut self) -> Result<(), Self::Error> {
+                // no-op
+                Ok(())
+            }
+
+            fn set_high(&mut self) -> Result<(), Self::Error> {
                 // no-op
                 Ok(())
             }
@@ -395,7 +349,7 @@ pub mod gpio {
         {
             type Error = Infallible;
 
-            fn level(
+            fn output_level(
                 &self,
             ) -> Result<gpio::digital::Level, <Self as gpio::digital::StatefulOutputPin<Mode>>::Error>
             {
@@ -414,34 +368,36 @@ pub mod gpio {
                 PA0 { _mode: PhantomData }
             }
         }
-        #[cfg(feature = "pin_alternates")]
-        impl<Mode: gpio::PinMode> gpio::alternate::IntoAlternate<AF0> for PA0<Mode> {}
 
         // Explicit conversions.
         impl<Mode: gpio::PinMode> PA0<Mode> {
             fn into_input_floating(self) -> PA0<gpio::digital::Input<Floating>> {
-                <Self as gpio::digital::IntoInput<Floating>>::into_input(self)
+                gpio::IntoMode::<gpio::digital::Input<Floating>>::into_mode(self)
             }
 
             fn into_input_pull_up(self) -> PA0<gpio::digital::Input<PullUp>> {
-                <Self as gpio::digital::IntoInput<PullUp>>::into_input(self)
+                gpio::IntoMode::<gpio::digital::Input<PullUp>>::into_mode(self)
             }
 
             fn into_input_pull_down(self) -> PA0<gpio::digital::Input<PullDown>> {
-                <Self as gpio::digital::IntoInput<PullDown>>::into_input(self)
+                gpio::IntoMode::<gpio::digital::Input<PullDown>>::into_mode(self)
             }
 
             fn into_output_open_drain(self) -> PA0<gpio::digital::Output<OpenDrain>> {
-                <Self as gpio::digital::IntoOutput<OpenDrain>>::into_output(self)
+                gpio::IntoMode::<gpio::digital::Output<OpenDrain>>::into_mode(self)
             }
 
             fn into_output_push_pull(self) -> PA0<gpio::digital::Output<PushPull>> {
-                <Self as gpio::digital::IntoOutput<PushPull>>::into_output(self)
+                gpio::IntoMode::<gpio::digital::Output<PushPull>>::into_mode(self)
+            }
+
+            fn into_analog(self) -> PA0<gpio::analog::Analog> {
+                gpio::IntoMode::<gpio::analog::Analog>::into_mode(self)
             }
 
             #[cfg(feature = "pin_alternates")]
             fn into_alternate_af0(self) -> PA0<gpio::alternate::Alternate<AF0>> {
-                <Self as gpio::alternate::IntoAlternate<AF0>>::into_alternate(self)
+                gpio::IntoMode::<gpio::alternate::Alternate<AF0>>::into_mode(self)
             }
         }
 
@@ -472,9 +428,9 @@ pub mod gpio {
 
             fn makes_a_pull_down<Pin>(pin: Pin) -> Pin::Into
             where
-                Pin: gpio::digital::IntoInput<PullDown>,
+                Pin: gpio::IntoMode<gpio::digital::Input<PullDown>>,
             {
-                pin.into_input() // provided by trait, mode inferred
+                pin.into_mode() // provided by trait, mode inferred
             }
 
             let input_pull_up = pa0.into_input_pull_up();
@@ -495,7 +451,7 @@ pub mod gpio {
 
                 let input = pa0.into_input_pull_up();
 
-                assert_eq!(input.level().unwrap(), gpio::digital::Level::High);
+                assert_eq!(input.input_level().unwrap(), gpio::digital::Level::High);
                 assert!(!input.is_low().unwrap());
                 assert!(input.is_high().unwrap());
             }
@@ -506,7 +462,7 @@ pub mod gpio {
 
                 let mut output = pa0.into_output_push_pull();
 
-                assert_eq!(output.level().unwrap(), gpio::digital::Level::High);
+                assert_eq!(output.output_level().unwrap(), gpio::digital::Level::High);
                 assert!(!output.is_set_low().unwrap());
                 assert!(output.is_set_high().unwrap());
                 output.set_level(gpio::digital::Level::Low).unwrap();
