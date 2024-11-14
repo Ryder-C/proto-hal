@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use darling::FromMeta;
+use darling::{ast::NestedMeta, FromMeta};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
@@ -12,9 +12,9 @@ use syn::{
     spanned::Spanned,
     token::{Brace, Colon, Const, Eq, For, Gt, Impl, Lt, Paren, PathSep, Semi, Struct, Unsafe},
     Attribute, Block, Expr, ExprArray, ExprLit, Field, FieldMutability, Fields, FieldsNamed,
-    GenericParam, Generics, Ident, ImplItem, ImplItemConst, Item, ItemConst, ItemImpl, ItemMod,
-    ItemStruct, Lit, LitInt, Meta, Path, PathArguments, PathSegment, Token, Type, TypeParam,
-    TypeTuple, Visibility,
+    GenericParam, Generics, Ident, ImplItem, ImplItemConst, Item, ItemConst, ItemEnum, ItemImpl,
+    ItemMod, ItemStruct, Lit, LitInt, Meta, MetaList, Path, PathArguments, PathSegment, Token,
+    Type, TypeParam, TypeTuple, Visibility,
 };
 
 #[derive(Debug, FromMeta)]
@@ -624,4 +624,91 @@ pub fn peripheral(_args: TokenStream, item: TokenStream) -> TokenStream {
     });
 
     result.into()
+}
+
+fn field_inner(args: TokenStream, item: TokenStream) -> syn::Result<TokenStream2> {
+    let args = FieldArgs::from_list(&NestedMeta::parse_meta_list(args.into())?)?;
+
+    let mut errors = Vec::new();
+    let mut reset_errors = Vec::new();
+
+    let mut e = parse2::<ItemEnum>(item.into())?;
+
+    let mut reset = None;
+    let mut states = Vec::new();
+
+    e.variants.iter_mut().for_each(|variant| {
+        let mut state_args = StateArgs::default();
+
+        variant.attrs = variant
+            .attrs
+            .iter()
+            .cloned()
+            .filter(|attr| {
+                if attr.meta.path().is_ident("reset") {
+                    if reset.is_none() {
+                        match Reset::from_meta(&attr.meta) {
+                            Ok(r) => {
+                                reset = Some(r);
+                            }
+                            Err(e) => {
+                                errors.push(e.into());
+                            }
+                        }
+                    } else {
+                        reset_errors.push(syn::Error::new(attr.meta.span(), "extra reset here"));
+                    }
+
+                    false
+                } else if attr.meta.path().is_ident("state") {
+                    match StateArgs::from_meta(&attr.meta) {
+                        Ok(args) => {
+                            state_args = args;
+                        }
+                        Err(e) => {
+                            errors.push(e.into());
+                        }
+                    }
+
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect();
+
+        states.push(StateInfo {
+            args: state_args,
+            ident: variant.ident.clone(),
+        });
+    });
+
+    if reset.is_none() || !reset_errors.is_empty() {
+        errors.push(syn::Error::new(
+            e.ident.span(),
+            "exactly one reset state must be specified",
+        ));
+    }
+
+    errors.extend(reset_errors);
+
+    if let Some(error) = errors.iter().cloned().reduce(|mut acc, e| {
+        acc.combine(e);
+        acc
+    }) {
+        Err(error)
+    } else {
+        Ok(quote! {
+            #e
+        })
+    }
+}
+
+#[proc_macro_attribute]
+pub fn field(args: TokenStream, item: TokenStream) -> TokenStream {
+    match field_inner(args, item) {
+        Ok(tokens) => tokens,
+        Err(e) => e.to_compile_error(),
+    }
+    .into()
 }

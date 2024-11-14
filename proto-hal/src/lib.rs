@@ -24,10 +24,12 @@ pub trait IntoReset {
 mod tests {
     mod macros {
         use arbitrary_int::u4;
-        use macros::peripheral;
+        use macros::field;
 
-        #[peripheral]
+        // #[peripheral]
         mod syscfg {
+            use super::*;
+
             #[field(width = 3, read, write(entitlements = [N0]))]
             enum MemMode {
                 #[reset]
@@ -39,24 +41,24 @@ mod tests {
                 QuadSpi,
             }
 
-            #[register(infer_offsets)]
-            struct MemRmp {
-                mem_mode: MemMode,
+            // #[register(infer_offsets)]
+            // struct MemRmp {
+            //     mem_mode: MemMode,
 
-                #[field(offset = 0x08)]
-                fb_mode: bool,
-            }
-            struct Cfgr1;
-            struct ExtiCr1;
-            struct ExtiCr2;
+            //     #[field(offset = 0x08)]
+            //     fb_mode: bool,
+            // }
+            // struct Cfgr1;
+            // struct ExtiCr1;
+            // struct ExtiCr2;
 
-            #[block(base_addr = 0x4001_0000, infer_offsets)]
-            struct SysCfg {
-                memrmp: MemRmp,
-                cfgr1: Cfgr1,
-                exticr1: ExtiCr1,
-                exticr2: ExtiCr2,
-            }
+            // #[block(base_addr = 0x4001_0000, infer_offsets)]
+            // struct SysCfg {
+            //     memrmp: MemRmp,
+            //     cfgr1: Cfgr1,
+            //     exticr1: ExtiCr1,
+            //     exticr2: ExtiCr2,
+            // }
         }
 
         // #[peripheral]
