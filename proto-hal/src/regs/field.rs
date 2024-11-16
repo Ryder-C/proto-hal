@@ -14,18 +14,20 @@ pub mod access {
     impl Read for Denied {}
 }
 
-pub trait FieldSpec {
+pub unsafe trait FieldSpec {
     const WIDTH: u8;
-
-    type Write: access::Write;
-    type Read: access::Read;
 }
 
-pub trait Field<Block, Register>: FieldSpec
+pub unsafe trait Field<Block, Register>
 where
     Block: block::Block,
     Register: register::Register<Block>,
 {
-    type Reset: Field<Block, Register>;
     const OFFSET: usize;
+
+    type Spec: FieldSpec;
+    type Reset: Field<Block, Register>;
+
+    type Read: access::Read;
+    type Write: access::Write;
 }

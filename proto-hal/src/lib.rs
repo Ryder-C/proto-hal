@@ -24,93 +24,210 @@ pub trait IntoReset {
 mod tests {
     mod macros {
         use arbitrary_int::u4;
-        use macros::field;
+        use macros::{register, states};
 
-        // #[peripheral]
-        mod syscfg {
+        // mod syscfg {
+        //     use super::*;
+
+        //     #[field(width = 3)]
+        //     enum MemMode {
+        //         MainFlash,
+        //         SystemFlash,
+        //         Fsmc,
+        //         SRam1,
+        //         QuadSpi,
+        //     }
+
+        //     mod mem_mode {
+        //         struct Spec;
+
+        //         unsafe impl ::proto_hal::regs::field::FieldSpec for Spec {
+        //             const WIDTH: u8 = 3;
+        //         }
+
+        //         enum States {
+        //             MainFlash,
+        //             SystemFlash,
+        //             Fsmc,
+        //             SRam1,
+        //             QuadSpi,
+        //         }
+        //     }
+
+        //     #[register(infer_offsets)]
+        //     struct MemRmp {
+        //         mem_mode: MemMode,
+
+        //         #[field(offset = 0x08)]
+        //         fb_mode: bool,
+        //     }
+        //     // struct Cfgr1;
+        //     // struct ExtiCr1;
+        //     // struct ExtiCr2;
+
+        //     // #[block(base_addr = 0x4001_0000, infer_offsets)]
+        //     // struct SysCfg {
+        //     //     memrmp: MemRmp,
+        //     //     cfgr1: Cfgr1,
+        //     //     exticr1: ExtiCr1,
+        //     //     exticr2: ExtiCr2,
+        //     // }
+        // }
+
+        pub mod cordic {
             use super::*;
 
-            #[field(width = 3, read, write(entitlements = [N0]))]
-            enum MemMode {
-                #[reset]
-                MainFlash,
-                #[state(entitlements = [N1])]
-                SystemFlash,
-                Fsmc,
-                SRam1,
-                QuadSpi,
+            #[states(width = 4)]
+            pub enum Func {
+                Cos,
+                Sin,
+                Angle,
+                Magnitude,
+                Arctangent,
+                HyperbolicCosine,
+                HyperbolicSine,
+                ArctanH,
+                Ln,
+                Sqrt,
             }
 
-            // #[register(infer_offsets)]
-            // struct MemRmp {
-            //     mem_mode: MemMode,
+            #[states(width = 4)]
+            pub enum Precision {
+                P4 = 1,
+                P8,
+                P12,
+                P16,
+                P20,
+                P24,
+                P28,
+                P32,
+                P36,
+                P40,
+                P44,
+                P48,
+                P52,
+                P56,
+                P60,
+            }
 
-            //     #[field(offset = 0x08)]
-            //     fb_mode: bool,
-            // }
-            // struct Cfgr1;
-            // struct ExtiCr1;
-            // struct ExtiCr2;
+            #[states(width = 3)]
+            pub enum Scale {
+                N0,
+                N1,
+                N2,
+                N3,
+                N4,
+                N5,
+                N6,
+                N7,
+            }
 
-            // #[block(base_addr = 0x4001_0000, infer_offsets)]
-            // struct SysCfg {
-            //     memrmp: MemRmp,
-            //     cfgr1: Cfgr1,
-            //     exticr1: ExtiCr1,
-            //     exticr2: ExtiCr2,
-            // }
+            #[states(width = 1)]
+            pub enum Enable {
+                Disabled,
+                Enabled,
+            }
+
+            #[states(width = 1)]
+            pub enum NData {
+                One,
+                Two,
+            }
+
+            #[states(width = 1)]
+            pub enum DataSize {
+                Q15,
+                Q31,
+            }
+
+            #[states(width = 1)]
+            pub enum Rrdy {
+                NoData,
+                Ready,
+            }
+
+            #[register(infer_offsets)]
+            pub struct Csr {
+                #[field(read, write, reset = Cos)]
+                func: Func,
+                #[field(read, write, reset = P20)]
+                precision: Precision,
+                #[field(read, write, reset = N0)]
+                scale: Scale,
+
+                #[field(offset = 0x10, reset = Disabled)]
+                ien: Enable,
+                #[field(read, write, reset = Disabled)]
+                dmaren: Enable,
+                #[field(read, write, reset = Disabled)]
+                dmawen: Enable,
+                #[field(read, write, reset = One)]
+                nres: NData,
+                #[field(read, write, reset = One)]
+                nargs: NData,
+                #[field(read, write, reset = Q15)]
+                ressize: DataSize,
+                #[field(read, write, reset = Q15)]
+                argsize: DataSize,
+
+                #[field(offset = 0x1f, read, reset = NoData)]
+                rrdy: Rrdy,
+            }
+
+            #[register(infer_offsets)]
+            pub struct WData {
+                #[field(write(effect = unresolve(csr::rrdy)))]
+                arg: u32,
+            }
+
+            #[register(infer_offsets)]
+            pub struct RData {
+                #[field(read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
+                res: u32,
+            }
+
+            #[block(
+                base_addr = 0x4002_1000,
+                infer_offsets,
+                entitlements = [super::ahb::cordic_en::Enabled]
+            )]
+            pub struct Cordic {
+                csr: Csr,
+                wdata: WData,
+                rdata: RData,
+            }
         }
 
-        // #[peripheral]
-        // pub mod cordic {
-        //     #[field(width = 4, read, write)]
-        //     pub enum Func {
-        //         #[reset]
-        //         Cos,
-        //         Sin,
-        //         Angle,
-        //         Magnitude,
-        //         Arctangent,
-        //         HyperbolicCosine,
-        //         HyperbolicSine,
-        //         ArctanH,
-        //         Ln,
-        //         Sqrt,
-        //     }
+        /*
+        let ahb = ctx.device.ahb;
 
-        //     #[register(infer_offsets)]
-        //     pub struct Csr {
-        //         func: Func,
-        //         precision: u4,
-        //         scale: u3,
-        //         #[field(offset = 0x10)]
-        //         ien: bool,
-        //         dmaren: bool,
-        //         dmawen: bool,
-        //         nres: bool,
-        //         nargs: bool,
-        //         ressize: bool,
-        //         argsize: bool,
-        //         #[field(offset = 0x1f)]
-        //         rrdy: bool,
-        //     }
+        let cordic = ctx.device.cordic;
 
-        //     #[register(infer_offsets)]
-        //     pub struct WData {
-        //         arg: u32,
-        //     }
+        cordic.csr(|csr| ...); // doesn't compile
 
-        //     #[register(infer_offsets)]
-        //     pub struct RData {
-        //         res: u32,
-        //     }
+        let cordic = cordic.attach(ahb.cordic_en);
 
-        //     #[block(base_addr = 0x4002_1000, infer_offsets)]
-        //     pub struct Cordic {
-        //         csr: Csr,
-        //         wdata: WData,
-        //         rdata: RData,
-        //     }
-        // }
+        let cordic = cordic.csr(|csr| {
+            csr
+                .func::<Sin>()
+                .precision::<P40>()
+                .transition()
+        });
+
+        let csr = cordic.csr
+            .func::<Sin>()
+            .precision::<P40>()
+            .transition();
+
+        let func = csr.func.lossy_transition::<Cos>();
+
+        // re-collect
+        csr.func = func.lossy_transition();
+        cordic.csr = csr.transition();
+
+        let (cordic, cordic_en) = cordic.release();
+        ahb.cordic_en = cordic_en;
+
+        */
     }
 }
