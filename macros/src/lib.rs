@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use darling::{ast::NestedMeta, FromMeta};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{
     meta::ParseNestedMeta,
     parse::Parse,
@@ -29,7 +29,7 @@ struct RegisterArgs {
     infer_offsets: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 struct PathArray {
     elems: Vec<Path>,
 }
@@ -61,7 +61,7 @@ impl PathArray {
     }
 }
 
-#[derive(Debug, Default, FromMeta)]
+#[derive(Debug, Clone, Default, FromMeta)]
 #[darling(default)]
 struct Access {
     entitlements: PathArray,
@@ -73,12 +73,19 @@ struct StatesArgs {
     width: u8,
 }
 
-#[derive(Debug, Default, FromMeta)]
+#[derive(Debug, Clone, Default, FromMeta)]
 struct FieldArgs {
     offset: Option<u8>,
     read: Option<Access>,
     write: Option<Access>,
     reset: Option<Ident>,
+}
+
+#[derive(Debug, Clone)]
+struct FieldInfo {
+    args: FieldArgs,
+    ident: Ident,
+    ty: Type,
 }
 
 #[derive(Debug)]
@@ -113,14 +120,6 @@ struct StateInfo {
 #[derive(Debug, Default, FromMeta)]
 struct StateArgs {
     entitlements: PathArray,
-}
-
-#[derive(Debug)]
-struct FieldInfo {
-    args: StatesArgs,
-    ident: Ident,
-    states: Vec<StateInfo>,
-    reset: Ident,
 }
 
 #[derive(Debug)]
@@ -683,7 +682,7 @@ fn states_inner(args: TokenStream, item: TokenStream) -> syn::Result<TokenStream
     let variants = e.variants;
 
     let mut result = quote! {
-        const WIDTH: u8 = #width;
+        pub const WIDTH: u8 = #width;
 
         pub enum States {
             #variants
@@ -715,8 +714,11 @@ fn register_inner(args: TokenStream, item: TokenStream) -> syn::Result<TokenStre
     let register_args = RegisterArgs::from_list(&NestedMeta::parse_meta_list(args.into())?)?;
 
     let mut s = parse2::<ItemStruct>(item.into())?;
+    let vis = s.vis.clone();
 
     let mut errors = Vec::<syn::Error>::new();
+
+    let mut result = TokenStream2::new();
 
     let Fields::Named(mut fields) = s.fields else {
         Err(syn::Error::new(
@@ -724,6 +726,8 @@ fn register_inner(args: TokenStream, item: TokenStream) -> syn::Result<TokenStre
             "register structs must have named fields",
         ))?
     };
+
+    let mut field_infos = Vec::new();
 
     fields.named.iter_mut().for_each(|field| {
         let mut field_args = FieldArgs::default();
@@ -756,9 +760,97 @@ fn register_inner(args: TokenStream, item: TokenStream) -> syn::Result<TokenStre
                 "field offset must be specified. to infer offsets add the `infer_offsets` argument to the `register` attribute macro.",
             ));
         }
+
+        field_infos.push(FieldInfo {
+            args: field_args,
+            ident: field.ident.as_ref().unwrap().clone(),
+            ty: field.ty.clone(),
+        });
     });
 
     s.fields = Fields::Named(fields);
+
+    let mut prev = None::<FieldInfo>;
+
+    for current in field_infos.iter() {
+        let current_ident = current.ident.clone();
+        let current_mod_ident = Ident::new(
+            inflector::cases::snakecase::to_snake_case(
+                current.ty.to_token_stream().to_string().as_str(),
+            )
+            .as_str(),
+            Span::call_site(),
+        );
+        let (offset, assertion) = if let Some(prev) = prev {
+            let prev_ident = prev.ident.clone();
+            let prev_mod_ident = Ident::new(
+                inflector::cases::snakecase::to_snake_case(
+                    prev.ty.to_token_stream().to_string().as_str(),
+                )
+                .as_str(),
+                Span::call_site(),
+            );
+
+            let offset_tokens = if let Some(offset) = current.args.offset {
+                quote! {
+                    #offset
+                }
+            } else {
+                quote! {
+                    super::#prev_ident::OFFSET + super::super::#prev_mod_ident::WIDTH + 1
+                }
+            };
+
+            let msg = format!(
+                "field domains must be in order and non-overlapping. overlaps with {}",
+                prev_ident,
+            );
+
+            let span = current.ident.span();
+
+            (
+                offset_tokens,
+                Some(quote_spanned! { span =>
+                    assert!(
+                        #prev_ident::OFFSET + super::#prev_mod_ident::WIDTH < #current_ident::OFFSET,
+                        #msg,
+                    )
+                }),
+            )
+        } else {
+            (quote! { 0 }, None)
+        };
+
+        let order_overlap_assertion = assertion.and_then(|assertion| {
+            Some(quote! {
+                const _: () = #assertion;
+            })
+        });
+
+        let register_assertion = {
+            let msg = "field domain exceeds register domain";
+
+            let span = current.ident.span();
+
+            quote_spanned! { span =>
+                const _: () = assert!(
+                    #current_ident::OFFSET + super::#current_mod_ident::WIDTH <= 32,
+                    #msg,
+                );
+            }
+        };
+
+        result.extend(quote! {
+            pub mod #current_ident {
+                pub const OFFSET: u8 = #offset;
+            }
+
+            #order_overlap_assertion
+            #register_assertion
+        });
+
+        prev = Some(current.clone());
+    }
 
     if let Some(error) = errors.iter().cloned().reduce(|mut acc, e| {
         acc.combine(e);
@@ -767,8 +859,15 @@ fn register_inner(args: TokenStream, item: TokenStream) -> syn::Result<TokenStre
         Err(error)?
     }
 
+    let mod_ident = Ident::new(
+        inflector::cases::snakecase::to_snake_case(s.ident.to_string().as_str()).as_str(),
+        Span::call_site(),
+    );
+
     Ok(quote! {
-        #s
+        #vis mod #mod_ident {
+            #result
+        }
     })
 }
 
