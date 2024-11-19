@@ -626,6 +626,44 @@ struct BlockInfo {
 //     result.into()
 // }
 
+struct GenPrimitiveModsArgs {
+    ty: Type,
+    comma: Token![,],
+    width: LitInt,
+}
+
+impl Parse for GenPrimitiveModsArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            ty: input.parse()?,
+            comma: input.parse()?,
+            width: input.parse()?,
+        })
+    }
+}
+
+#[proc_macro]
+pub fn gen_primitive_mods(item: TokenStream) -> TokenStream {
+    let GenPrimitiveModsArgs {
+        ty,
+        comma: _comma,
+        width,
+    } = parse_macro_input!(item as GenPrimitiveModsArgs);
+
+    let mod_ident = Ident::new(
+        inflector::cases::snakecase::to_snake_case(ty.to_token_stream().to_string().as_str())
+            .as_str(),
+        Span::call_site(),
+    );
+
+    quote! {
+        pub mod #mod_ident {
+            pub const WIDTH: u8 = #width;
+        }
+    }
+    .into()
+}
+
 fn states_inner(args: TokenStream, item: TokenStream) -> syn::Result<TokenStream2> {
     let states_args = StatesArgs::from_list(&NestedMeta::parse_meta_list(args.into())?)?;
 
@@ -770,6 +808,7 @@ fn register_inner(args: TokenStream, item: TokenStream) -> syn::Result<TokenStre
 
     s.fields = Fields::Named(fields);
 
+    // couldn't think of a better way to do this
     let mut prev = None::<FieldInfo>;
 
     for current in field_infos.iter() {

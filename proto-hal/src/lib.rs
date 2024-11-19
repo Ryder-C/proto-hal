@@ -9,6 +9,7 @@ pub mod stm32;
 
 pub use macros;
 pub mod macro_utils;
+pub mod prelude;
 
 /// Types that encapsulate a resource that can be configured to be
 /// in a "reset" state implement this trait.
@@ -23,7 +24,7 @@ pub trait IntoReset {
 #[cfg(test)]
 mod tests {
     mod macros {
-        use arbitrary_int::u4;
+        use crate::prelude::*;
         use macros::{register, states};
 
         // mod syscfg {
@@ -79,15 +80,24 @@ mod tests {
 
             #[states(width = 4)]
             pub enum Func {
+                #[state(entitlements = [scale::N0])]
                 Cos,
+                #[state(entitlements = [scale::N0])]
                 Sin,
-                Angle,
+                #[state(entitlements = [scale::N0])]
+                ATan2,
+                #[state(entitlements = [scale::N0])]
                 Magnitude,
-                Arctangent,
-                HyperbolicCosine,
-                HyperbolicSine,
-                ArctanH,
+                ATan,
+                #[state(entitlements = [scale::N1])]
+                CosH,
+                #[state(entitlements = [scale::N1])]
+                SinH,
+                #[state(entitlements = [scale::N1])]
+                ATanH,
+                #[state(entitlements = [scale::N1, scale::N2, scale::N3, scale::N4])]
                 Ln,
+                #[state(entitlements = [scale::N0, scale::N1, scale::N2])]
                 Sqrt,
             }
 
