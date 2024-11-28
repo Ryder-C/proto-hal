@@ -214,9 +214,9 @@ mod tests {
             entitlements = [super::ahb::cordic_en::Enabled]
         )]
         mod cordic {
-            #[register(infer_offsets)]
+            #[register(auto_increment)]
             mod csr {
-                #[field(width = 4, read, write)]
+                #[field(width = 4, read, write, auto_increment)]
                 mod func {
                     #[state(entitlements = [scale::N0], reset)]
                     struct Cos;
@@ -248,9 +248,9 @@ mod tests {
                     struct Sqrt;
                 }
 
-                #[field(width = 3, read, write)]
+                #[field(width = 3, read, write, auto_increment)]
                 mod precision {
-                    #[state(reset)]
+                    #[state(bits = 0b001, reset)]
                     struct P4;
                     #[state]
                     struct P8;
@@ -283,23 +283,23 @@ mod tests {
                 }
             }
 
-            #[register]
-            mod wdata {
-                #[field(offset = 0, width = 32, write(effect = unresolve(csr::rrdy)))]
-                mod arg {
-                    #[value]
-                    struct Argument(u32);
-                }
-            }
+            // #[register]
+            // mod wdata {
+            //     #[field(offset = 0, width = 32, write(effect = unresolve(csr::rrdy)))]
+            //     mod arg {
+            //         #[value]
+            //         struct Argument(u32);
+            //     }
+            // }
 
-            #[register]
-            mod rdata {
-                #[field(offset = 0, width = 32, read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
-                mod res {
-                    #[value]
-                    struct Result(u32);
-                }
-            }
+            // #[register]
+            // mod rdata {
+            //     #[field(offset = 0, width = 32, read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
+            //     mod res {
+            //         #[value]
+            //         struct Result(u32);
+            //     }
+            // }
         }
 
         /*

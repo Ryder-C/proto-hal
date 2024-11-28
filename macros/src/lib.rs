@@ -28,7 +28,7 @@ struct BlockArgs {
 #[darling(default)]
 struct RegisterArgs {
     #[darling(default)]
-    infer_offsets: bool,
+    auto_increment: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -72,6 +72,8 @@ struct Access {
 
 #[derive(Debug, Clone, Default, FromMeta)]
 struct FieldArgs {
+    #[darling(default)]
+    auto_increment: bool,
     offset: Option<u8>,
     width: u8,
     read: Option<Access>,
@@ -108,16 +110,17 @@ struct BlockRegInfo {
 #[derive(Debug, FromMeta)]
 struct Reset;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct StateInfo {
     args: StateArgs,
     ident: Ident,
 }
 
-#[derive(Debug, Default, FromMeta)]
+#[derive(Debug, Clone, Default, FromMeta)]
 #[darling(default)]
 struct StateArgs {
     #[darling(default)]
+    bits: Option<u8>,
     reset: bool,
     entitlements: PathArray,
 }
@@ -244,7 +247,7 @@ fn process_value(args: ValueArgs, s: &mut ItemStruct) -> Result<(), syn::Error> 
     Ok(())
 }
 
-fn process_state(args: StateArgs, s: &mut ItemStruct) -> Result<(), syn::Error> {
+fn process_state(state_args: StateArgs, s: &mut ItemStruct) -> Result<StateInfo, syn::Error> {
     let Fields::Unit = s.fields else {
         Err(syn::Error::new_spanned(
             s.fields.clone(),
@@ -266,7 +269,10 @@ fn process_state(args: StateArgs, s: &mut ItemStruct) -> Result<(), syn::Error> 
 
     s.vis = Visibility::Public(Token![pub](s.span()));
 
-    Ok(())
+    Ok(StateInfo {
+        args: state_args,
+        ident: s.ident.clone(),
+    })
 }
 
 fn process_field(
@@ -279,6 +285,8 @@ fn process_field(
     let mut error_combinator = SynErrorCombinator::new();
 
     let mut reset = None;
+
+    let mut states = Vec::new();
 
     items.iter_mut().for_each(|item| {
         let Item::Struct(s) = item else { return };
@@ -302,6 +310,11 @@ fn process_field(
                             } else {
                                 Err(syn::Error::new_spanned(attr, "reset is already specified"))?
                             }
+                        }
+
+                        // validate bits specification
+                        if args.bits.is_none() && !field_args.auto_increment {
+                            Err(syn::Error::new_spanned(attr.path(), "state bit value `bits` must be specified. to infer the bit value, add the `auto_increment` argument to the field attribute macro"))?
                         }
 
                         state_args.replace(args);
@@ -329,7 +342,12 @@ fn process_field(
             )),
             (Some(args), _) => {
                 // 2. pass the module over to the state parser
-                error_combinator.maybe(process_state(args, s));
+                error_combinator.maybe_then(
+                    process_state(args, s),
+                    |state| {
+                        states.push(state);
+                    },
+                );
             }
             (_, Some(args)) => {
                 // 2. (cont.) pass the module over to the value parser
@@ -339,8 +357,9 @@ fn process_field(
         }
     });
 
+    // offset and width
     {
-        let offset_tokens = match (field_args.offset, prev_field_info) {
+        let offset_tokens = match (field_args.offset, &prev_field_info) {
             (Some(offset), _) => {
                 quote! { #offset }
             }
@@ -357,6 +376,68 @@ fn process_field(
         items.push(Item::Verbatim(quote! {
             pub const OFFSET: u8 = #offset_tokens;
             pub const WIDTH: u8 = #width;
+        }));
+    }
+
+    // trait and enum for states
+    if !states.is_empty() {
+        let state_idents = states
+            .iter()
+            .map(|state| state.ident.clone())
+            .collect::<Vec<_>>();
+        let state_bits_tokens = states
+            .iter()
+            .map(|state| {
+                if let Some(bits) = state.args.bits {
+                    Some(quote! { = #bits })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        items.push(Item::Verbatim(quote! {
+            #[repr(u8)]
+            pub enum States {
+                #(
+                    #state_idents #state_bits_tokens,
+                )*
+            }
+
+            pub trait State {
+                const RAW: States;
+            }
+
+            #(
+                impl State for #state_idents {
+                    const RAW: States = States::#state_idents;
+                }
+            )*
+        }));
+    }
+
+    // domain validation
+    if let Some(prev_field) = prev_field_info {
+        let prev_ident = &prev_field.ident;
+
+        let overlap_msg = format!(
+            "field domains must be in order and non-overlapping. overlaps with {}",
+            prev_ident,
+        );
+
+        // TODO: would be better if the span was
+        // that of the field annotation, or better
+        // yet the offset argument
+        let span = module.ident.span();
+        items.push(Item::Verbatim(quote_spanned! { span =>
+            const _: () = assert!(
+                super::#prev_ident::OFFSET + super::#prev_ident::WIDTH < OFFSET,
+                #overlap_msg
+            );
+            const _: () = assert!(
+                OFFSET + WIDTH < 32,
+                "field domain goes out of bounds of register domain"
+            );
         }));
     }
 
@@ -394,8 +475,8 @@ fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result
                 if attr.path().is_ident("field") {
                     error_combinator.try_maybe_then(FieldArgs::from_meta(&attr.meta), |args| {
                         // validate offset specification
-                        if args.offset.is_none() && !register_args.infer_offsets {
-                            Err(syn::Error::new_spanned(attr.path(), "field offset must be specified. to infer offsets add the `infer_offsets` argument to the `register` attribute macro"))?
+                        if args.offset.is_none() && !register_args.auto_increment {
+                            Err(syn::Error::new_spanned(attr.path(), "field offset must be specified. to infer offsets, add the `auto_increment` argument to the register attribute macro"))?
                         }
 
                         field_args.replace(args);
@@ -419,33 +500,6 @@ fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result
             fields.push(field)
         });
     });
-
-    // 3. generate domain validation assertions
-    let mut prev_field = None::<FieldInfo>;
-    for current_field in fields {
-        if let Some(prev_field) = prev_field {
-            let prev_ident = &prev_field.ident;
-            let current_ident = &current_field.ident;
-
-            let msg = format!(
-                "field domains must be in order and non-overlapping. overlaps with {}",
-                prev_ident,
-            );
-
-            // TODO: would be better if the span was
-            // that of the field annotation, or better
-            // yet the offset argument
-            let span = current_field.ident.span();
-            items.push(Item::Verbatim(quote_spanned! { span =>
-                const _: () = assert!(
-                    #prev_ident::OFFSET + #prev_ident::WIDTH < #current_ident::OFFSET,
-                    #msg
-                );
-            }));
-        }
-
-        prev_field = Some(current_field.clone());
-    }
 
     error_combinator.coalesce()?;
 
