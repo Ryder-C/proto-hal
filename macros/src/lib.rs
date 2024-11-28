@@ -269,7 +269,11 @@ fn process_state(args: StateArgs, s: &mut ItemStruct) -> Result<(), syn::Error> 
     Ok(())
 }
 
-fn process_field(args: FieldArgs, module: &mut ItemMod) -> Result<FieldInfo, syn::Error> {
+fn process_field(
+    field_args: FieldArgs,
+    prev_field_info: Option<FieldInfo>,
+    module: &mut ItemMod,
+) -> Result<FieldInfo, syn::Error> {
     let items = &mut module.content.as_mut().expect("module cannot be empty").1;
 
     let mut error_combinator = SynErrorCombinator::new();
@@ -335,6 +339,27 @@ fn process_field(args: FieldArgs, module: &mut ItemMod) -> Result<FieldInfo, syn
         }
     });
 
+    {
+        let offset_tokens = match (field_args.offset, prev_field_info) {
+            (Some(offset), _) => {
+                quote! { #offset }
+            }
+            (_, Some(prev)) => {
+                let prev_ident = &prev.ident;
+                quote! { super::#prev_ident::OFFSET + super::#prev_ident::WIDTH + 1 }
+            }
+            (None, None) => {
+                quote! { 0 }
+            }
+        };
+        let width = field_args.width;
+
+        items.push(Item::Verbatim(quote! {
+            pub const OFFSET: u8 = #offset_tokens;
+            pub const WIDTH: u8 = #width;
+        }));
+    }
+
     error_combinator.coalesce()?;
 
     let Some(reset) = reset else {
@@ -342,16 +367,18 @@ fn process_field(args: FieldArgs, module: &mut ItemMod) -> Result<FieldInfo, syn
     };
 
     Ok(FieldInfo {
-        args,
+        args: field_args,
         ident: module.ident.clone(),
         reset,
     })
 }
 
-fn process_register(args: RegisterArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
+fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
     let items = &mut module.content.as_mut().expect("module cannot be empty").1;
 
     let mut error_combinator = SynErrorCombinator::new();
+
+    let mut fields = Vec::new();
 
     items.iter_mut().for_each(|item| {
         let Item::Mod(inner_mod) = item else { return };
@@ -365,8 +392,15 @@ fn process_register(args: RegisterArgs, module: &mut ItemMod) -> Result<(), syn:
             .cloned()
             .filter(|attr| {
                 if attr.path().is_ident("field") {
-                    error_combinator.maybe_then(FieldArgs::from_meta(&attr.meta), |args| {
+                    error_combinator.try_maybe_then(FieldArgs::from_meta(&attr.meta), |args| {
+                        // validate offset specification
+                        if args.offset.is_none() && !register_args.infer_offsets {
+                            Err(syn::Error::new_spanned(attr.path(), "field offset must be specified. to infer offsets add the `infer_offsets` argument to the `register` attribute macro"))?
+                        }
+
                         field_args.replace(args);
+
+                        Ok(())
                     });
 
                     false
@@ -381,8 +415,37 @@ fn process_register(args: RegisterArgs, module: &mut ItemMod) -> Result<(), syn:
         };
 
         // 2. pass the module over to the field parser
-        error_combinator.maybe(process_field(field_args, inner_mod));
+        error_combinator.maybe_then(process_field(field_args, fields.last().cloned(), inner_mod), |field| {
+            fields.push(field)
+        });
     });
+
+    // 3. generate domain validation assertions
+    let mut prev_field = None::<FieldInfo>;
+    for current_field in fields {
+        if let Some(prev_field) = prev_field {
+            let prev_ident = &prev_field.ident;
+            let current_ident = &current_field.ident;
+
+            let msg = format!(
+                "field domains must be in order and non-overlapping. overlaps with {}",
+                prev_ident,
+            );
+
+            // TODO: would be better if the span was
+            // that of the field annotation, or better
+            // yet the offset argument
+            let span = current_field.ident.span();
+            items.push(Item::Verbatim(quote_spanned! { span =>
+                const _: () = assert!(
+                    #prev_ident::OFFSET + #prev_ident::WIDTH < #current_ident::OFFSET,
+                    #msg
+                );
+            }));
+        }
+
+        prev_field = Some(current_field.clone());
+    }
 
     error_combinator.coalesce()?;
 

@@ -214,7 +214,7 @@ mod tests {
             entitlements = [super::ahb::cordic_en::Enabled]
         )]
         mod cordic {
-            #[register]
+            #[register(infer_offsets)]
             mod csr {
                 #[field(width = 4, read, write)]
                 mod func {
@@ -250,13 +250,42 @@ mod tests {
 
                 #[field(width = 3, read, write)]
                 mod precision {
-                    // #[state]
+                    #[state(reset)]
+                    struct P4;
+                    #[state]
+                    struct P8;
+                    #[state]
+                    struct P12;
+                    #[state]
+                    struct P16;
+                    #[state]
+                    struct P20;
+                    #[state]
+                    struct P24;
+                    #[state]
+                    struct P28;
+                    #[state]
+                    struct P32;
+                    #[state]
+                    struct P36;
+                    #[state]
+                    struct P40;
+                    #[state]
+                    struct P44;
+                    #[state]
+                    struct P48;
+                    #[state]
+                    struct P52;
+                    #[state]
+                    struct P56;
+                    #[state]
+                    struct P60;
                 }
             }
 
             #[register]
             mod wdata {
-                #[field(width = 32, write(effect = unresolve(csr::rrdy)))]
+                #[field(offset = 0, width = 32, write(effect = unresolve(csr::rrdy)))]
                 mod arg {
                     #[value]
                     struct Argument(u32);
@@ -265,7 +294,7 @@ mod tests {
 
             #[register]
             mod rdata {
-                #[field(width = 32, read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
+                #[field(offset = 0, width = 32, read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
                 mod res {
                     #[value]
                     struct Result(u32);
