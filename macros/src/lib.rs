@@ -120,7 +120,7 @@ struct StateInfo {
 #[darling(default)]
 struct StateArgs {
     #[darling(default)]
-    bits: Option<u8>,
+    bits: Option<u32>,
     reset: bool,
     entitlements: PathArray,
 }
@@ -247,7 +247,12 @@ fn process_value(args: ValueArgs, s: &mut ItemStruct) -> Result<(), syn::Error> 
     Ok(())
 }
 
-fn process_state(state_args: StateArgs, s: &mut ItemStruct) -> Result<StateInfo, syn::Error> {
+fn process_state(
+    state_args: StateArgs,
+    prev_state_info: Option<StateInfo>,
+    field_width: u8,
+    s: &mut ItemStruct,
+) -> Result<(StateInfo, TokenStream2), syn::Error> {
     let Fields::Unit = s.fields else {
         Err(syn::Error::new_spanned(
             s.fields.clone(),
@@ -269,10 +274,57 @@ fn process_state(state_args: StateArgs, s: &mut ItemStruct) -> Result<StateInfo,
 
     s.vis = Visibility::Public(Token![pub](s.span()));
 
-    Ok(StateInfo {
-        args: state_args,
-        ident: s.ident.clone(),
-    })
+    let state_impl = {
+        let ident = &s.ident;
+        quote! {
+            impl State for #ident {
+                const RAW: States = States::#ident;
+            }
+        }
+    };
+
+    let order_assertion = if let Some(prev_state) = prev_state_info {
+        let current_ident = &s.ident;
+        let prev_ident = prev_state.ident;
+
+        let span = s.ident.span();
+        Some(quote_spanned! { span =>
+            const _: () = assert!(
+                (States::#prev_ident as u32) < (States::#current_ident as u32),
+                "state bit values must be unique and in ascending order"
+            );
+        })
+    } else {
+        None
+    };
+
+    let msg = format!(
+        "state bit value is larger than the maximum value supported by a field of width {}",
+        field_width
+    );
+
+    let bounds_assertion = {
+        let span = s.ident.span();
+        let ident = &s.ident;
+        quote_spanned! { span =>
+            const _: () = assert!(
+                (States::#ident as u32) <= u32::MAX >> (32 - #field_width),
+                #msg,
+            );
+        }
+    };
+
+    Ok((
+        StateInfo {
+            args: state_args,
+            ident: s.ident.clone(),
+        },
+        quote! {
+            #state_impl
+            #order_assertion
+            #bounds_assertion
+        },
+    ))
 }
 
 fn process_field(
@@ -287,6 +339,7 @@ fn process_field(
     let mut reset = None;
 
     let mut states = Vec::new();
+    let mut extras = Vec::new();
 
     items.iter_mut().for_each(|item| {
         let Item::Struct(s) = item else { return };
@@ -343,9 +396,10 @@ fn process_field(
             (Some(args), _) => {
                 // 2. pass the module over to the state parser
                 error_combinator.maybe_then(
-                    process_state(args, s),
-                    |state| {
+                    process_state(args, states.last().cloned(), field_args.width, s),
+                    |(state, extra)| {
                         states.push(state);
+                        extras.push(extra);
                     },
                 );
             }
@@ -397,7 +451,7 @@ fn process_field(
             .collect::<Vec<_>>();
 
         items.push(Item::Verbatim(quote! {
-            #[repr(u8)]
+            #[repr(u32)]
             pub enum States {
                 #(
                     #state_idents #state_bits_tokens,
@@ -407,33 +461,37 @@ fn process_field(
             pub trait State {
                 const RAW: States;
             }
-
-            #(
-                impl State for #state_idents {
-                    const RAW: States = States::#state_idents;
-                }
-            )*
         }));
     }
 
+    // render extras to module
+    for extra in extras {
+        items.push(Item::Verbatim(extra));
+    }
+
     // domain validation
-    if let Some(prev_field) = prev_field_info {
-        let prev_ident = &prev_field.ident;
-
-        let overlap_msg = format!(
-            "field domains must be in order and non-overlapping. overlaps with {}",
-            prev_ident,
-        );
-
-        // TODO: would be better if the span was
-        // that of the field annotation, or better
-        // yet the offset argument
+    {
         let span = module.ident.span();
-        items.push(Item::Verbatim(quote_spanned! { span =>
-            const _: () = assert!(
-                super::#prev_ident::OFFSET + super::#prev_ident::WIDTH < OFFSET,
-                #overlap_msg
+        if let Some(prev_field) = prev_field_info {
+            let prev_ident = &prev_field.ident;
+
+            let overlap_msg = format!(
+                "field domains must be in order and non-overlapping. overlaps with {}",
+                prev_ident,
             );
+
+            // TODO: would be better if the span was
+            // that of the field annotation, or better
+            // yet the offset argument
+            items.push(Item::Verbatim(quote_spanned! { span =>
+                const _: () = assert!(
+                    super::#prev_ident::OFFSET + super::#prev_ident::WIDTH < OFFSET,
+                    #overlap_msg
+                );
+            }));
+        }
+
+        items.push(Item::Verbatim(quote_spanned! { span =>
             const _: () = assert!(
                 OFFSET + WIDTH < 32,
                 "field domain goes out of bounds of register domain"

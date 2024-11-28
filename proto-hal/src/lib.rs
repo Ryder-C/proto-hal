@@ -248,7 +248,7 @@ mod tests {
                     struct Sqrt;
                 }
 
-                #[field(width = 3, read, write, auto_increment)]
+                #[field(width = 4, read, write, auto_increment)]
                 mod precision {
                     #[state(bits = 0b001, reset)]
                     struct P4;
