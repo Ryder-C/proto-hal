@@ -25,7 +25,7 @@ pub trait IntoReset {
 mod tests {
     mod macros {
         use crate::prelude::*;
-        use macros::{register, states};
+        use macros::block;
 
         // mod syscfg {
         //     use super::*;
@@ -75,136 +75,201 @@ mod tests {
         //     // }
         // }
 
-        pub mod cordic {
-            use super::*;
+        // pub mod cordic {
+        //     use super::*;
 
-            #[states(width = 4)]
-            pub enum Func {
-                #[state(entitlements = [scale::N0])]
-                Cos,
-                #[state(entitlements = [scale::N0])]
-                Sin,
-                #[state(entitlements = [scale::N0])]
-                ATan2,
-                #[state(entitlements = [scale::N0])]
-                Magnitude,
-                ATan,
-                #[state(entitlements = [scale::N1])]
-                CosH,
-                #[state(entitlements = [scale::N1])]
-                SinH,
-                #[state(entitlements = [scale::N1])]
-                ATanH,
-                #[state(entitlements = [scale::N1, scale::N2, scale::N3, scale::N4])]
-                Ln,
-                #[state(entitlements = [scale::N0, scale::N1, scale::N2])]
-                Sqrt,
+        //     #[states(width = 4)]
+        //     pub enum Func {
+        //         #[state(entitlements = [scale::N0])]
+        //         Cos,
+        //         #[state(entitlements = [scale::N0])]
+        //         Sin,
+        //         #[state(entitlements = [scale::N0])]
+        //         ATan2,
+        //         #[state(entitlements = [scale::N0])]
+        //         Magnitude,
+        //         ATan,
+        //         #[state(entitlements = [scale::N1])]
+        //         CosH,
+        //         #[state(entitlements = [scale::N1])]
+        //         SinH,
+        //         #[state(entitlements = [scale::N1])]
+        //         ATanH,
+        //         #[state(entitlements = [scale::N1, scale::N2, scale::N3, scale::N4])]
+        //         Ln,
+        //         #[state(entitlements = [scale::N0, scale::N1, scale::N2])]
+        //         Sqrt,
+        //     }
+
+        //     #[states(width = 4)]
+        //     pub enum Precision {
+        //         P4 = 1,
+        //         P8,
+        //         P12,
+        //         P16,
+        //         P20,
+        //         P24,
+        //         P28,
+        //         P32,
+        //         P36,
+        //         P40,
+        //         P44,
+        //         P48,
+        //         P52,
+        //         P56,
+        //         P60,
+        //     }
+
+        //     #[states(width = 3)]
+        //     pub enum Scale {
+        //         N0,
+        //         N1,
+        //         N2,
+        //         N3,
+        //         N4,
+        //         N5,
+        //         N6,
+        //         N7,
+        //     }
+
+        //     #[states(width = 1)]
+        //     pub enum Enable {
+        //         Disabled,
+        //         Enabled,
+        //     }
+
+        //     #[states(width = 1)]
+        //     pub enum NData {
+        //         One,
+        //         Two,
+        //     }
+
+        //     #[states(width = 1)]
+        //     pub enum DataSize {
+        //         Q15,
+        //         Q31,
+        //     }
+
+        //     #[states(width = 1)]
+        //     pub enum Rrdy {
+        //         NoData,
+        //         Ready,
+        //     }
+
+        //     #[register(infer_offsets)]
+        //     pub struct Csr {
+        //         #[field(read, write, reset = Cos)]
+        //         func: Func,
+        //         #[field(read, write, reset = P20)]
+        //         precision: Precision,
+        //         #[field(read, write, reset = N0)]
+        //         scale: Scale,
+
+        //         #[field(offset = 0x10, reset = Disabled)]
+        //         ien: Enable,
+        //         #[field(read, write, reset = Disabled)]
+        //         dmaren: Enable,
+        //         #[field(read, write, reset = Disabled)]
+        //         dmawen: Enable,
+        //         #[field(read, write, reset = One)]
+        //         nres: NData,
+        //         #[field(read, write, reset = One)]
+        //         nargs: NData,
+        //         #[field(read, write, reset = Q15)]
+        //         ressize: DataSize,
+        //         #[field(read, write, reset = Q15)]
+        //         argsize: DataSize,
+
+        //         #[field(offset = 0x1f, read, reset = NoData)]
+        //         rrdy: Rrdy,
+        //     }
+
+        //     #[register(infer_offsets)]
+        //     pub struct WData {
+        //         #[field(write(effect = unresolve(csr::rrdy)))]
+        //         arg: u32,
+        //     }
+
+        //     #[register(infer_offsets)]
+        //     pub struct RData {
+        //         #[field(read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
+        //         res: u32,
+        //     }
+
+        //     #[block(
+        //         base_addr = 0x4002_1000,
+        //         infer_offsets,
+        //         entitlements = [super::ahb::cordic_en::Enabled]
+        //     )]
+        //     pub struct Cordic {
+        //         csr: Csr,
+        //         wdata: WData,
+        //         rdata: RData,
+        //     }
+        // }
+
+        #[block(
+            base_addr = 0x4002_1000,
+            infer_offsets,
+            entitlements = [super::ahb::cordic_en::Enabled]
+        )]
+        mod cordic {
+            #[register]
+            mod csr {
+                #[field(width = 4, read, write)]
+                mod func {
+                    #[state(entitlements = [scale::N0], reset)]
+                    struct Cos;
+
+                    #[state(entitlements = [scale::N0])]
+                    struct Sin;
+
+                    #[state(entitlements = [scale::N0])]
+                    struct ATan2;
+
+                    #[state(entitlements = [scale::N0])]
+                    struct Magnitude;
+                    #[state]
+                    struct ATan;
+
+                    #[state(entitlements = [scale::N1])]
+                    struct CosH;
+
+                    #[state(entitlements = [scale::N1])]
+                    struct SinH;
+
+                    #[state(entitlements = [scale::N1])]
+                    struct ATanH;
+
+                    #[state(entitlements = [scale::N1, scale::N2, scale::N3, scale::N4])]
+                    struct Ln;
+
+                    #[state(entitlements = [scale::N0, scale::N1, scale::N2])]
+                    struct Sqrt;
+                }
+
+                #[field(width = 3, read, write)]
+                mod precision {
+                    // #[state]
+                }
             }
 
-            #[states(width = 4)]
-            pub enum Precision {
-                P4 = 1,
-                P8,
-                P12,
-                P16,
-                P20,
-                P24,
-                P28,
-                P32,
-                P36,
-                P40,
-                P44,
-                P48,
-                P52,
-                P56,
-                P60,
+            #[register]
+            mod wdata {
+                #[field(width = 32, write(effect = unresolve(csr::rrdy)))]
+                mod arg {
+                    #[value]
+                    struct Argument(u32);
+                }
             }
 
-            #[states(width = 3)]
-            pub enum Scale {
-                N0,
-                N1,
-                N2,
-                N3,
-                N4,
-                N5,
-                N6,
-                N7,
-            }
-
-            #[states(width = 1)]
-            pub enum Enable {
-                Disabled,
-                Enabled,
-            }
-
-            #[states(width = 1)]
-            pub enum NData {
-                One,
-                Two,
-            }
-
-            #[states(width = 1)]
-            pub enum DataSize {
-                Q15,
-                Q31,
-            }
-
-            #[states(width = 1)]
-            pub enum Rrdy {
-                NoData,
-                Ready,
-            }
-
-            #[register(infer_offsets)]
-            pub struct Csr {
-                #[field(read, write, reset = Cos)]
-                func: Func,
-                #[field(read, write, reset = P20)]
-                precision: Precision,
-                #[field(read, write, reset = N0)]
-                scale: Scale,
-
-                #[field(offset = 0x10, reset = Disabled)]
-                ien: Enable,
-                #[field(read, write, reset = Disabled)]
-                dmaren: Enable,
-                #[field(read, write, reset = Disabled)]
-                dmawen: Enable,
-                #[field(read, write, reset = One)]
-                nres: NData,
-                #[field(read, write, reset = One)]
-                nargs: NData,
-                #[field(read, write, reset = Q15)]
-                ressize: DataSize,
-                #[field(read, write, reset = Q15)]
-                argsize: DataSize,
-
-                #[field(offset = 0x1f, read, reset = NoData)]
-                rrdy: Rrdy,
-            }
-
-            #[register(infer_offsets)]
-            pub struct WData {
-                #[field(write(effect = unresolve(csr::rrdy)))]
-                arg: u32,
-            }
-
-            #[register(infer_offsets)]
-            pub struct RData {
-                #[field(read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
-                res: u32,
-            }
-
-            #[block(
-                base_addr = 0x4002_1000,
-                infer_offsets,
-                entitlements = [super::ahb::cordic_en::Enabled]
-            )]
-            pub struct Cordic {
-                csr: Csr,
-                wdata: WData,
-                rdata: RData,
+            #[register]
+            mod rdata {
+                #[field(width = 32, read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
+                mod res {
+                    #[value]
+                    struct Result(u32);
+                }
             }
         }
 
