@@ -79,13 +79,14 @@ struct FieldArgs {
     width: u8,
     read: Option<Access>,
     write: Option<Access>,
+    reset: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
 struct FieldInfo {
     args: FieldArgs,
     ident: Ident,
-    reset: Ident,
+    reset_state: Option<Ident>,
 }
 
 #[derive(Debug)]
@@ -333,11 +334,12 @@ fn process_field(
     prev_field_info: Option<FieldInfo>,
     module: &mut ItemMod,
 ) -> Result<FieldInfo, syn::Error> {
+    module.vis = Visibility::Public(Token![pub](module.span()));
     let items = &mut module.content.as_mut().expect("module cannot be empty").1;
 
     let mut error_combinator = SynErrorCombinator::new();
 
-    let mut reset = None;
+    let mut reset_state = None;
 
     let mut states = Vec::new();
     let mut extras = Vec::new();
@@ -347,8 +349,6 @@ fn process_field(
 
         // 1. try to extract state annotation args
         let mut state_args = None;
-        // 1. (cont.) or value annotation args
-        let mut value_args = None;
 
         s.attrs = s
             .attrs
@@ -359,8 +359,8 @@ fn process_field(
                     error_combinator.try_maybe_then(StateArgs::from_meta(&attr.meta), |args| {
                         // store reset and validate single occurance
                         if args.reset {
-                            if reset.is_none() {
-                                reset = Some(s.ident.clone());
+                            if reset_state.is_none() {
+                                reset_state = Some(s.ident.clone());
                             } else {
                                 Err(syn::Error::new_spanned(attr, "reset is already specified"))?
                             }
@@ -377,38 +377,21 @@ fn process_field(
                     });
 
                     false
-                } else if attr.path().is_ident("value") {
-                    error_combinator.maybe_then(ValueArgs::from_meta(&attr.meta), |args| {
-                        value_args.replace(args);
-                    });
-
-                    false
                 } else {
                     true
                 }
             })
             .collect();
 
-        match (state_args, value_args) {
-            (Some(_), Some(_)) => error_combinator.push(syn::Error::new(
-                Span::call_site(),
-                "state and value are mutually exclusive",
-            )),
-            (Some(args), _) => {
-                // 2. pass the module over to the state parser
-                error_combinator.maybe_then(
-                    process_state(args, states.last().cloned(), field_args.width, s),
-                    |(state, extra)| {
-                        states.push(state);
-                        extras.push(extra);
-                    },
-                );
-            }
-            (_, Some(args)) => {
-                // 2. (cont.) pass the module over to the value parser
-                error_combinator.maybe(process_value(args, s));
-            }
-            (_, _) => {}
+        if let Some(args) = state_args {
+            // 2. pass the module over to the state parser
+            error_combinator.maybe_then(
+                process_state(args, states.last().cloned(), field_args.width, s),
+                |(state, extra)| {
+                    states.push(state);
+                    extras.push(extra);
+                },
+            );
         }
     });
 
@@ -434,8 +417,11 @@ fn process_field(
         }));
     }
 
-    // trait and enum for states
-    if !states.is_empty() {
+    let stateful = !states.is_empty();
+
+    if stateful {
+        // field is stateful
+
         let state_idents = states
             .iter()
             .map(|state| state.ident.clone())
@@ -452,6 +438,9 @@ fn process_field(
             .collect::<Vec<_>>();
 
         items.push(Item::Verbatim(quote! {
+            pub type Reset = #reset_state;
+            pub const RESET: u32 = Reset::RAW as u32;
+
             #[repr(u32)]
             pub enum States {
                 #(
@@ -463,6 +452,14 @@ fn process_field(
                 const RAW: States;
             }
         }));
+    } else {
+        // field is stateless
+
+        if let Some(reset) = field_args.reset {
+            items.push(Item::Verbatim(quote! {
+                pub const RESET: u32 = #reset;
+            }));
+        }
     }
 
     // render extras to module
@@ -494,7 +491,7 @@ fn process_field(
 
         items.push(Item::Verbatim(quote_spanned! { span =>
             const _: () = assert!(
-                OFFSET + WIDTH < 32,
+                OFFSET + WIDTH <= 32,
                 "field domain goes out of bounds of register domain"
             );
         }));
@@ -502,18 +499,21 @@ fn process_field(
 
     error_combinator.coalesce()?;
 
-    let Some(reset) = reset else {
-        Err(syn::Error::new_spanned(module, "reset must be specified"))?
-    };
+    if (stateful && reset_state.is_none())
+        || (!stateful && field_args.read.is_some() && field_args.reset.is_none())
+    {
+        return Err(syn::Error::new_spanned(module, "reset must be specified"));
+    }
 
     Ok(FieldInfo {
         args: field_args,
         ident: module.ident.clone(),
-        reset,
+        reset_state,
     })
 }
 
 fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
+    module.vis = Visibility::Public(Token![pub](module.span()));
     let items = &mut module.content.as_mut().expect("module cannot be empty").1;
 
     let mut error_combinator = SynErrorCombinator::new();

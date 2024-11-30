@@ -229,6 +229,7 @@ mod tests {
 
                     #[state(entitlements = [scale::N0])]
                     struct Magnitude;
+
                     #[state]
                     struct ATan;
 
@@ -250,7 +251,7 @@ mod tests {
 
                 #[field(width = 4, read, write, auto_increment)]
                 mod precision {
-                    #[state(bits = 0b001, reset)]
+                    #[state(bits = 1, reset)]
                     struct P4;
                     #[state]
                     struct P8;
@@ -281,25 +282,103 @@ mod tests {
                     #[state]
                     struct P60;
                 }
+
+                #[field(width = 3, read, write, auto_increment)]
+                mod scale {
+                    #[state(reset)]
+                    struct N0;
+                    #[state]
+                    struct N1;
+                    #[state]
+                    struct N2;
+                    #[state]
+                    struct N3;
+                    #[state]
+                    struct N4;
+                    #[state]
+                    struct N5;
+                    #[state]
+                    struct N6;
+                    #[state]
+                    struct N7;
+                }
+
+                #[field(offset = 16, width = 1, read, write)]
+                mod ien {
+                    #[state(reset, bits = 0)]
+                    struct Disabled;
+                    #[state(bits = 1)]
+                    struct Enabled;
+                }
+
+                #[field(width = 1, read, write)]
+                mod dmaren {
+                    #[state(reset, bits = 0)]
+                    struct Disabled;
+                    #[state(bits = 1)]
+                    struct Enabled;
+                }
+
+                #[field(width = 1, read, write)]
+                mod dmwren {
+                    #[state(reset, bits = 0)]
+                    struct Disabled;
+                    #[state(bits = 1)]
+                    struct Enabled;
+                }
+
+                #[field(width = 1, read, write)]
+                mod nres {
+                    #[state(reset, bits = 0)]
+                    struct OneRead;
+                    #[state(bits = 1)]
+                    struct TwoReads;
+                }
+
+                #[field(width = 1, read, write)]
+                mod nargs {
+                    #[state(reset, bits = 0)]
+                    struct OneWrite;
+                    #[state(bits = 1)]
+                    struct TwoWrites;
+                }
+
+                #[field(width = 1, read, write)]
+                mod ressize {
+                    #[state(reset, bits = 0)]
+                    struct Q31;
+                    #[state(bits = 1)]
+                    struct Q15;
+                }
+
+                #[field(width = 1, read, write)]
+                mod argsize {
+                    #[state(reset, bits = 0)]
+                    struct Q31;
+                    #[state(bits = 1)]
+                    struct Q15;
+                }
+
+                #[field(offset = 31, width = 1, read, write)]
+                mod rrdy {
+                    #[state(reset, bits = 0)]
+                    struct NoData;
+                    #[state(bits = 1)]
+                    struct DataReady;
+                }
             }
 
-            // #[register]
-            // mod wdata {
-            //     #[field(offset = 0, width = 32, write(effect = unresolve(csr::rrdy)))]
-            //     mod arg {
-            //         #[value]
-            //         struct Argument(u32);
-            //     }
-            // }
+            #[register]
+            mod wdata {
+                #[field(offset = 0, width = 32, write(effect = unresolve(csr::rrdy)))]
+                mod arg {}
+            }
 
-            // #[register]
-            // mod rdata {
-            //     #[field(offset = 0, width = 32, read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
-            //     mod res {
-            //         #[value]
-            //         struct Result(u32);
-            //     }
-            // }
+            #[register]
+            mod rdata {
+                #[field(offset = 0, width = 32, reset = 0, read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
+                mod res {}
+            }
         }
 
         /*
