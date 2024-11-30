@@ -1,7 +1,7 @@
 use darling::{ast::NestedMeta, FromMeta};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, quote_spanned, ToTokens};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
     parse::Parse, parse2, parse_macro_input, spanned::Spanned, Expr, ExprArray, Fields, Generics,
     Ident, Item, ItemMod, ItemStruct, LitInt, Meta, Path, Token, Type, Visibility,
@@ -9,13 +9,13 @@ use syn::{
 
 #[derive(Debug, FromMeta)]
 struct BlockArgs {
-    base_addr: LitInt,
+    base_addr: u32,
     #[darling(default)]
     auto_increment: bool,
     entitlements: PathArray,
 }
 
-#[derive(Debug, Default, FromMeta)]
+#[derive(Debug, Clone, Default, FromMeta)]
 #[darling(default)]
 struct RegisterArgs {
     offset: Option<u8>,
@@ -101,7 +101,7 @@ struct StateArgs {
 #[derive(Debug, Default, FromMeta)]
 struct ValueArgs;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct RegisterInfo {
     args: RegisterArgs,
     ident: Ident,
@@ -374,7 +374,7 @@ fn process_field(
             }
             (_, Some(prev)) => {
                 let prev_ident = &prev.ident;
-                quote! { super::#prev_ident::OFFSET + super::#prev_ident::WIDTH + 1 }
+                quote! { super::#prev_ident::OFFSET + super::#prev_ident::WIDTH }
             }
             (None, None) => {
                 quote! { 0 }
@@ -448,7 +448,7 @@ fn process_field(
             // yet the offset argument
             items.push(Item::Verbatim(quote_spanned! { span =>
                 const _: () = assert!(
-                    super::#prev_ident::OFFSET + super::#prev_ident::WIDTH < OFFSET,
+                    super::#prev_ident::OFFSET + super::#prev_ident::WIDTH <= OFFSET,
                     #overlap_msg
                 );
             }));
@@ -496,6 +496,7 @@ fn process_field(
 
 fn process_register(
     register_args: RegisterArgs,
+    prev_register_info: Option<RegisterInfo>,
     module: &mut ItemMod,
 ) -> Result<RegisterInfo, syn::Error> {
     module.vis = Visibility::Public(Token![pub](module.span()));
@@ -548,8 +549,19 @@ fn process_register(
 
     let stateful = fields.iter().find(|field| field.stateful).is_some();
 
-    // register struct
     {
+        let offset = if let Some(offset) = register_args.offset {
+            quote! { #offset }
+        } else {
+            if let Some(prev) = prev_register_info {
+                let prev_ident = prev.ident;
+
+                quote! { super::#prev_ident::OFFSET + 32 }
+            } else {
+                quote! { 0 }
+            }
+        };
+
         let (stateful_fields, stateless_fields) =
             fields.iter().partition::<Vec<_>, _>(|field| field.stateful);
 
@@ -573,23 +585,21 @@ fn process_register(
             })
             .collect::<Vec<_>>();
 
+        let new_stateful_field_tys = stateful_field_tys
+            .iter()
+            .map(|ident| format_ident!("New{}", ident))
+            .collect::<Vec<_>>();
+
         items.push(Item::Verbatim(quote! {
-            pub struct Register<
+            pub const OFFSET: u32 = #offset;
+
+            pub struct Register<#(#stateful_field_tys,)*> {
                 #(
-                    #stateful_field_tys,
-                )*
-            >
-            where
-                #(
-                    #stateful_field_tys: #stateful_field_idents::State,
-                )*
-            {
-                #(
-                    #stateful_field_idents: #stateful_field_tys,
+                    pub #stateful_field_idents: #stateful_field_tys,
                 )*
 
                 #(
-                    #stateless_field_idents: (),
+                    pub #stateless_field_idents: (),
                 )*
             }
         }));
@@ -601,6 +611,25 @@ fn process_register(
                         #stateful_field_idents::Reset,
                     )*
                 >;
+
+                impl<#(#stateful_field_tys,)*> Register<#(#stateful_field_tys,)*>
+                where
+                    #(
+                        #stateful_field_tys: #stateful_field_idents::State,
+                    )*
+                {
+                    pub fn transition<#(#new_stateful_field_tys,)*>(self) -> Register<#(#new_stateful_field_tys,)*> {
+                        let reg_value = #(
+                            ((#stateful_field_tys::RAW as u32) << #stateful_field_idents::OFFSET)
+                        )+*;
+
+                        unsafe {
+                            core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, reg_value);
+                        }
+
+                        todo!()
+                    }
+                }
             }));
         }
     }
@@ -653,15 +682,16 @@ fn process_block(block_args: BlockArgs, module: &mut ItemMod) -> Result<(), syn:
         };
 
         // 2. pass the module over to the register parser
-        error_combinator.maybe_then(process_register(register_args, inner_mod), |register| {
+        error_combinator.maybe_then(process_register(register_args, registers.last().cloned(), inner_mod), |register| {
             registers.push(register);
         });
     });
 
     error_combinator.coalesce()?;
 
-    // block struct
     {
+        let base_addr = block_args.base_addr;
+
         let (stateful_registers, stateless_registers) = registers
             .iter()
             .partition::<Vec<_>, _>(|register| register.stateful);
@@ -687,17 +717,19 @@ fn process_block(block_args: BlockArgs, module: &mut ItemMod) -> Result<(), syn:
             .collect::<Vec<_>>();
 
         items.push(Item::Verbatim(quote! {
+            pub const BASE_ADDR: u32 = #base_addr;
+
             pub struct Block<
                 #(
                     #stateful_register_tys,
                 )*
             > {
                 #(
-                    #stateful_register_idents: #stateful_register_tys,
+                    pub #stateful_register_idents: #stateful_register_tys,
                 )*
 
                 #(
-                    #stateless_register_idents: (),
+                    pub #stateless_register_idents: (),
                 )*
             }
 
@@ -707,6 +739,13 @@ fn process_block(block_args: BlockArgs, module: &mut ItemMod) -> Result<(), syn:
                 )*
             >;
         }));
+    }
+
+    // register accessors
+    {
+        //     items.push(Item::Verbatim(quote! {
+        //         impl Block
+        //     }));
     }
 
     Ok(())
