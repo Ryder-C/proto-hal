@@ -82,6 +82,8 @@ struct FieldArgs {
     reset: Option<u32>,
 }
 
+// TODO: should probably encode statefulness
+// and reset requirement explicitly somehow
 #[derive(Debug, Clone)]
 struct FieldInfo {
     args: FieldArgs,
@@ -499,6 +501,7 @@ fn process_field(
 
     error_combinator.coalesce()?;
 
+    // Q: is this the best way to do this?
     if (stateful && reset_state.is_none())
         || (!stateful && field_args.read.is_some() && field_args.reset.is_none())
     {
