@@ -327,7 +327,11 @@ fn process_field(
     module: &mut ItemMod,
 ) -> Result<FieldInfo, syn::Error> {
     module.vis = Visibility::Public(Token![pub](module.span()));
-    let items = &mut module.content.as_mut().expect("module cannot be empty").1;
+    let items = &mut module
+        .content
+        .as_mut()
+        .expect("module must be a definition, not an import")
+        .1;
 
     let mut error_combinator = SynErrorCombinator::new();
 
@@ -495,6 +499,8 @@ fn process_field(
             msg.push_str(&format!("\t- {}\n", state.ident));
         }
 
+        // TODO: i dislike the misleading
+        // fallibility of this
         *module = parse2(quote! {
             #[doc = #msg]
             #module
@@ -511,7 +517,11 @@ fn process_field(
 
 fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
     module.vis = Visibility::Public(Token![pub](module.span()));
-    let items = &mut module.content.as_mut().expect("module cannot be empty").1;
+    let items = &mut module
+        .content
+        .as_mut()
+        .expect("module must be a definition, not an import")
+        .1;
 
     let mut error_combinator = SynErrorCombinator::new();
 
@@ -558,7 +568,11 @@ fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result
 }
 
 fn process_block(args: BlockArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
-    let items = &mut module.content.as_mut().expect("module cannot be empty").1;
+    let items = &mut module
+        .content
+        .as_mut()
+        .expect("module must be a definition, not an import")
+        .1;
 
     let mut error_combinator = SynErrorCombinator::new();
 

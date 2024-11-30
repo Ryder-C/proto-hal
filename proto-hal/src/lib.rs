@@ -250,6 +250,7 @@ mod tests {
                 }
 
                 #[field(width = 4, read, write, auto_increment)]
+                /// custom docs
                 mod precision {
                     #[state(bits = 1, reset)]
                     struct P4;
@@ -382,7 +383,7 @@ mod tests {
         }
 
         fn foo() {
-            // cordic::csr::func
+            type _x = cordic::csr::precision::P4;
         }
 
         /*
