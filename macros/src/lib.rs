@@ -79,6 +79,7 @@ struct FieldInfo {
     args: FieldArgs,
     ident: Ident,
     reset_state: Option<Ident>,
+    stateful: bool,
 }
 
 #[derive(Debug)]
@@ -512,6 +513,7 @@ fn process_field(
         args: field_args,
         ident: module.ident.clone(),
         reset_state,
+        stateful,
     })
 }
 
@@ -563,6 +565,39 @@ fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result
     });
 
     error_combinator.coalesce()?;
+
+    // register struct
+    {
+        let field_idents = fields
+            .iter()
+            .filter(|field| field.stateful)
+            .map(|field| field.ident.clone())
+            .collect::<Vec<_>>();
+        let field_tys = field_idents
+            .iter()
+            .map(|ident| {
+                Ident::new(
+                    &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
+                    Span::call_site(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        items.push(Item::Verbatim(quote! {
+            pub struct Register<#(
+                #field_tys,
+            )*>
+            where
+                #(
+                    #field_tys: #field_idents::State,
+                )*
+            {
+                #(
+                    #field_idents: #field_tys,
+                )*
+            }
+        }));
+    }
 
     Ok(())
 }
