@@ -381,6 +381,10 @@ mod tests {
             }
         }
 
+        fn foo() {
+            cordic::csr::func
+        }
+
         /*
         let ahb = ctx.device.ahb;
 

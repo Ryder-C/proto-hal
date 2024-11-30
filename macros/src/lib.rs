@@ -11,10 +11,10 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     token::{Brace, Colon, Const, Eq, For, Gt, Impl, Lt, Paren, PathSep, Semi, Struct, Unsafe},
-    Attribute, Block, Expr, ExprArray, ExprLit, Field, FieldMutability, Fields, FieldsNamed,
-    GenericParam, Generics, Ident, ImplItem, ImplItemConst, Item, ItemConst, ItemEnum, ItemImpl,
-    ItemMod, ItemStruct, Lit, LitInt, Meta, MetaList, Path, PathArguments, PathSegment, Token,
-    Type, TypeParam, TypeTuple, Visibility,
+    AttrStyle, Attribute, Block, Expr, ExprArray, ExprLit, Field, FieldMutability, Fields,
+    FieldsNamed, GenericParam, Generics, Ident, ImplItem, ImplItemConst, Item, ItemConst, ItemEnum,
+    ItemImpl, ItemMod, ItemStruct, Lit, LitInt, Meta, MetaList, MetaNameValue, Path, PathArguments,
+    PathSegment, Token, Type, TypeParam, TypeTuple, Visibility,
 };
 
 #[derive(Debug, FromMeta)]
@@ -506,6 +506,21 @@ fn process_field(
         || (!stateful && field_args.read.is_some() && field_args.reset.is_none())
     {
         return Err(syn::Error::new_spanned(module, "reset must be specified"));
+    }
+
+    // field docs
+    {
+        let mut msg = format!("# Spec\n- width: {}\n# States\n", field_args.width);
+
+        for state in states.iter() {
+            msg.push_str(&format!("\t- {}\n", state.ident));
+        }
+
+        *module = parse2(quote! {
+            #[doc = #msg]
+            #module
+        })
+        .unwrap();
     }
 
     Ok(FieldInfo {
