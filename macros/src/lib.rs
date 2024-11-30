@@ -1,20 +1,10 @@
-use std::collections::HashMap;
-
 use darling::{ast::NestedMeta, FromMeta};
 use proc_macro::TokenStream;
-use proc_macro2::{extra::DelimSpan, Span, TokenStream as TokenStream2};
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    meta::ParseNestedMeta,
-    parse::Parse,
-    parse2, parse_macro_input,
-    punctuated::Punctuated,
-    spanned::Spanned,
-    token::{Brace, Colon, Const, Eq, For, Gt, Impl, Lt, Paren, PathSep, Semi, Struct, Unsafe},
-    AttrStyle, Attribute, Block, Expr, ExprArray, ExprLit, Field, FieldMutability, Fields,
-    FieldsNamed, GenericParam, Generics, Ident, ImplItem, ImplItemConst, Item, ItemConst, ItemEnum,
-    ItemImpl, ItemMod, ItemStruct, Lit, LitInt, Meta, MetaList, MetaNameValue, Path, PathArguments,
-    PathSegment, Token, Type, TypeParam, TypeTuple, Visibility,
+    parse::Parse, parse2, parse_macro_input, spanned::Spanned, Expr, ExprArray, Fields, Generics,
+    Ident, Item, ItemMod, ItemStruct, LitInt, Meta, Path, Token, Type, Visibility,
 };
 
 #[derive(Debug, FromMeta)]
@@ -352,11 +342,7 @@ fn process_field(
         // 1. try to extract state annotation args
         let mut state_args = None;
 
-        s.attrs = s
-            .attrs
-            .iter()
-            .cloned()
-            .filter(|attr| {
+        s.attrs.retain(|attr| {
                 if attr.path().is_ident("state") {
                     error_combinator.try_maybe_then(StateArgs::from_meta(&attr.meta), |args| {
                         // store reset and validate single occurance
@@ -382,8 +368,7 @@ fn process_field(
                 } else {
                     true
                 }
-            })
-            .collect();
+            });
 
         if let Some(args) = state_args {
             // 2. pass the module over to the state parser
@@ -430,13 +415,7 @@ fn process_field(
             .collect::<Vec<_>>();
         let state_bits_tokens = states
             .iter()
-            .map(|state| {
-                if let Some(bits) = state.args.bits {
-                    Some(quote! { = #bits })
-                } else {
-                    None
-                }
-            })
+            .map(|state| state.args.bits.map(|bits| quote! { = #bits }))
             .collect::<Vec<_>>();
 
         items.push(Item::Verbatim(quote! {
@@ -544,29 +523,24 @@ fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result
         // 1. try to extract field annotation args
         let mut field_args = None;
 
-        inner_mod.attrs = inner_mod
-            .attrs
-            .iter()
-            .cloned()
-            .filter(|attr| {
-                if attr.path().is_ident("field") {
-                    error_combinator.try_maybe_then(FieldArgs::from_meta(&attr.meta), |args| {
-                        // validate offset specification
-                        if args.offset.is_none() && !register_args.auto_increment {
-                            Err(syn::Error::new_spanned(attr.path(), "field offset must be specified. to infer offsets, add the `auto_increment` argument to the register attribute macro"))?
-                        }
+        inner_mod.attrs.retain(|attr| {
+            if attr.path().is_ident("field") {
+                error_combinator.try_maybe_then(FieldArgs::from_meta(&attr.meta), |args| {
+                    // validate offset specification
+                    if args.offset.is_none() && !register_args.auto_increment {
+                        Err(syn::Error::new_spanned(attr.path(), "field offset must be specified. to infer offsets, add the `auto_increment` argument to the register attribute macro"))?
+                    }
 
-                        field_args.replace(args);
+                    field_args.replace(args);
 
-                        Ok(())
-                    });
+                    Ok(())
+                });
 
-                    false
-                } else {
-                    true
-                }
-            })
-            .collect();
+                false
+            } else {
+                true
+            }
+        });
 
         let Some(field_args) = field_args else {
             return;
@@ -594,22 +568,17 @@ fn process_block(args: BlockArgs, module: &mut ItemMod) -> Result<(), syn::Error
         // 1. try to extract register annotation args
         let mut register_args = None;
 
-        inner_mod.attrs = inner_mod
-            .attrs
-            .iter()
-            .cloned()
-            .filter(|attr| {
-                if attr.path().is_ident("register") {
-                    error_combinator.maybe_then(RegisterArgs::from_meta(&attr.meta), |args| {
-                        register_args.replace(args);
-                    });
+        inner_mod.attrs.retain(|attr| {
+            if attr.path().is_ident("register") {
+                error_combinator.maybe_then(RegisterArgs::from_meta(&attr.meta), |args| {
+                    register_args.replace(args);
+                });
 
-                    false
-                } else {
-                    true
-                }
-            })
-            .collect();
+                false
+            } else {
+                true
+            }
+        });
 
         let Some(register_args) = register_args else {
             return;

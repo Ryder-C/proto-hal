@@ -382,7 +382,7 @@ mod tests {
         }
 
         fn foo() {
-            cordic::csr::func
+            // cordic::csr::func
         }
 
         /*
