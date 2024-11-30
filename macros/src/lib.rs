@@ -18,6 +18,7 @@ struct BlockArgs {
 #[derive(Debug, Default, FromMeta)]
 #[darling(default)]
 struct RegisterArgs {
+    offset: Option<u8>,
     #[darling(default)]
     auto_increment: bool,
 }
@@ -82,29 +83,6 @@ struct FieldInfo {
     stateful: bool,
 }
 
-#[derive(Debug)]
-struct RegFieldInfo {
-    args: FieldArgs,
-    ident: Ident,
-    ty: Ident,
-    gen_ty: Ident,
-}
-
-#[derive(Debug, FromMeta)]
-struct BlockRegArgs {
-    offset: u8,
-}
-
-#[derive(Debug)]
-struct BlockRegInfo {
-    args: BlockRegArgs,
-    ident: Ident,
-    gen_ty: Ident,
-}
-
-#[derive(Debug, FromMeta)]
-struct Reset;
-
 #[derive(Debug, Clone)]
 struct StateInfo {
     args: StateArgs,
@@ -126,14 +104,13 @@ struct ValueArgs;
 #[derive(Debug)]
 struct RegisterInfo {
     args: RegisterArgs,
-    fields: Vec<RegFieldInfo>,
+    ident: Ident,
+    stateful: bool,
 }
 
 struct BlockInfo {
     args: BlockArgs,
     ident: Ident,
-    generics: Generics,
-    registers: Vec<BlockRegInfo>,
 }
 
 struct GenPrimitiveModsArgs {
@@ -387,6 +364,8 @@ fn process_field(
         }
     });
 
+    error_combinator.coalesce()?;
+
     // offset and width
     {
         let offset_tokens = match (field_args.offset, &prev_field_info) {
@@ -483,8 +462,6 @@ fn process_field(
         }));
     }
 
-    error_combinator.coalesce()?;
-
     // Q: is this the best way to do this?
     if (stateful && reset_state.is_none())
         || (!stateful && field_args.read.is_some() && field_args.reset.is_none())
@@ -517,7 +494,10 @@ fn process_field(
     })
 }
 
-fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
+fn process_register(
+    register_args: RegisterArgs,
+    module: &mut ItemMod,
+) -> Result<RegisterInfo, syn::Error> {
     module.vis = Visibility::Public(Token![pub](module.span()));
     let items = &mut module
         .content
@@ -566,14 +546,24 @@ fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result
 
     error_combinator.coalesce()?;
 
+    let stateful = fields.iter().find(|field| field.stateful).is_some();
+
     // register struct
     {
-        let field_idents = fields
+        let (stateful_fields, stateless_fields) =
+            fields.iter().partition::<Vec<_>, _>(|field| field.stateful);
+
+        let stateful_field_idents = stateful_fields
             .iter()
-            .filter(|field| field.stateful)
             .map(|field| field.ident.clone())
             .collect::<Vec<_>>();
-        let field_tys = field_idents
+
+        let stateless_field_idents = stateless_fields
+            .iter()
+            .map(|field| field.ident.clone())
+            .collect::<Vec<_>>();
+
+        let stateful_field_tys = stateful_field_idents
             .iter()
             .map(|ident| {
                 Ident::new(
@@ -584,25 +574,45 @@ fn process_register(register_args: RegisterArgs, module: &mut ItemMod) -> Result
             .collect::<Vec<_>>();
 
         items.push(Item::Verbatim(quote! {
-            pub struct Register<#(
-                #field_tys,
-            )*>
+            pub struct Register<
+                #(
+                    #stateful_field_tys,
+                )*
+            >
             where
                 #(
-                    #field_tys: #field_idents::State,
+                    #stateful_field_tys: #stateful_field_idents::State,
                 )*
             {
                 #(
-                    #field_idents: #field_tys,
+                    #stateful_field_idents: #stateful_field_tys,
+                )*
+
+                #(
+                    #stateless_field_idents: (),
                 )*
             }
         }));
+
+        if stateful {
+            items.push(Item::Verbatim(quote! {
+                pub type Reset = Register<
+                    #(
+                        #stateful_field_idents::Reset,
+                    )*
+                >;
+            }));
+        }
     }
 
-    Ok(())
+    Ok(RegisterInfo {
+        args: register_args,
+        ident: module.ident.clone(),
+        stateful,
+    })
 }
 
-fn process_block(args: BlockArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
+fn process_block(block_args: BlockArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
     let items = &mut module
         .content
         .as_mut()
@@ -610,6 +620,8 @@ fn process_block(args: BlockArgs, module: &mut ItemMod) -> Result<(), syn::Error
         .1;
 
     let mut error_combinator = SynErrorCombinator::new();
+
+    let mut registers = Vec::new();
 
     items.iter_mut().for_each(|item| {
         let Item::Mod(inner_mod) = item else { return };
@@ -619,8 +631,15 @@ fn process_block(args: BlockArgs, module: &mut ItemMod) -> Result<(), syn::Error
 
         inner_mod.attrs.retain(|attr| {
             if attr.path().is_ident("register") {
-                error_combinator.maybe_then(RegisterArgs::from_meta(&attr.meta), |args| {
+                error_combinator.try_maybe_then(RegisterArgs::from_meta(&attr.meta), |args| {
+                    // validate offset specification
+                    if args.offset.is_none() && !block_args.auto_increment {
+                        Err(syn::Error::new_spanned(attr.path(), "register offset must be specified. to infer offsets, add the `auto_increment` argument to the block attribute macro"))?
+                    }
+
                     register_args.replace(args);
+
+                    Ok(())
                 });
 
                 false
@@ -634,10 +653,61 @@ fn process_block(args: BlockArgs, module: &mut ItemMod) -> Result<(), syn::Error
         };
 
         // 2. pass the module over to the register parser
-        error_combinator.maybe(process_register(register_args, inner_mod));
+        error_combinator.maybe_then(process_register(register_args, inner_mod), |register| {
+            registers.push(register);
+        });
     });
 
     error_combinator.coalesce()?;
+
+    // block struct
+    {
+        let (stateful_registers, stateless_registers) = registers
+            .iter()
+            .partition::<Vec<_>, _>(|register| register.stateful);
+
+        let stateful_register_idents = stateful_registers
+            .iter()
+            .map(|register| register.ident.clone())
+            .collect::<Vec<_>>();
+
+        let stateless_register_idents = stateless_registers
+            .iter()
+            .map(|register| register.ident.clone())
+            .collect::<Vec<_>>();
+
+        let stateful_register_tys = stateful_register_idents
+            .iter()
+            .map(|ident| {
+                Ident::new(
+                    &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
+                    Span::call_site(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        items.push(Item::Verbatim(quote! {
+            pub struct Block<
+                #(
+                    #stateful_register_tys,
+                )*
+            > {
+                #(
+                    #stateful_register_idents: #stateful_register_tys,
+                )*
+
+                #(
+                    #stateless_register_idents: (),
+                )*
+            }
+
+            pub type Reset = Block<
+                #(
+                    #stateful_register_idents::Reset,
+                )*
+            >;
+        }));
+    }
 
     Ok(())
 }

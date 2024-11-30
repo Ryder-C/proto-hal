@@ -383,7 +383,7 @@ mod tests {
         }
 
         fn foo() {
-            type _x = cordic::csr::precision::P4;
+            let p: cordic::Reset = unsafe { core::mem::transmute(()) };
         }
 
         /*
