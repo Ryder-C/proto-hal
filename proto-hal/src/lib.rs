@@ -24,7 +24,7 @@ pub trait IntoReset {
 #[cfg(test)]
 mod tests {
     mod macros {
-        
+
         use macros::block;
 
         // mod syscfg {
@@ -360,7 +360,7 @@ mod tests {
                     struct Q15;
                 }
 
-                #[field(offset = 31, width = 1, read, write)]
+                #[field(offset = 31, width = 1, read)]
                 mod rrdy {
                     #[state(reset, bits = 0)]
                     struct NoData;
@@ -397,7 +397,8 @@ mod tests {
                     .finish()
             });
 
-            let csr = p.csr;
+            p.wdata.write(|w| w.arg(0x7000));
+            let x = p.rdata.read(|r| r.res());
         }
 
         /*

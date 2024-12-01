@@ -4,7 +4,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
     parse::Parse, parse2, parse_macro_input, spanned::Spanned, Expr, ExprArray, Fields, Ident,
-    Item, ItemMod, ItemStruct, LitInt, Meta, Path, Token, Type, Visibility,
+    Index, Item, ItemMod, ItemStruct, LitInt, Meta, Path, Token, Type, Visibility,
 };
 
 #[derive(Debug, FromMeta)]
@@ -215,10 +215,6 @@ impl SynErrorCombinator {
     }
 }
 
-fn process_value(args: ValueArgs, s: &mut ItemStruct) -> Result<(), syn::Error> {
-    Ok(())
-}
-
 fn process_state(
     state_args: StateArgs,
     prev_state_info: Option<StateInfo>,
@@ -243,8 +239,13 @@ fn process_state(
         })
         .unwrap(),
     );
-
     s.vis = Visibility::Public(Token![pub](s.span()));
+
+    *s = parse2(quote! {
+        #[cfg_attr(feature = "defmt", derive(::defmt::Format))]
+        #s
+    })
+    .unwrap();
 
     let state_impl = {
         let ident = &s.ident;
@@ -409,9 +410,15 @@ fn process_field(
             .collect::<Vec<_>>();
 
         items.push(Item::Verbatim(quote! {
+            #[cfg_attr(feature = "defmt", derive(::defmt::Format))]
+            pub struct Any {
+                state: States,
+            }
+
             pub type Reset = #reset_state;
             pub const RESET: u32 = Reset::RAW as u32;
 
+            #[cfg_attr(feature = "defmt", derive(::defmt::Format))]
             #[repr(u32)]
             pub enum States {
                 #(
@@ -599,6 +606,7 @@ fn process_register(
         items.push(Item::Verbatim(quote! {
             pub const OFFSET: u32 = #offset;
 
+            #[cfg_attr(feature = "defmt", derive(::defmt::Format))]
             pub struct Register<#(#stateful_field_tys,)*> {
                 #(
                     pub #stateful_field_idents: #stateful_field_tys,
@@ -641,7 +649,7 @@ fn process_register(
                     pub fn finish(self) -> Register<#(#stateful_field_tys,)*> {
                         let reg_value = #(
                             ((#stateful_field_tys::RAW as u32) << #stateful_field_idents::OFFSET)
-                        )+*;
+                        )|*;
 
                         // SAFETY: assumes the proc macro implementation is sound
                         // and that the peripheral description is accurate
@@ -708,6 +716,165 @@ fn process_register(
                         }
                     }));
                 });
+        }
+
+        // reader
+        {
+            let readable_stateless_fields = stateless_fields
+                .iter()
+                .filter(|field| field.args.read.is_some())
+                .collect::<Vec<_>>();
+
+            let readable_stateless_field_idents = readable_stateless_fields
+                .iter()
+                .map(|field| field.ident.clone())
+                .collect::<Vec<_>>();
+
+            let value_tys = readable_stateless_fields
+                .iter()
+                .map(|field| {
+                    let ident = format_ident!(
+                        "u{}",
+                        Index {
+                            index: field.args.width as _,
+                            span: Span::call_site(),
+                        }
+                    );
+
+                    match field.args.width {
+                        8 | 16 | 32 => {
+                            quote! { #ident }
+                        }
+                        _ => {
+                            quote! { ::proto_hal::macro_utils::arbitrary_int::#ident }
+                        }
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let widths = readable_stateless_fields
+                .iter()
+                .map(|field| field.args.width)
+                .collect::<Vec<_>>();
+
+            if !readable_stateless_fields.is_empty() {
+                items.push(Item::Verbatim(quote! {
+                    pub struct Reader {
+                        value: u32,
+                    }
+
+                    impl Reader {
+                        const fn new(value: u32) -> Self {
+                            Self {
+                                value,
+                            }
+                        }
+
+                        #(
+                            pub fn #readable_stateless_field_idents(&self) -> #value_tys {
+                                (self.value >> #readable_stateless_field_idents::OFFSET) % (1 << #widths)
+                            }
+                        )*
+                    }
+                }));
+
+                items.push(Item::Verbatim(quote! {
+                impl<#(#stateful_field_tys,)*> Register<#(#stateful_field_tys,)*>
+                where
+                    #(
+                        #stateful_field_tys: #stateful_field_idents::State,
+                    )*
+                {
+                    pub fn read<T>(&self, f: impl FnOnce(&Reader) -> T) -> T {
+                        let reader = Reader::new(
+                            // SAFETY: assumes the proc macro implementation is sound
+                            // and that the peripheral description is accurate
+                            unsafe {
+                                core::ptr::read_volatile((super::BASE_ADDR + OFFSET) as *const u32)
+                            }
+                        );
+
+                        f(&reader)
+                    }
+                }
+            }));
+            }
+        }
+
+        // writer
+        {
+            let writable_stateless_fields = stateless_fields
+                .iter()
+                .filter(|field| field.args.write.is_some())
+                .collect::<Vec<_>>();
+
+            let writable_stateless_field_idents = writable_stateless_fields
+                .iter()
+                .map(|field| field.ident.clone())
+                .collect::<Vec<_>>();
+
+            let value_tys = writable_stateless_fields
+                .iter()
+                .map(|field| {
+                    let ident = format_ident!(
+                        "u{}",
+                        Index {
+                            index: field.args.width as _,
+                            span: Span::call_site(),
+                        }
+                    );
+
+                    match field.args.width {
+                        1 => quote! { bool },
+                        8 | 16 | 32 => quote! { #ident },
+                        _ => quote! { ::proto_hal::macro_utils::arbitrary_int::#ident },
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            if !writable_stateless_fields.is_empty() {
+                items.push(Item::Verbatim(quote! {
+                pub struct Writer {
+                    value: u32,
+                }
+
+                impl Writer {
+                    const fn new() -> Self {
+                        Self {
+                            value: 0,
+                        }
+                    }
+
+                    #(
+                        pub fn #writable_stateless_field_idents(&mut self, value: #value_tys) -> &mut Self {
+                            self.value |= (value as u32) << #writable_stateless_field_idents::OFFSET;
+                            self
+                        }
+                    )*
+                }
+            }));
+
+                items.push(Item::Verbatim(quote! {
+                impl<#(#stateful_field_tys,)*> Register<#(#stateful_field_tys,)*>
+                where
+                    #(
+                        #stateful_field_tys: #stateful_field_idents::State,
+                    )*
+                {
+                    pub fn write(&self, f: impl FnOnce(&mut Writer) -> &mut Writer) {
+                        let mut writer = Writer::new();
+
+                        f(&mut writer);
+
+                        // SAFETY: assumes the proc macro implementation is sound
+                        // and that the peripheral description is accurate
+                        unsafe {
+                            core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, writer.value);
+                        }
+                    }
+                }
+            }));
+            }
         }
     }
 
@@ -796,6 +963,7 @@ fn process_block(block_args: BlockArgs, module: &mut ItemMod) -> Result<(), syn:
         items.push(Item::Verbatim(quote! {
             pub const BASE_ADDR: u32 = #base_addr;
 
+            #[cfg_attr(feature = "defmt", derive(::defmt::Format))]
             pub struct Block<
                 #(
                     #stateful_register_tys,
@@ -806,7 +974,7 @@ fn process_block(block_args: BlockArgs, module: &mut ItemMod) -> Result<(), syn:
                 )*
 
                 #(
-                    pub #stateless_register_idents: (),
+                    pub #stateless_register_idents: #stateless_register_idents::Register,
                 )*
             }
 
