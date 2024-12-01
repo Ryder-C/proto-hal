@@ -252,7 +252,7 @@ mod tests {
                 #[field(width = 4, read, write, auto_increment)]
                 /// custom docs
                 mod precision {
-                    #[state(bits = 1, reset)]
+                    #[state(bits = 1)]
                     struct P4;
                     #[state]
                     struct P8;
@@ -260,7 +260,7 @@ mod tests {
                     struct P12;
                     #[state]
                     struct P16;
-                    #[state]
+                    #[state(reset)]
                     struct P20;
                     #[state]
                     struct P24;
@@ -397,8 +397,12 @@ mod tests {
                 }
             }
 
-            // let p = p.csr(|reg| reg.build_transition().func::<Sin>().finish());
-            // core::ptr::write_volatile(cordic::BASE_ADDR + cordic::csr::, src);
+            let p = p.csr(|reg| {
+                reg.build_transition()
+                    .func::<cordic::csr::func::Sin>()
+                    .precision::<cordic::csr::precision::P4>()
+                    .finish()
+            });
         }
 
         /*

@@ -251,6 +251,12 @@ fn process_state(
         quote! {
             impl State for #ident {
                 const RAW: States = States::#ident;
+
+                unsafe fn conjure() -> Self {
+                    Self {
+                        sealed: (),
+                    }
+                }
             }
         }
     };
@@ -415,6 +421,8 @@ fn process_field(
 
             pub trait State {
                 const RAW: States;
+
+                unsafe fn conjure() -> Self;
             }
         }));
     } else {
@@ -612,13 +620,27 @@ fn process_register(
                     )*
                 >;
 
-                impl<#(#stateful_field_tys,)*> Register<#(#stateful_field_tys,)*>
+                pub struct TransitionBuilder<#(#stateful_field_tys,)*> {
+                    #(
+                        pub #stateful_field_idents: core::marker::PhantomData<#stateful_field_tys>,
+                    )*
+                }
+
+                impl<#(#stateful_field_tys,)*> TransitionBuilder<#(#stateful_field_tys,)*>
                 where
                     #(
                         #stateful_field_tys: #stateful_field_idents::State,
                     )*
                 {
-                    pub fn transition<#(#new_stateful_field_tys,)*>(self) -> Register<#(#new_stateful_field_tys,)*> {
+                    pub unsafe fn conjure() -> Self {
+                        Self {
+                            #(
+                                #stateful_field_idents: core::marker::PhantomData,
+                            )*
+                        }
+                    }
+
+                    pub fn finish(self) -> Register<#(#stateful_field_tys,)*> {
                         let reg_value = #(
                             ((#stateful_field_tys::RAW as u32) << #stateful_field_idents::OFFSET)
                         )+*;
@@ -627,10 +649,57 @@ fn process_register(
                             core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, reg_value);
                         }
 
-                        todo!()
+                        Register {
+                            #(
+                                #stateful_field_idents: unsafe { #stateful_field_tys::conjure() },
+                            )*
+                        }
+                    }
+                }
+
+                impl<#(#stateful_field_tys,)*> Register<#(#stateful_field_tys,)*>
+                where
+                    #(
+                        #stateful_field_tys: #stateful_field_idents::State,
+                    )*
+                {
+                    pub fn transition<#(#new_stateful_field_tys,)*>(self) -> Register<#(#new_stateful_field_tys,)*>
+                    where
+                        #(
+                            #new_stateful_field_tys: #stateful_field_idents::State,
+                        )*
+                    {
+                        unsafe { TransitionBuilder::conjure() }.finish()
+                    }
+
+                    pub fn build_transition(self) -> TransitionBuilder<#(#stateful_field_tys,)*> {
+                        unsafe { TransitionBuilder::conjure() }
                     }
                 }
             }));
+
+            for (i, field) in stateful_fields.iter().enumerate() {
+                let ident = &field.ident;
+
+                let prev_field_tys = stateful_field_tys.get(..i).unwrap();
+                let next_field_tys = stateful_field_tys.get(i + 1..).unwrap();
+
+                items.push(Item::Verbatim(quote! {
+                    impl<#(#stateful_field_tys,)*> TransitionBuilder<#(#stateful_field_tys,)*>
+                    where
+                        #(
+                            #stateful_field_tys: #stateful_field_idents::State,
+                        )*
+                    {
+                        pub fn #ident<S>(self) -> TransitionBuilder<#(#prev_field_tys,)* S, #(#next_field_tys,)*>
+                        where
+                            S: #ident::State,
+                        {
+                            unsafe { TransitionBuilder::conjure() }
+                        }
+                    }
+                }));
+            }
         }
     }
 
