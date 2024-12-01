@@ -762,6 +762,7 @@ fn process_register(
                     );
 
                     match field.args.width {
+                        1 => quote! { bool },
                         8 | 16 | 32 => {
                             quote! { #ident }
                         }
