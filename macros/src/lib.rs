@@ -555,19 +555,17 @@ fn process_register(
 
     error_combinator.coalesce()?;
 
-    let stateful = fields.iter().find(|field| field.stateful).is_some();
+    let stateful = fields.iter().any(|field| field.stateful);
 
     {
         let offset = if let Some(offset) = register_args.offset {
             quote! { #offset }
-        } else {
-            if let Some(prev) = prev_register_info {
-                let prev_ident = prev.ident;
+        } else if let Some(prev) = prev_register_info {
+            let prev_ident = prev.ident;
 
-                quote! { super::#prev_ident::OFFSET + 32 }
-            } else {
-                quote! { 0 }
-            }
+            quote! { super::#prev_ident::OFFSET + 32 }
+        } else {
+            quote! { 0 }
         };
 
         let (stateful_fields, stateless_fields) =

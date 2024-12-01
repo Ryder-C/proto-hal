@@ -24,7 +24,7 @@ pub trait IntoReset {
 #[cfg(test)]
 mod tests {
     mod macros {
-        use crate::prelude::*;
+        
         use macros::block;
 
         // mod syscfg {
