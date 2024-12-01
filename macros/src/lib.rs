@@ -619,6 +619,26 @@ fn process_register(
         }));
 
         if stateful {
+            let writable_stateful_fields = stateful_fields
+                .iter()
+                .filter(|field| field.args.write.is_some())
+                .collect::<Vec<_>>();
+
+            let writable_stateful_field_idents = writable_stateful_fields
+                .iter()
+                .map(|field| field.ident.clone())
+                .collect::<Vec<_>>();
+
+            let writable_stateful_field_tys = writable_stateful_field_idents
+                .iter()
+                .map(|ident| {
+                    Ident::new(
+                        &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
+                        Span::call_site(),
+                    )
+                })
+                .collect::<Vec<_>>();
+
             items.push(Item::Verbatim(quote! {
                 pub type Reset = Register<
                     #(
@@ -648,7 +668,7 @@ fn process_register(
 
                     pub fn finish(self) -> Register<#(#stateful_field_tys,)*> {
                         let reg_value = #(
-                            ((#stateful_field_tys::RAW as u32) << #stateful_field_idents::OFFSET)
+                            ((#writable_stateful_field_tys::RAW as u32) << #writable_stateful_field_idents::OFFSET)
                         )|*;
 
                         // SAFETY: assumes the proc macro implementation is sound
