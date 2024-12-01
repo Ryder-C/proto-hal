@@ -683,29 +683,33 @@ fn process_register(
                 }
             }));
 
-            for (i, field) in stateful_fields.iter().enumerate() {
-                let ident = &field.ident;
+            stateful_fields
+                .iter()
+                .enumerate()
+                .filter(|(_, field)| field.args.write.is_some())
+                .for_each(|(i, field)| {
+                    let ident = &field.ident;
 
-                let prev_field_tys = stateful_field_tys.get(..i).unwrap();
-                let next_field_tys = stateful_field_tys.get(i + 1..).unwrap();
+                    let prev_field_tys = stateful_field_tys.get(..i).unwrap();
+                    let next_field_tys = stateful_field_tys.get(i + 1..).unwrap();
 
-                items.push(Item::Verbatim(quote! {
-                    impl<#(#stateful_field_tys,)*> TransitionBuilder<#(#stateful_field_tys,)*>
-                    where
-                        #(
-                            #stateful_field_tys: #stateful_field_idents::State,
-                        )*
-                    {
-                        pub fn #ident<S>(self) -> TransitionBuilder<#(#prev_field_tys,)* S, #(#next_field_tys,)*>
+                    items.push(Item::Verbatim(quote! {
+                        impl<#(#stateful_field_tys,)*> TransitionBuilder<#(#stateful_field_tys,)*>
                         where
-                            S: #ident::State,
+                            #(
+                                #stateful_field_tys: #stateful_field_idents::State,
+                            )*
                         {
-                            // SAFETY: `self` is destroyed
-                            unsafe { TransitionBuilder::conjure() }
+                            pub fn #ident<S>(self) -> TransitionBuilder<#(#prev_field_tys,)* S, #(#next_field_tys,)*>
+                            where
+                                S: #ident::State,
+                            {
+                                // SAFETY: `self` is destroyed
+                                unsafe { TransitionBuilder::conjure() }
+                            }
                         }
-                    }
-                }));
-            }
+                    }));
+                });
         }
     }
 
@@ -816,40 +820,39 @@ fn process_block(block_args: BlockArgs, module: &mut ItemMod) -> Result<(), syn:
         }));
 
         // Q: better way to do this?
-        for (i, (ident, ty)) in stateful_register_idents
+        stateful_register_idents
             .iter()
             .zip(stateful_register_tys.iter())
             .enumerate()
-        {
-            let prev_register_idents = stateful_register_idents.get(..i).unwrap();
-            let next_register_idents = stateful_register_idents.get(i + 1..).unwrap();
+            .for_each(|(i, (ident, ty))| {
+                let prev_register_idents = stateful_register_idents.get(..i).unwrap();
+                let next_register_idents = stateful_register_idents.get(i + 1..).unwrap();
 
-            let prev_register_tys = stateful_register_tys.get(..i).unwrap();
-            let next_register_tys = stateful_register_tys.get(i + 1..).unwrap();
+                let prev_register_tys = stateful_register_tys.get(..i).unwrap();
+                let next_register_tys = stateful_register_tys.get(i + 1..).unwrap();
 
-            items.push(Item::Verbatim(quote! {
-                impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)*>
-                where
-                    #(
-                        #stateful_register_tys: #stateful_register_idents::State,
-                    )*
-                {
-                    pub fn #ident<R>(self, f: impl FnOnce(#ty) -> R) -> Block<#(#prev_register_tys,)* R, #(#next_register_tys,)*> {
-                        Register {
-                            #(
-                                #prev_register_idents: self.#prev_register_idents,
-                            )*
+                items.push(Item::Verbatim(quote! {
+                    impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)*> {
+                        pub fn #ident<R>(self, f: impl FnOnce(#ty) -> R) -> Block<#(#prev_register_tys,)* R, #(#next_register_tys,)*> {
+                            Block {
+                                #(
+                                    #prev_register_idents: self.#prev_register_idents,
+                                )*
 
-                            #ident: R,
+                                #ident: f(self.#ident),
 
-                            #(
-                                #next_register_idents: self.#next_register_idents,
-                            )*
+                                #(
+                                    #next_register_idents: self.#next_register_idents,
+                                )*
+
+                                #(
+                                    #stateless_register_idents: self.#stateless_register_idents,
+                                )*
+                            }
                         }
                     }
-                }
-            }));
-        }
+                }));
+            });
     }
 
     Ok(())

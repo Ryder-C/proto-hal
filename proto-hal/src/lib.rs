@@ -332,7 +332,7 @@ mod tests {
                 mod nres {
                     #[state(reset, bits = 0)]
                     struct OneRead;
-                    #[state(bits = 1)]
+                    #[state(bits = 1, entitlements = [ressize::Q31])]
                     struct TwoReads;
                 }
 
@@ -340,7 +340,7 @@ mod tests {
                 mod nargs {
                     #[state(reset, bits = 0)]
                     struct OneWrite;
-                    #[state(bits = 1)]
+                    #[state(bits = 1, entitlements = [argsize::Q31])]
                     struct TwoWrites;
                 }
 
@@ -382,13 +382,18 @@ mod tests {
             }
         }
 
-        fn foo() {
+        #[allow(unused)]
+        fn this_should_compile() {
             let p: cordic::Reset = unsafe { core::mem::transmute(()) };
 
             let p = p.csr(|reg| {
+                use cordic::csr::*;
+
                 reg.build_transition()
-                    .func::<cordic::csr::func::Sin>()
-                    .precision::<cordic::csr::precision::P4>()
+                    .argsize::<argsize::Q15>()
+                    .nargs::<nargs::TwoWrites>()
+                    .func::<func::Sin>()
+                    .precision::<precision::P60>()
                     .finish()
             });
 
