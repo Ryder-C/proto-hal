@@ -645,10 +645,13 @@ fn process_register(
                             ((#stateful_field_tys::RAW as u32) << #stateful_field_idents::OFFSET)
                         )+*;
 
+                        // SAFETY: assumes the proc macro implementation is sound
+                        // and that the peripheral description is accurate
                         unsafe {
                             core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, reg_value);
                         }
 
+                        // SAFETY: `self` is destroyed
                         Register {
                             #(
                                 #stateful_field_idents: unsafe { #stateful_field_tys::conjure() },
@@ -669,10 +672,12 @@ fn process_register(
                             #new_stateful_field_tys: #stateful_field_idents::State,
                         )*
                     {
+                        // SAFETY: `self` is destroyed
                         unsafe { TransitionBuilder::conjure() }.finish()
                     }
 
                     pub fn build_transition(self) -> TransitionBuilder<#(#stateful_field_tys,)*> {
+                        // SAFETY: `self` is destroyed
                         unsafe { TransitionBuilder::conjure() }
                     }
                 }
@@ -695,6 +700,7 @@ fn process_register(
                         where
                             S: #ident::State,
                         {
+                            // SAFETY: `self` is destroyed
                             unsafe { TransitionBuilder::conjure() }
                         }
                     }
@@ -808,13 +814,42 @@ fn process_block(block_args: BlockArgs, module: &mut ItemMod) -> Result<(), syn:
                 )*
             >;
         }));
-    }
 
-    // register accessors
-    {
-        //     items.push(Item::Verbatim(quote! {
-        //         impl Block
-        //     }));
+        // Q: better way to do this?
+        for (i, (ident, ty)) in stateful_register_idents
+            .iter()
+            .zip(stateful_register_tys.iter())
+            .enumerate()
+        {
+            let prev_register_idents = stateful_register_idents.get(..i).unwrap();
+            let next_register_idents = stateful_register_idents.get(i + 1..).unwrap();
+
+            let prev_register_tys = stateful_register_tys.get(..i).unwrap();
+            let next_register_tys = stateful_register_tys.get(i + 1..).unwrap();
+
+            items.push(Item::Verbatim(quote! {
+                impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)*>
+                where
+                    #(
+                        #stateful_register_tys: #stateful_register_idents::State,
+                    )*
+                {
+                    pub fn #ident<R>(self, f: impl FnOnce(#ty) -> R) -> Block<#(#prev_register_tys,)* R, #(#next_register_tys,)*> {
+                        Register {
+                            #(
+                                #prev_register_idents: self.#prev_register_idents,
+                            )*
+
+                            #ident: R,
+
+                            #(
+                                #next_register_idents: self.#next_register_idents,
+                            )*
+                        }
+                    }
+                }
+            }));
+        }
     }
 
     Ok(())

@@ -385,24 +385,14 @@ mod tests {
         fn foo() {
             let p: cordic::Reset = unsafe { core::mem::transmute(()) };
 
-            impl<Csr> cordic::Block<Csr> {
-                pub fn csr<NewCsr>(self, f: impl FnOnce(Csr) -> NewCsr) -> cordic::Block<NewCsr> {
-                    let new_csr = f(self.csr);
-
-                    cordic::Block {
-                        wdata: self.wdata,
-                        rdata: self.rdata,
-                        csr: new_csr,
-                    }
-                }
-            }
-
             let p = p.csr(|reg| {
                 reg.build_transition()
                     .func::<cordic::csr::func::Sin>()
                     .precision::<cordic::csr::precision::P4>()
                     .finish()
             });
+
+            let csr = p.csr;
         }
 
         /*
