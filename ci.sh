@@ -3,7 +3,7 @@
 set -euxo pipefail
 
 TARGETS=("thumbv6m-none-eabi" "thumbv7em-none-eabi" "thumbv7em-none-eabihf")
-FEATURES=("stm32" "sw_cordic")
+FEATURES=("stm32")
 
 for TARGET in "${TARGETS[@]}"; do
     rustup target add "$TARGET"

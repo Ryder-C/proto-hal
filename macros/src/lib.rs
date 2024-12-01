@@ -3,8 +3,8 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
-    parse::Parse, parse2, parse_macro_input, spanned::Spanned, Expr, ExprArray, Fields, Generics,
-    Ident, Item, ItemMod, ItemStruct, LitInt, Meta, Path, Token, Type, Visibility,
+    parse::Parse, parse2, parse_macro_input, spanned::Spanned, Expr, ExprArray, Fields, Ident,
+    Item, ItemMod, ItemStruct, LitInt, Meta, Path, Token, Type, Visibility,
 };
 
 #[derive(Debug, FromMeta)]

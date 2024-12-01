@@ -8,8 +8,6 @@ stm32 = ["pin_alternates"]
 
 pin_alternates = []
 
-sw_cordic = ["dep:cordic"]
-
 [dependencies]
 arbitrary-int = "1.2.7"
 cordic = { version = "0.1.5", optional = true }
