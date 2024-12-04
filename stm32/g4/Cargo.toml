@@ -7,4 +7,5 @@ edition = "2021"
 proto-hal = { path = "../../proto-hal" }
 
 [features]
+default = ["cordic"]
 cordic = []

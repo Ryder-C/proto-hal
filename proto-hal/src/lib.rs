@@ -10,6 +10,7 @@ pub mod stm32;
 pub use macros;
 pub mod macro_utils;
 pub mod prelude;
+pub mod stasis;
 
 /// Types that encapsulate a resource that can be configured to be
 /// in a "reset" state implement this trait.

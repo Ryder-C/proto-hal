@@ -1,9 +1,9 @@
 use proto_hal::macros::block;
 
 #[block(
-    base_addr = 0x4002_1000,
+    base_addr = 0x4002_0c00,
     auto_increment,
-    entitlements = [super::ahb::cordic_en::Enabled],
+    entitlements = [super::rcc::ahb1enr::cordic_en::Enabled],
     erase_mod,
 )]
 mod cordic {

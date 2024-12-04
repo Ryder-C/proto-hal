@@ -9,13 +9,12 @@ use syn::{
     Index, Item, ItemMod, ItemStruct, LitInt, Meta, Path, Token, Type, Visibility,
 };
 
-#[derive(Debug, FromMeta)]
+#[derive(Debug, Default, FromMeta)]
+#[darling(default)]
 struct BlockArgs {
     base_addr: u32,
-    #[darling(default)]
     auto_increment: bool,
     entitlements: PathArray,
-    #[darling(default)]
     erase_mod: bool,
 }
 
@@ -157,6 +156,7 @@ pub fn gen_primitive_mods(item: TokenStream) -> TokenStream {
     .into()
 }
 
+#[derive(Debug)]
 struct SynErrorCombinator {
     errors: Vec<syn::Error>,
 }
@@ -274,7 +274,7 @@ fn process_state(
 
         Some(quote! {
             #(
-                unsafe impl ::proto_hal::macro_utils::Entitled<super::#entitlement_paths> for #ident {}
+                unsafe impl ::proto_hal::stasis::Entitled<super::#entitlement_paths> for #ident {}
             )*
         })
     } else {
@@ -575,6 +575,13 @@ fn process_register(
                         Err(syn::Error::new_spanned(attr.path(), "field offset must be specified. to infer offsets, add the `auto_increment` argument to the register attribute macro"))?
                     }
 
+                    if args.read.is_none() && args.write.is_none() {
+                        Err(syn::Error::new_spanned(
+                            attr.path(),
+                            "fields must be readable or writable.",
+                        ))?
+                    }
+
                     field_args.replace(args);
 
                     Ok(())
@@ -640,7 +647,7 @@ fn process_register(
             .collect::<Vec<_>>();
 
         items.push(Item::Verbatim(quote! {
-            pub const OFFSET: u32 = #offset;
+            pub const OFFSET: u32 = #offset as u32;
 
             #[cfg_attr(feature = "defmt", derive(::defmt::Format))]
             pub struct Register<#(#stateful_field_tys,)*> {
@@ -766,7 +773,7 @@ fn process_register(
                             }).collect::<Vec<_>>();
 
                         Some(quote! {
-                            #(+ ::proto_hal::macro_utils::Entitled<#entitled_field_tys>)*
+                            #(+ ::proto_hal::stasis::Entitled<#entitled_field_tys>)*
                         })
                     } else {
                         None
