@@ -4,6 +4,7 @@ use proto_hal::macros::block;
     base_addr = 0x4002_1000,
     auto_increment,
     entitlements = [super::ahb::cordic_en::Enabled],
+    erase_mod,
 )]
 mod cordic {
     #[register(auto_increment)]
@@ -176,29 +177,29 @@ mod cordic {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use super::*;
 
-    // #[allow(unused)]
-    // fn this_should_compile() {
-    //     let p: Reset = unsafe { core::mem::transmute(()) };
+    #[allow(unused)]
+    fn this_should_compile() {
+        let p: Reset = unsafe { core::mem::transmute(()) };
 
-    //     let p = p.csr(|reg| {
-    //         use csr::*;
+        let p = p.csr(|reg| {
+            use csr::*;
 
-    //         // reg.build_transition()
-    //         //     .argsize::<argsize::Q15>()
-    //         //     .nargs::<nargs::TwoWrites>()
-    //         //     .func::<func::Sin>()
-    //         //     .precision::<precision::P60>()
-    //         //     .finish()
-    //         reg.build_transition()
-    //             .scale::<scale::N1>()
-    //             .func::<func::Ln>()
-    //             .precision::<precision::P60>()
-    //             .finish()
-    //     });
+            // reg.build_transition()
+            //     .argsize::<argsize::Q15>()
+            //     .nargs::<nargs::TwoWrites>()
+            //     .func::<func::Sin>()
+            //     .precision::<precision::P60>()
+            //     .finish()
+            reg.build_transition()
+                .scale::<scale::N1>()
+                .func::<func::Ln>()
+                .precision::<precision::P60>()
+                .finish()
+        });
 
-    //     p.wdata.write(|w| w.arg(0x7000));
-    //     let x = p.rdata.read(|r| r.res());
-    // }
+        p.wdata.write(|w| w.arg(0x7000));
+        let x = p.rdata.read(|r| r.res());
+    }
 }
