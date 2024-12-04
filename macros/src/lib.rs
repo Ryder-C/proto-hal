@@ -1042,6 +1042,24 @@ fn process_block(block_args: &BlockArgs, module: &mut ItemMod) -> Result<(), syn
             })
             .collect::<Vec<_>>();
 
+        let entitlement_idents = (0..block_args.entitlements.elems.len())
+            .into_iter()
+            .map(|i| format_ident!("entitlement{}", i))
+            .collect::<Vec<_>>();
+        let entitlement_tys = (0..block_args.entitlements.elems.len())
+            .into_iter()
+            .map(|i| format_ident!("Entitlement{}", i))
+            .collect::<Vec<_>>();
+
+        let reset_entitlement_tys = entitlement_tys
+            .iter()
+            .map(|_| {
+                quote! {
+                    ::proto_hal::stasis::Unsatisfied
+                }
+            })
+            .collect::<Vec<_>>();
+
         items.push(Item::Verbatim(quote! {
             pub const BASE_ADDR: u32 = #base_addr;
 
@@ -1049,6 +1067,10 @@ fn process_block(block_args: &BlockArgs, module: &mut ItemMod) -> Result<(), syn
             pub struct Block<
                 #(
                     #stateful_register_tys,
+                )*
+
+                #(
+                    #entitlement_tys,
                 )*
             > {
                 #(
@@ -1058,14 +1080,33 @@ fn process_block(block_args: &BlockArgs, module: &mut ItemMod) -> Result<(), syn
                 #(
                     pub #stateless_register_idents: #stateless_register_idents::Register,
                 )*
+
+                #(
+                    pub #entitlement_idents: #entitlement_tys,
+                )*
             }
 
             pub type Reset = Block<
                 #(
                     #stateful_register_idents::Reset,
                 )*
+
+                #(
+                    #reset_entitlement_tys,
+                )*
             >;
         }));
+
+        let entitlements = block_args
+            .entitlements
+            .elems
+            .iter()
+            .map(|path| {
+                quote! {
+                    ::proto_hal::stasis::Entitlement<#path>
+                }
+            })
+            .collect::<Vec<_>>();
 
         // Q: better way to do this?
         stateful_register_idents
@@ -1080,8 +1121,8 @@ fn process_block(block_args: &BlockArgs, module: &mut ItemMod) -> Result<(), syn
                 let next_register_tys = stateful_register_tys.get(i + 1..).unwrap();
 
                 items.push(Item::Verbatim(quote! {
-                    impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)*> {
-                        pub fn #ident<R>(self, f: impl FnOnce(#ty) -> R) -> Block<#(#prev_register_tys,)* R, #(#next_register_tys,)*> {
+                    impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)* #(#entitlements,)*> {
+                        pub fn #ident<R>(self, f: impl FnOnce(#ty) -> R) -> Block<#(#prev_register_tys,)* R, #(#next_register_tys,)* #(#entitlements,)*> {
                             Block {
                                 #(
                                     #prev_register_idents: self.#prev_register_idents,
@@ -1096,11 +1137,37 @@ fn process_block(block_args: &BlockArgs, module: &mut ItemMod) -> Result<(), syn
                                 #(
                                     #stateless_register_idents: self.#stateless_register_idents,
                                 )*
+
+                                #(
+                                    #entitlement_idents: self.#entitlement_idents,
+                                )*
                             }
                         }
                     }
                 }));
             });
+
+        if !block_args.entitlements.elems.is_empty() {
+            items.push(Item::Verbatim(quote! {
+                impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)* #(#reset_entitlement_tys,)*> {
+                    pub fn attach(self, #(#entitlement_idents: #entitlements,)*) -> Block<#(#stateful_register_tys,)* #(#entitlements,)*> {
+                        Block {
+                            #(
+                                #stateful_register_idents: self.#stateful_register_idents,
+                            )*
+
+                            #(
+                                #stateless_register_idents: self.#stateless_register_idents,
+                            )*
+
+                            #(
+                                #entitlement_idents,
+                            )*
+                        }
+                    }
+                }
+            }));
+        }
     }
 
     Ok(())

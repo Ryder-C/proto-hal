@@ -10,6 +10,8 @@ pub trait Freeze: Sized {
     }
 }
 
+impl<T> Freeze for T where T: Sized {}
+
 /// A struct to hold stateful types where
 /// the state is frozen.
 pub struct Frozen<P, const OBSERVERS: usize>
@@ -44,3 +46,16 @@ where
 {
     _p: PhantomData<P>,
 }
+
+impl<P> From<P> for Entitlement<P>
+where
+    P: Freeze,
+{
+    fn from(_: P) -> Self {
+        Self { _p: PhantomData }
+    }
+}
+
+/// A marker type for
+/// an unsatisfied entitlement.
+pub struct Unsatisfied;

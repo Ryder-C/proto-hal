@@ -3,7 +3,7 @@ use proto_hal::macros::block;
 #[block(
     base_addr = 0x4002_0c00,
     auto_increment,
-    entitlements = [super::rcc::ahb1enr::cordic_en::Enabled],
+    entitlements = [super::rcc::ahb1enr::cordicen::Enabled],
     erase_mod,
 )]
 mod cordic {
@@ -177,13 +177,24 @@ mod cordic {
 
 #[cfg(test)]
 mod tests {
+    use super::super::rcc;
     use super::*;
 
     #[allow(unused)]
     fn this_should_compile() {
-        let p: Reset = unsafe { core::mem::transmute(()) };
+        let rcc: rcc::Reset = unsafe { core::mem::transmute(()) };
+        let cordic: Reset = unsafe { core::mem::transmute(()) };
 
-        let p = p.csr(|reg| {
+        let cordicen = rcc
+            .ahb1enr
+            .build_transition()
+            .cordicen::<rcc::ahb1enr::cordicen::Enabled>()
+            .finish()
+            .cordicen;
+
+        let cordic = cordic.attach(cordicen.into());
+
+        let cordic = cordic.csr(|reg| {
             use csr::*;
 
             // reg.build_transition()
@@ -199,7 +210,7 @@ mod tests {
                 .finish()
         });
 
-        p.wdata.write(|w| w.arg(0x7000));
-        let x = p.rdata.read(|r| r.res());
+        cordic.wdata.write(|w| w.arg(0x7000));
+        let x = cordic.rdata.read(|r| r.res());
     }
 }
