@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use darling::{ast::NestedMeta, FromMeta};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -80,6 +82,7 @@ struct FieldInfo {
     args: FieldArgs,
     ident: Ident,
     reset_state: Option<Ident>,
+    entitlement_fields: HashSet<Ident>,
     stateful: bool,
 }
 
@@ -87,6 +90,7 @@ struct FieldInfo {
 struct StateInfo {
     args: StateArgs,
     ident: Ident,
+    entitlement_fields: HashSet<Ident>,
 }
 
 #[derive(Debug, Clone, Default, FromMeta)]
@@ -262,6 +266,19 @@ fn process_state(
         }
     };
 
+    let entitlement_impl = if !state_args.entitlements.elems.is_empty() {
+        let ident = &s.ident;
+        let entitlement_paths = &state_args.entitlements.elems;
+
+        Some(quote! {
+            #(
+                unsafe impl ::proto_hal::macro_utils::Entitled<super::#entitlement_paths> for #ident {}
+            )*
+        })
+    } else {
+        None
+    };
+
     let order_assertion = if let Some(prev_state) = prev_state_info {
         let current_ident = &s.ident;
         let prev_ident = prev_state.ident;
@@ -293,13 +310,22 @@ fn process_state(
         }
     };
 
+    let mut entitlement_fields = HashSet::new();
+
+    state_args.entitlements.elems.iter().for_each(|path| {
+        entitlement_fields.insert(path.segments.first().unwrap().ident.clone());
+    });
+
     Ok((
         StateInfo {
             args: state_args,
             ident: s.ident.clone(),
+            entitlement_fields,
         },
         quote! {
             #state_impl
+            #entitlement_impl
+
             #order_assertion
             #bounds_assertion
         },
@@ -505,6 +531,14 @@ fn process_field(
         args: field_args,
         ident: module.ident.clone(),
         reset_state,
+        entitlement_fields: {
+            states
+                .iter()
+                .map(|state| state.entitlement_fields.clone())
+                .fold(HashSet::new(), |acc, next_set| {
+                    acc.union(&next_set).cloned().collect()
+                })
+        },
         stateful,
     })
 }
@@ -719,6 +753,23 @@ fn process_register(
                     let prev_field_tys = stateful_field_tys.get(..i).unwrap();
                     let next_field_tys = stateful_field_tys.get(i + 1..).unwrap();
 
+                    let entitlement_bounds = if !field.entitlement_fields.is_empty() {
+                        let entitled_field_tys = field.entitlement_fields
+                            .iter()
+                            .map(|ident| {
+                                Ident::new(
+                                    &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
+                                    Span::call_site(),
+                                )
+                            }).collect::<Vec<_>>();
+
+                        Some(quote! {
+                            #(+ ::proto_hal::macro_utils::Entitled<#entitled_field_tys>)*
+                        })
+                    } else {
+                        None
+                    };
+
                     items.push(Item::Verbatim(quote! {
                         impl<#(#stateful_field_tys,)*> TransitionBuilder<#(#stateful_field_tys,)*>
                         where
@@ -728,7 +779,7 @@ fn process_register(
                         {
                             pub fn #ident<S>(self) -> TransitionBuilder<#(#prev_field_tys,)* S, #(#next_field_tys,)*>
                             where
-                                S: #ident::State,
+                                S: #ident::State #entitlement_bounds,
                             {
                                 // SAFETY: `self` is destroyed
                                 unsafe { TransitionBuilder::conjure() }
@@ -793,6 +844,7 @@ fn process_register(
 
                         #(
                             pub fn #readable_stateless_field_idents(&self) -> #value_tys {
+                                // there must be a better way without modulo
                                 (self.value >> #readable_stateless_field_idents::OFFSET) % (1 << #widths)
                             }
                         )*
