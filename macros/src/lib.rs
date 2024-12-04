@@ -15,6 +15,8 @@ struct BlockArgs {
     #[darling(default)]
     auto_increment: bool,
     entitlements: PathArray,
+    #[darling(default)]
+    erase_mod: bool,
 }
 
 #[derive(Debug, Clone, Default, FromMeta)]
@@ -511,21 +513,21 @@ fn process_field(
     }
 
     // field docs
-    {
-        let mut msg = format!("# Spec\n- width: {}\n# States\n", field_args.width);
+    // {
+    //     let mut msg = format!("# Spec\n- width: {}\n# States\n", field_args.width);
 
-        for state in states.iter() {
-            msg.push_str(&format!("\t- {}\n", state.ident));
-        }
+    //     for state in states.iter() {
+    //         msg.push_str(&format!("\t- {}::{}\n", module.ident.clone(), state.ident));
+    //     }
 
-        // TODO: i dislike the misleading
-        // fallibility of this
-        *module = parse2(quote! {
-            #[doc = #msg]
-            #module
-        })
-        .unwrap();
-    }
+    //     // TODO: i dislike the misleading
+    //     // fallibility of this
+    //     *module = parse2(quote! {
+    //         #[doc = #msg]
+    //         #module
+    //     })
+    //     .unwrap();
+    // }
 
     Ok(FieldInfo {
         args: field_args,
@@ -958,7 +960,7 @@ fn process_register(
     })
 }
 
-fn process_block(block_args: BlockArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
+fn process_block(block_args: &BlockArgs, module: &mut ItemMod) -> Result<(), syn::Error> {
     let items = &mut module
         .content
         .as_mut()
@@ -1102,9 +1104,19 @@ fn block_inner(args: TokenStream, item: TokenStream) -> Result<TokenStream2, syn
 
     let mut module = parse2::<ItemMod>(item.into())?;
 
-    process_block(block_args, &mut module)?;
+    process_block(&block_args, &mut module)?;
 
-    Ok(module.to_token_stream())
+    Ok(if !block_args.erase_mod {
+        module.to_token_stream()
+    } else {
+        let items = module.content.unwrap().1;
+
+        quote! {
+            #(
+                #items
+            )*
+        }
+    })
 }
 
 #[proc_macro_attribute]

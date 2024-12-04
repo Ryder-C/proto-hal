@@ -1,0 +1,10 @@
+[package]
+name = "g4"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+proto-hal = { path = "../../proto-hal" }
+
+[features]
+cordic = []
