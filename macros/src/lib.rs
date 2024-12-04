@@ -853,8 +853,7 @@ fn process_register(
 
                         #(
                             pub fn #readable_stateless_field_idents(&self) -> #value_tys {
-                                // there must be a better way without modulo
-                                (self.value >> #readable_stateless_field_idents::OFFSET) % (1 << #widths)
+                                (self.value >> #readable_stateless_field_idents::OFFSET) & (u32::MAX >> (32 - #widths))
                             }
                         )*
                     }
