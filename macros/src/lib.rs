@@ -656,7 +656,7 @@ fn process_register(
                 )*
 
                 #(
-                    pub #stateless_field_idents: (),
+                    #stateless_field_idents: (),
                 )*
             }
         }));
@@ -833,27 +833,22 @@ fn process_register(
                 })
                 .collect::<Vec<_>>();
 
-            let widths = readable_stateless_fields
-                .iter()
-                .map(|field| field.args.width)
-                .collect::<Vec<_>>();
-
             if !readable_stateless_fields.is_empty() {
                 items.push(Item::Verbatim(quote! {
                     pub struct Reader {
-                        value: u32,
+                        value: ::proto_hal::macro_utils::RegisterValue,
                     }
 
                     impl Reader {
                         const fn new(value: u32) -> Self {
                             Self {
-                                value,
+                                value: ::proto_hal::macro_utils::RegisterValue::new(value),
                             }
                         }
 
                         #(
                             pub fn #readable_stateless_field_idents(&self) -> #value_tys {
-                                (self.value >> #readable_stateless_field_idents::OFFSET) & (u32::MAX >> (32 - #widths))
+                                self.value.#value_tys(#readable_stateless_field_idents::OFFSET)
                             }
                         )*
                     }

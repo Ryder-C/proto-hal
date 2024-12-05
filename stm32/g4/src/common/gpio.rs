@@ -1,6 +1,10 @@
 use proto_hal::macros::block;
 
-#[block(base_addr = 0x4800_0000, auto_increment)]
+#[block(
+    base_addr = 0x4800_0000,
+    entitlements = [super::super::rcc::ahb2enr::gpioaen::Enabled],
+    auto_increment,
+)]
 mod gpioa {
     #[register(auto_increment)]
     mod moder {
@@ -630,10 +634,755 @@ mod gpioa {
     mod idr {
         #[field(width = 1, read)]
         mod id0 {}
+        #[field(width = 1, read)]
+        mod id1 {}
+        #[field(width = 1, read)]
+        mod id2 {}
+        #[field(width = 1, read)]
+        mod id3 {}
+        #[field(width = 1, read)]
+        mod id4 {}
+        #[field(width = 1, read)]
+        mod id5 {}
+        #[field(width = 1, read)]
+        mod id6 {}
+        #[field(width = 1, read)]
+        mod id7 {}
+        #[field(width = 1, read)]
+        mod id8 {}
+        #[field(width = 1, read)]
+        mod id9 {}
+        #[field(width = 1, read)]
+        mod id10 {}
+        #[field(width = 1, read)]
+        mod id11 {}
+        #[field(width = 1, read)]
+        mod id12 {}
+        #[field(width = 1, read)]
+        mod id13 {}
+        #[field(width = 1, read)]
+        mod id14 {}
+        #[field(width = 1, read)]
+        mod id15 {}
+    }
+
+    #[register(auto_increment)]
+    mod odr {
+        #[field(width = 1, read, write)]
+        mod od0 {}
+        #[field(width = 1, read, write)]
+        mod od1 {}
+        #[field(width = 1, read, write)]
+        mod od2 {}
+        #[field(width = 1, read, write)]
+        mod od3 {}
+        #[field(width = 1, read, write)]
+        mod od4 {}
+        #[field(width = 1, read, write)]
+        mod od5 {}
+        #[field(width = 1, read, write)]
+        mod od6 {}
+        #[field(width = 1, read, write)]
+        mod od7 {}
+        #[field(width = 1, read, write)]
+        mod od8 {}
+        #[field(width = 1, read, write)]
+        mod od9 {}
+        #[field(width = 1, read, write)]
+        mod od10 {}
+        #[field(width = 1, read, write)]
+        mod od11 {}
+        #[field(width = 1, read, write)]
+        mod od12 {}
+        #[field(width = 1, read, write)]
+        mod od13 {}
+        #[field(width = 1, read, write)]
+        mod od14 {}
+        #[field(width = 1, read, write)]
+        mod od15 {}
+    }
+
+    // this could probably be
+    // stateful
+    #[register(auto_increment)]
+    mod bsrr {
+        #[field(width = 1, write, reset = 0)]
+        mod bs0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs15 {}
+
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
+
+    #[register(offset = 0x20, auto_increment)]
+    mod afrl {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel0 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel1 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel2 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel3 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel4 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel5 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel6 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel7 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod afrh {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel8 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel9 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel10 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel11 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel12 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel13 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel14 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel15 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod brr {
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
     }
 }
 
-#[block(base_addr = 0x4800_0400, auto_increment)]
+#[block(
+    base_addr = 0x4800_0400,
+    entitlements = [super::super::rcc::ahb2enr::gpioben::Enabled],
+    auto_increment
+)]
 mod gpiob {
     #[register(auto_increment)]
     mod moder {
@@ -1258,9 +2007,760 @@ mod gpiob {
             struct PullDown;
         }
     }
+
+    #[register(auto_increment)]
+    mod idr {
+        #[field(width = 1, read)]
+        mod id0 {}
+        #[field(width = 1, read)]
+        mod id1 {}
+        #[field(width = 1, read)]
+        mod id2 {}
+        #[field(width = 1, read)]
+        mod id3 {}
+        #[field(width = 1, read)]
+        mod id4 {}
+        #[field(width = 1, read)]
+        mod id5 {}
+        #[field(width = 1, read)]
+        mod id6 {}
+        #[field(width = 1, read)]
+        mod id7 {}
+        #[field(width = 1, read)]
+        mod id8 {}
+        #[field(width = 1, read)]
+        mod id9 {}
+        #[field(width = 1, read)]
+        mod id10 {}
+        #[field(width = 1, read)]
+        mod id11 {}
+        #[field(width = 1, read)]
+        mod id12 {}
+        #[field(width = 1, read)]
+        mod id13 {}
+        #[field(width = 1, read)]
+        mod id14 {}
+        #[field(width = 1, read)]
+        mod id15 {}
+    }
+
+    #[register(auto_increment)]
+    mod odr {
+        #[field(width = 1, read, write)]
+        mod od0 {}
+        #[field(width = 1, read, write)]
+        mod od1 {}
+        #[field(width = 1, read, write)]
+        mod od2 {}
+        #[field(width = 1, read, write)]
+        mod od3 {}
+        #[field(width = 1, read, write)]
+        mod od4 {}
+        #[field(width = 1, read, write)]
+        mod od5 {}
+        #[field(width = 1, read, write)]
+        mod od6 {}
+        #[field(width = 1, read, write)]
+        mod od7 {}
+        #[field(width = 1, read, write)]
+        mod od8 {}
+        #[field(width = 1, read, write)]
+        mod od9 {}
+        #[field(width = 1, read, write)]
+        mod od10 {}
+        #[field(width = 1, read, write)]
+        mod od11 {}
+        #[field(width = 1, read, write)]
+        mod od12 {}
+        #[field(width = 1, read, write)]
+        mod od13 {}
+        #[field(width = 1, read, write)]
+        mod od14 {}
+        #[field(width = 1, read, write)]
+        mod od15 {}
+    }
+
+    // this could probably be
+    // stateful
+    #[register(auto_increment)]
+    mod bsrr {
+        #[field(width = 1, write, reset = 0)]
+        mod bs0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs15 {}
+
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
+
+    #[register(offset = 0x20, auto_increment)]
+    mod afrl {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel0 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel1 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel2 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel3 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel4 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel5 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel6 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel7 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod afrh {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel8 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel9 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel10 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel11 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel12 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel13 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel14 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel15 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod brr {
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
 }
 
-#[block(base_addr = 0x4800_0400, auto_increment)]
+#[block(
+    base_addr = 0x4800_0800,
+    entitlements = [super::super::rcc::ahb2enr::gpiocen::Enabled],
+    auto_increment,
+)]
 mod gpioc {
     #[register(auto_increment)]
     mod moder {
@@ -1885,9 +3385,760 @@ mod gpioc {
             struct PullDown;
         }
     }
+
+    #[register(auto_increment)]
+    mod idr {
+        #[field(width = 1, read)]
+        mod id0 {}
+        #[field(width = 1, read)]
+        mod id1 {}
+        #[field(width = 1, read)]
+        mod id2 {}
+        #[field(width = 1, read)]
+        mod id3 {}
+        #[field(width = 1, read)]
+        mod id4 {}
+        #[field(width = 1, read)]
+        mod id5 {}
+        #[field(width = 1, read)]
+        mod id6 {}
+        #[field(width = 1, read)]
+        mod id7 {}
+        #[field(width = 1, read)]
+        mod id8 {}
+        #[field(width = 1, read)]
+        mod id9 {}
+        #[field(width = 1, read)]
+        mod id10 {}
+        #[field(width = 1, read)]
+        mod id11 {}
+        #[field(width = 1, read)]
+        mod id12 {}
+        #[field(width = 1, read)]
+        mod id13 {}
+        #[field(width = 1, read)]
+        mod id14 {}
+        #[field(width = 1, read)]
+        mod id15 {}
+    }
+
+    #[register(auto_increment)]
+    mod odr {
+        #[field(width = 1, read, write)]
+        mod od0 {}
+        #[field(width = 1, read, write)]
+        mod od1 {}
+        #[field(width = 1, read, write)]
+        mod od2 {}
+        #[field(width = 1, read, write)]
+        mod od3 {}
+        #[field(width = 1, read, write)]
+        mod od4 {}
+        #[field(width = 1, read, write)]
+        mod od5 {}
+        #[field(width = 1, read, write)]
+        mod od6 {}
+        #[field(width = 1, read, write)]
+        mod od7 {}
+        #[field(width = 1, read, write)]
+        mod od8 {}
+        #[field(width = 1, read, write)]
+        mod od9 {}
+        #[field(width = 1, read, write)]
+        mod od10 {}
+        #[field(width = 1, read, write)]
+        mod od11 {}
+        #[field(width = 1, read, write)]
+        mod od12 {}
+        #[field(width = 1, read, write)]
+        mod od13 {}
+        #[field(width = 1, read, write)]
+        mod od14 {}
+        #[field(width = 1, read, write)]
+        mod od15 {}
+    }
+
+    // this could probably be
+    // stateful
+    #[register(auto_increment)]
+    mod bsrr {
+        #[field(width = 1, write, reset = 0)]
+        mod bs0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs15 {}
+
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
+
+    #[register(offset = 0x20, auto_increment)]
+    mod afrl {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel0 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel1 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel2 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel3 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel4 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel5 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel6 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel7 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod afrh {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel8 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel9 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel10 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel11 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel12 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel13 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel14 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel15 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod brr {
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
 }
 
-#[block(base_addr = 0x4800_0400, auto_increment)]
+#[block(
+    base_addr = 0x4800_0c00,
+    entitlements = [super::super::rcc::ahb2enr::gpioden::Enabled],
+    auto_increment,
+)]
 mod gpiod {
     #[register(auto_increment)]
     mod moder {
@@ -2512,9 +4763,760 @@ mod gpiod {
             struct PullDown;
         }
     }
+
+    #[register(auto_increment)]
+    mod idr {
+        #[field(width = 1, read)]
+        mod id0 {}
+        #[field(width = 1, read)]
+        mod id1 {}
+        #[field(width = 1, read)]
+        mod id2 {}
+        #[field(width = 1, read)]
+        mod id3 {}
+        #[field(width = 1, read)]
+        mod id4 {}
+        #[field(width = 1, read)]
+        mod id5 {}
+        #[field(width = 1, read)]
+        mod id6 {}
+        #[field(width = 1, read)]
+        mod id7 {}
+        #[field(width = 1, read)]
+        mod id8 {}
+        #[field(width = 1, read)]
+        mod id9 {}
+        #[field(width = 1, read)]
+        mod id10 {}
+        #[field(width = 1, read)]
+        mod id11 {}
+        #[field(width = 1, read)]
+        mod id12 {}
+        #[field(width = 1, read)]
+        mod id13 {}
+        #[field(width = 1, read)]
+        mod id14 {}
+        #[field(width = 1, read)]
+        mod id15 {}
+    }
+
+    #[register(auto_increment)]
+    mod odr {
+        #[field(width = 1, read, write)]
+        mod od0 {}
+        #[field(width = 1, read, write)]
+        mod od1 {}
+        #[field(width = 1, read, write)]
+        mod od2 {}
+        #[field(width = 1, read, write)]
+        mod od3 {}
+        #[field(width = 1, read, write)]
+        mod od4 {}
+        #[field(width = 1, read, write)]
+        mod od5 {}
+        #[field(width = 1, read, write)]
+        mod od6 {}
+        #[field(width = 1, read, write)]
+        mod od7 {}
+        #[field(width = 1, read, write)]
+        mod od8 {}
+        #[field(width = 1, read, write)]
+        mod od9 {}
+        #[field(width = 1, read, write)]
+        mod od10 {}
+        #[field(width = 1, read, write)]
+        mod od11 {}
+        #[field(width = 1, read, write)]
+        mod od12 {}
+        #[field(width = 1, read, write)]
+        mod od13 {}
+        #[field(width = 1, read, write)]
+        mod od14 {}
+        #[field(width = 1, read, write)]
+        mod od15 {}
+    }
+
+    // this could probably be
+    // stateful
+    #[register(auto_increment)]
+    mod bsrr {
+        #[field(width = 1, write, reset = 0)]
+        mod bs0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs15 {}
+
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
+
+    #[register(offset = 0x20, auto_increment)]
+    mod afrl {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel0 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel1 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel2 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel3 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel4 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel5 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel6 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel7 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod afrh {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel8 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel9 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel10 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel11 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel12 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel13 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel14 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel15 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod brr {
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
 }
 
-#[block(base_addr = 0x4800_0400, auto_increment)]
+#[block(
+    base_addr = 0x4800_1000,
+    entitlements = [super::super::rcc::ahb2enr::gpioeen::Enabled],
+    auto_increment,
+)]
 mod gpioe {
     #[register(auto_increment)]
     mod moder {
@@ -3139,9 +6141,760 @@ mod gpioe {
             struct PullDown;
         }
     }
+
+    #[register(auto_increment)]
+    mod idr {
+        #[field(width = 1, read)]
+        mod id0 {}
+        #[field(width = 1, read)]
+        mod id1 {}
+        #[field(width = 1, read)]
+        mod id2 {}
+        #[field(width = 1, read)]
+        mod id3 {}
+        #[field(width = 1, read)]
+        mod id4 {}
+        #[field(width = 1, read)]
+        mod id5 {}
+        #[field(width = 1, read)]
+        mod id6 {}
+        #[field(width = 1, read)]
+        mod id7 {}
+        #[field(width = 1, read)]
+        mod id8 {}
+        #[field(width = 1, read)]
+        mod id9 {}
+        #[field(width = 1, read)]
+        mod id10 {}
+        #[field(width = 1, read)]
+        mod id11 {}
+        #[field(width = 1, read)]
+        mod id12 {}
+        #[field(width = 1, read)]
+        mod id13 {}
+        #[field(width = 1, read)]
+        mod id14 {}
+        #[field(width = 1, read)]
+        mod id15 {}
+    }
+
+    #[register(auto_increment)]
+    mod odr {
+        #[field(width = 1, read, write)]
+        mod od0 {}
+        #[field(width = 1, read, write)]
+        mod od1 {}
+        #[field(width = 1, read, write)]
+        mod od2 {}
+        #[field(width = 1, read, write)]
+        mod od3 {}
+        #[field(width = 1, read, write)]
+        mod od4 {}
+        #[field(width = 1, read, write)]
+        mod od5 {}
+        #[field(width = 1, read, write)]
+        mod od6 {}
+        #[field(width = 1, read, write)]
+        mod od7 {}
+        #[field(width = 1, read, write)]
+        mod od8 {}
+        #[field(width = 1, read, write)]
+        mod od9 {}
+        #[field(width = 1, read, write)]
+        mod od10 {}
+        #[field(width = 1, read, write)]
+        mod od11 {}
+        #[field(width = 1, read, write)]
+        mod od12 {}
+        #[field(width = 1, read, write)]
+        mod od13 {}
+        #[field(width = 1, read, write)]
+        mod od14 {}
+        #[field(width = 1, read, write)]
+        mod od15 {}
+    }
+
+    // this could probably be
+    // stateful
+    #[register(auto_increment)]
+    mod bsrr {
+        #[field(width = 1, write, reset = 0)]
+        mod bs0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs15 {}
+
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
+
+    #[register(offset = 0x20, auto_increment)]
+    mod afrl {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel0 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel1 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel2 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel3 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel4 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel5 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel6 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel7 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod afrh {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel8 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel9 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel10 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel11 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel12 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel13 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel14 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel15 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod brr {
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
 }
 
-#[block(base_addr = 0x4800_0400, auto_increment)]
+#[block(
+    base_addr = 0x4800_1400,
+    entitlements = [super::super::rcc::ahb2enr::gpiofen::Enabled],
+    auto_increment,
+)]
 mod gpiof {
     #[register(auto_increment)]
     mod moder {
@@ -3766,9 +7519,760 @@ mod gpiof {
             struct PullDown;
         }
     }
+
+    #[register(auto_increment)]
+    mod idr {
+        #[field(width = 1, read)]
+        mod id0 {}
+        #[field(width = 1, read)]
+        mod id1 {}
+        #[field(width = 1, read)]
+        mod id2 {}
+        #[field(width = 1, read)]
+        mod id3 {}
+        #[field(width = 1, read)]
+        mod id4 {}
+        #[field(width = 1, read)]
+        mod id5 {}
+        #[field(width = 1, read)]
+        mod id6 {}
+        #[field(width = 1, read)]
+        mod id7 {}
+        #[field(width = 1, read)]
+        mod id8 {}
+        #[field(width = 1, read)]
+        mod id9 {}
+        #[field(width = 1, read)]
+        mod id10 {}
+        #[field(width = 1, read)]
+        mod id11 {}
+        #[field(width = 1, read)]
+        mod id12 {}
+        #[field(width = 1, read)]
+        mod id13 {}
+        #[field(width = 1, read)]
+        mod id14 {}
+        #[field(width = 1, read)]
+        mod id15 {}
+    }
+
+    #[register(auto_increment)]
+    mod odr {
+        #[field(width = 1, read, write)]
+        mod od0 {}
+        #[field(width = 1, read, write)]
+        mod od1 {}
+        #[field(width = 1, read, write)]
+        mod od2 {}
+        #[field(width = 1, read, write)]
+        mod od3 {}
+        #[field(width = 1, read, write)]
+        mod od4 {}
+        #[field(width = 1, read, write)]
+        mod od5 {}
+        #[field(width = 1, read, write)]
+        mod od6 {}
+        #[field(width = 1, read, write)]
+        mod od7 {}
+        #[field(width = 1, read, write)]
+        mod od8 {}
+        #[field(width = 1, read, write)]
+        mod od9 {}
+        #[field(width = 1, read, write)]
+        mod od10 {}
+        #[field(width = 1, read, write)]
+        mod od11 {}
+        #[field(width = 1, read, write)]
+        mod od12 {}
+        #[field(width = 1, read, write)]
+        mod od13 {}
+        #[field(width = 1, read, write)]
+        mod od14 {}
+        #[field(width = 1, read, write)]
+        mod od15 {}
+    }
+
+    // this could probably be
+    // stateful
+    #[register(auto_increment)]
+    mod bsrr {
+        #[field(width = 1, write, reset = 0)]
+        mod bs0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs15 {}
+
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
+
+    #[register(offset = 0x20, auto_increment)]
+    mod afrl {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel0 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel1 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel2 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel3 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel4 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel5 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel6 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel7 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod afrh {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel8 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel9 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel10 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel11 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel12 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel13 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel14 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel15 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod brr {
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
 }
 
-#[block(base_addr = 0x4800_0400, auto_increment)]
+#[block(
+    base_addr = 0x4800_1800,
+    entitlements = [super::super::rcc::ahb2enr::gpiogen::Enabled],
+    auto_increment,
+)]
 mod gpiog {
     #[register(auto_increment)]
     mod moder {
@@ -4392,5 +8896,781 @@ mod gpiog {
             #[state]
             struct PullDown;
         }
+    }
+
+    #[register(auto_increment)]
+    mod idr {
+        #[field(width = 1, read)]
+        mod id0 {}
+        #[field(width = 1, read)]
+        mod id1 {}
+        #[field(width = 1, read)]
+        mod id2 {}
+        #[field(width = 1, read)]
+        mod id3 {}
+        #[field(width = 1, read)]
+        mod id4 {}
+        #[field(width = 1, read)]
+        mod id5 {}
+        #[field(width = 1, read)]
+        mod id6 {}
+        #[field(width = 1, read)]
+        mod id7 {}
+        #[field(width = 1, read)]
+        mod id8 {}
+        #[field(width = 1, read)]
+        mod id9 {}
+        #[field(width = 1, read)]
+        mod id10 {}
+        #[field(width = 1, read)]
+        mod id11 {}
+        #[field(width = 1, read)]
+        mod id12 {}
+        #[field(width = 1, read)]
+        mod id13 {}
+        #[field(width = 1, read)]
+        mod id14 {}
+        #[field(width = 1, read)]
+        mod id15 {}
+    }
+
+    #[register(auto_increment)]
+    mod odr {
+        #[field(width = 1, read, write)]
+        mod od0 {}
+        #[field(width = 1, read, write)]
+        mod od1 {}
+        #[field(width = 1, read, write)]
+        mod od2 {}
+        #[field(width = 1, read, write)]
+        mod od3 {}
+        #[field(width = 1, read, write)]
+        mod od4 {}
+        #[field(width = 1, read, write)]
+        mod od5 {}
+        #[field(width = 1, read, write)]
+        mod od6 {}
+        #[field(width = 1, read, write)]
+        mod od7 {}
+        #[field(width = 1, read, write)]
+        mod od8 {}
+        #[field(width = 1, read, write)]
+        mod od9 {}
+        #[field(width = 1, read, write)]
+        mod od10 {}
+        #[field(width = 1, read, write)]
+        mod od11 {}
+        #[field(width = 1, read, write)]
+        mod od12 {}
+        #[field(width = 1, read, write)]
+        mod od13 {}
+        #[field(width = 1, read, write)]
+        mod od14 {}
+        #[field(width = 1, read, write)]
+        mod od15 {}
+    }
+
+    // this could probably be
+    // stateful
+    #[register(auto_increment)]
+    mod bsrr {
+        #[field(width = 1, write, reset = 0)]
+        mod bs0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod bs15 {}
+
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
+
+    #[register(offset = 0x20, auto_increment)]
+    mod afrl {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel0 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel1 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel2 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel3 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel4 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel5 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel6 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel7 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod afrh {
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel8 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel9 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel10 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel11 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel12 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel13 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel14 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+        #[field(width = 4, read, write, auto_increment)]
+        mod afsel15 {
+            #[state(reset)]
+            struct AF0;
+            #[state]
+            struct AF1;
+            #[state]
+            struct AF2;
+            #[state]
+            struct AF3;
+            #[state]
+            struct AF4;
+            #[state]
+            struct AF5;
+            #[state]
+            struct AF6;
+            #[state]
+            struct AF7;
+            #[state]
+            struct AF8;
+            #[state]
+            struct AF9;
+            #[state]
+            struct AF10;
+            #[state]
+            struct AF11;
+            #[state]
+            struct AF12;
+            #[state]
+            struct AF13;
+            #[state]
+            struct AF14;
+            #[state]
+            struct AF15;
+        }
+    }
+
+    #[register(auto_increment)]
+    mod brr {
+        #[field(width = 1, write, reset = 0)]
+        mod br0 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br1 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br2 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br3 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br4 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br5 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br6 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br7 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br8 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br9 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br10 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br11 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br12 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br13 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br14 {}
+        #[field(width = 1, write, reset = 0)]
+        mod br15 {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::rcc;
+    use super::*;
+
+    #[allow(unused)]
+    fn this_should_compile() {
+        let rcc: rcc::Reset = unsafe { core::mem::transmute(()) };
+        let gpioa: gpioa::Reset = unsafe { core::mem::transmute(()) };
+
+        let gpioaen = rcc
+            .ahb2enr
+            .build_transition()
+            .gpioaen::<rcc::ahb2enr::gpioaen::Enabled>()
+            .finish()
+            .gpioaen;
+
+        let gpioa = gpioa.attach(gpioaen.into());
+
+        let gpioa = gpioa.moder(|reg| {
+            reg.build_transition()
+                .mode0::<gpioa::moder::mode0::Output>()
+                .finish()
+        });
+
+        gpioa.odr.write(|w| w.od0(true));
     }
 }
