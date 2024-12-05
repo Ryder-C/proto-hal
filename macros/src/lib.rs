@@ -506,8 +506,8 @@ fn process_field(
     }
 
     // Q: is this the best way to do this?
-    if (stateful && reset_state.is_none())
-        || (!stateful && field_args.read.is_some() && field_args.reset.is_none())
+    if stateful && reset_state.is_none()
+    // || (!stateful && field_args.read.is_some() && field_args.reset.is_none()) // why was this here?
     {
         return Err(syn::Error::new_spanned(module, "reset must be specified"));
     }
