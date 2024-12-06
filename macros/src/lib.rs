@@ -1037,11 +1037,9 @@ fn process_block(block_args: &BlockArgs, module: &mut ItemMod) -> Result<(), syn
             .collect::<Vec<_>>();
 
         let entitlement_idents = (0..block_args.entitlements.elems.len())
-            .into_iter()
             .map(|i| format_ident!("entitlement{}", i))
             .collect::<Vec<_>>();
         let entitlement_tys = (0..block_args.entitlements.elems.len())
-            .into_iter()
             .map(|i| format_ident!("Entitlement{}", i))
             .collect::<Vec<_>>();
 

@@ -10,9 +10,10 @@ for TARGET in "${TARGETS[@]}"; do
     cargo build --target "$TARGET"
     cargo clippy -- --deny warnings
 
+    # test proto-hal features
     for FEATURE in "${FEATURES[@]}"; do
-        cargo build --features "$FEATURE" --target "$TARGET"
-        cargo test --features "$FEATURE"
-        cargo clippy -- --deny warnings
+        cargo build -p proto-hal--features "$FEATURE" --target "$TARGET"
+        cargo test -p proto-hal --features "$FEATURE"
+        cargo clippy -p proto-hal -- --deny warnings
     done
 done
