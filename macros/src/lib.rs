@@ -613,7 +613,7 @@ fn process_register(
         } else if let Some(prev) = prev_register_info {
             let prev_ident = prev.ident;
 
-            quote! { super::#prev_ident::OFFSET + 32 }
+            quote! { super::#prev_ident::OFFSET + 4 }
         } else {
             quote! { 0 }
         };

@@ -114,7 +114,7 @@ mod cordic {
         }
 
         #[field(width = 1, read, write)]
-        mod dmwren {
+        mod dmawen {
             #[state(reset, bits = 0)]
             struct Disabled;
             #[state(bits = 1)]

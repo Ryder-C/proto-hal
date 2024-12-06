@@ -5,7 +5,7 @@ use proto_hal::macros::block;
     entitlements = [super::super::rcc::ahb2enr::gpioaen::Enabled],
     auto_increment,
 )]
-mod gpioa {
+pub mod gpioa {
     #[register(auto_increment)]
     mod moder {
         #[field(width = 2, read, write, auto_increment)]
@@ -1383,7 +1383,7 @@ mod gpioa {
     entitlements = [super::super::rcc::ahb2enr::gpioben::Enabled],
     auto_increment
 )]
-mod gpiob {
+pub mod gpiob {
     #[register(auto_increment)]
     mod moder {
         #[field(width = 2, read, write, auto_increment)]
@@ -2761,7 +2761,7 @@ mod gpiob {
     entitlements = [super::super::rcc::ahb2enr::gpiocen::Enabled],
     auto_increment,
 )]
-mod gpioc {
+pub mod gpioc {
     #[register(auto_increment)]
     mod moder {
         #[field(width = 2, read, write, auto_increment)]
@@ -4139,7 +4139,7 @@ mod gpioc {
     entitlements = [super::super::rcc::ahb2enr::gpioden::Enabled],
     auto_increment,
 )]
-mod gpiod {
+pub mod gpiod {
     #[register(auto_increment)]
     mod moder {
         #[field(width = 2, read, write, auto_increment)]
@@ -5517,7 +5517,7 @@ mod gpiod {
     entitlements = [super::super::rcc::ahb2enr::gpioeen::Enabled],
     auto_increment,
 )]
-mod gpioe {
+pub mod gpioe {
     #[register(auto_increment)]
     mod moder {
         #[field(width = 2, read, write, auto_increment)]
@@ -6895,7 +6895,7 @@ mod gpioe {
     entitlements = [super::super::rcc::ahb2enr::gpiofen::Enabled],
     auto_increment,
 )]
-mod gpiof {
+pub mod gpiof {
     #[register(auto_increment)]
     mod moder {
         #[field(width = 2, read, write, auto_increment)]
@@ -8273,7 +8273,7 @@ mod gpiof {
     entitlements = [super::super::rcc::ahb2enr::gpiogen::Enabled],
     auto_increment,
 )]
-mod gpiog {
+pub mod gpiog {
     #[register(auto_increment)]
     mod moder {
         #[field(width = 2, read, write, auto_increment)]
@@ -9647,12 +9647,13 @@ mod gpiog {
 }
 
 #[cfg(test)]
+#[embedded_test::tests]
 mod tests {
     use super::super::rcc;
     use super::*;
 
-    #[allow(unused)]
-    fn this_should_compile() {
+    #[init]
+    fn init() {
         let rcc: rcc::Reset = unsafe { core::mem::transmute(()) };
         let gpioa: gpioa::Reset = unsafe { core::mem::transmute(()) };
 

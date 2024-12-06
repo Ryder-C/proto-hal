@@ -1,18 +1,9 @@
 [package]
-name = "g4"
+name = "debug-bin"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-default = ["cordic"]
-cordic = []
-
 [dependencies]
-proto-hal = { path = "../../proto-hal" }
-
-[dev-dependencies]
-defmt-test = "0.3.2"
-
 cortex-m = { version = "0.7.7", features = [
     "inline-asm",
     "critical-section-single-core",
@@ -21,13 +12,27 @@ cortex-m-rt = "0.7.3"
 critical-section = "1.1.2"
 defmt = { version = "0.3.6" }
 defmt-rtt = { version = "0.4.0" }
+panic-halt = "0.2.0"
 panic-probe = { version = "0.3.1", features = ["print-defmt"] }
+g4 = { path = "../stm32/g4" }
 fixed = "1.28.0"
+proto-hal = { path = "../proto-hal" }
 
-[[test]]
-name = "gpio"
-harness = false
+[[bin]]
+name = "debug-bin"
+test = false
+bench = false
 
-[[test]]
-name = "cordic"
-harness = false
+[profile.dev]
+debug = true
+lto = true
+opt-level = "z"
+incremental = true
+codegen-units = 1
+
+[profile.release]
+debug = false
+lto = true
+opt-level = "z"
+incremental = true
+codegen-units = 1
