@@ -804,6 +804,46 @@ fn process_register(
                         unsafe { StateBuilder::conjure() }
                     }
                 }
+
+                impl<#(#stateful_field_tys,)*> ::proto_hal::macro_utils::AsBuilder for Register<#(#stateful_field_tys,)*>
+                where
+                    #(
+                        #stateful_field_tys: #stateful_field_idents::State,
+                    )*
+                {
+                    type Builder = StateBuilder<#(#stateful_field_tys,)*>;
+                }
+
+                impl<#(#stateful_field_tys,)*> ::proto_hal::macro_utils::AsRegister for StateBuilder<#(#stateful_field_tys,)*>
+                where
+                    #(
+                        #stateful_field_tys: #stateful_field_idents::State,
+                    )*
+                {
+                    type Register = Register<#(#stateful_field_tys,)*>;
+                }
+
+                impl<#(#stateful_field_tys,)*> Into<StateBuilder<#(#stateful_field_tys,)*>> for Register<#(#stateful_field_tys,)*>
+                where
+                    #(
+                        #stateful_field_tys: #stateful_field_idents::State,
+                    )*
+                {
+                    fn into(self) -> StateBuilder<#(#stateful_field_tys,)*> {
+                        self.build_state()
+                    }
+                }
+
+                impl<#(#stateful_field_tys,)*> Into<Register<#(#stateful_field_tys,)*>> for StateBuilder<#(#stateful_field_tys,)*>
+                where
+                    #(
+                        #stateful_field_tys: #stateful_field_idents::State,
+                    )*
+                {
+                    fn into(self) -> Register<#(#stateful_field_tys,)*> {
+                        self.finish()
+                    }
+                }
             }));
 
             let mut refine_impl = quote! {};
@@ -1199,14 +1239,20 @@ fn process_block(block_args: &BlockArgs, module: &mut ItemMod) -> Result<(), syn
                 let next_register_tys = stateful_register_tys.get(i + 1..).unwrap();
 
                 items.push(Item::Verbatim(quote! {
-                    impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)* #(#entitlements,)*> {
-                        pub fn #ident<R>(self, f: impl FnOnce(#ty) -> R) -> Block<#(#prev_register_tys,)* R, #(#next_register_tys,)* #(#entitlements,)*> {
+                    impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)* #(#entitlements,)*>
+                    where
+                        #ty: ::proto_hal::macro_utils::AsBuilder,
+                    {
+                        pub fn #ident<R, B>(self, f: impl FnOnce(#ty::Builder) -> B) -> Block<#(#prev_register_tys,)* R, #(#next_register_tys,)* #(#entitlements,)*>
+                        where
+                            B: ::proto_hal::macro_utils::AsRegister<Register = R>,
+                        {
                             Block {
                                 #(
                                     #prev_register_idents: self.#prev_register_idents,
                                 )*
 
-                                #ident: f(self.#ident),
+                                #ident: f(self.#ident.into()).into(),
 
                                 #(
                                     #next_register_idents: self.#next_register_idents,

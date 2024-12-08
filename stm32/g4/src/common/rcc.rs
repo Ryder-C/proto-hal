@@ -65,4 +65,15 @@ mod rcc {
             struct Enabled;
         }
     }
+
+    #[register(offset = 0x60)]
+    mod apb2enr {
+        #[field(offset = 0, width = 1, read, write)]
+        mod syscfgen {
+            #[state(bits = 0, reset)]
+            struct Disabled;
+            #[state(bits = 1)]
+            struct Enabled;
+        }
+    }
 }

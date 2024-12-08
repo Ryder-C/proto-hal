@@ -81,3 +81,11 @@ impl_uint_special!(u29, 29);
 impl_uint_special!(u30, 30);
 impl_uint_special!(u31, 31);
 impl_uint_standard!(u32, 32);
+
+pub trait AsBuilder: Into<Self::Builder> {
+    type Builder;
+}
+
+pub trait AsRegister: Into<Self::Register> {
+    type Register;
+}

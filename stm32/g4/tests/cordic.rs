@@ -27,7 +27,7 @@ mod tests {
 
         let cordic = cordic
             .attach(cordicen.into())
-            .csr(|reg| reg.build_state().func().sqrt().finish());
+            .csr(|state| state.func().sqrt());
 
         cordic
             .wdata

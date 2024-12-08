@@ -29,6 +29,10 @@ name = "gpio"
 harness = false
 
 [[test]]
+name = "exti"
+harness = false
+
+[[test]]
 name = "cordic"
 harness = false
 
