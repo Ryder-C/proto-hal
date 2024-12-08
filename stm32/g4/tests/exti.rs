@@ -9,7 +9,7 @@ mod tests {
     use g4::common::{exti, rcc, syscfg};
 
     #[test]
-    fn output_input() {
+    fn gpio_trigger() {
         let rcc: rcc::Reset = unsafe { core::mem::transmute(()) };
         let syscfg: syscfg::Reset = unsafe { core::mem::transmute(()) };
         let exti: exti::Reset = unsafe { core::mem::transmute(()) };

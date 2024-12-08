@@ -22,9 +22,9 @@ mod tests {
             .finish()
             .gpioaen;
 
-        let gpioa = gpioa.attach(gpioaen.into());
-
-        let gpioa = gpioa.moder(|reg| reg.build_state().mode5().output().finish());
+        let gpioa = gpioa
+            .attach(gpioaen.into())
+            .moder(|state| state.mode5().output());
 
         gpioa.odr.write(|w| w.od5(true));
 

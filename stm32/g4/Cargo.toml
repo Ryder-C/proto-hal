@@ -24,6 +24,10 @@ defmt-rtt = { version = "0.4.0" }
 panic-probe = { version = "0.3.1", features = ["print-defmt"] }
 fixed = "1.28.0"
 
+[lib]
+test = false
+bench = false
+
 [[test]]
 name = "gpio"
 harness = false
