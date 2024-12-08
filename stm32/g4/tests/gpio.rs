@@ -16,18 +16,15 @@ mod tests {
 
         let gpioaen = rcc
             .ahb2enr
-            .build_transition()
-            .gpioaen::<rcc::ahb2enr::gpioaen::Enabled>()
+            .build_state()
+            .gpioaen()
+            .enabled()
             .finish()
             .gpioaen;
 
         let gpioa = gpioa.attach(gpioaen.into());
 
-        let gpioa = gpioa.moder(|reg| {
-            reg.build_transition()
-                .mode5::<gpioa::moder::mode5::Output>()
-                .finish()
-        });
+        let gpioa = gpioa.moder(|reg| reg.build_state().mode5().output().finish());
 
         gpioa.odr.write(|w| w.od5(true));
 

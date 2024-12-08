@@ -9645,33 +9645,3 @@ pub mod gpiog {
         mod br15 {}
     }
 }
-
-#[cfg(test)]
-#[embedded_test::tests]
-mod tests {
-    use super::super::rcc;
-    use super::*;
-
-    #[init]
-    fn init() {
-        let rcc: rcc::Reset = unsafe { core::mem::transmute(()) };
-        let gpioa: gpioa::Reset = unsafe { core::mem::transmute(()) };
-
-        let gpioaen = rcc
-            .ahb2enr
-            .build_transition()
-            .gpioaen::<rcc::ahb2enr::gpioaen::Enabled>()
-            .finish()
-            .gpioaen;
-
-        let gpioa = gpioa.attach(gpioaen.into());
-
-        let gpioa = gpioa.moder(|reg| {
-            reg.build_transition()
-                .mode0::<gpioa::moder::mode0::Output>()
-                .finish()
-        });
-
-        gpioa.odr.write(|w| w.od0(true));
-    }
-}

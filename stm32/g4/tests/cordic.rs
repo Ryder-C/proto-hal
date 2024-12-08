@@ -17,18 +17,17 @@ mod tests {
 
         let cordicen = rcc
             .ahb1enr
-            .build_transition()
-            .cordicen::<rcc::ahb1enr::cordicen::Enabled>()
+            .build_state()
+            .cordicen()
+            .enabled()
             .finish()
             .cordicen;
 
         cortex_m::asm::delay(1);
 
-        let cordic = cordic.attach(cordicen.into()).csr(|reg| {
-            reg.build_transition()
-                .func::<cordic::csr::func::Sqrt>()
-                .finish()
-        });
+        let cordic = cordic
+            .attach(cordicen.into())
+            .csr(|reg| reg.build_state().func().sqrt().finish());
 
         cordic
             .wdata

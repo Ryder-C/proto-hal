@@ -460,6 +460,48 @@ fn process_field(
                 unsafe fn conjure() -> Self;
             }
         }));
+
+        let state_accessor_idents = state_idents
+            .iter()
+            .map(|ident| {
+                Ident::new(
+                    &inflector::cases::snakecase::to_snake_case(&ident.to_string()),
+                    Span::call_site(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let field_ty = Ident::new(
+            &inflector::cases::pascalcase::to_pascal_case(&module.ident.to_string()),
+            Span::call_site(),
+        );
+        let field_ident = &module.ident;
+
+        if field_args.write.is_some() {
+            // state builder
+            items.push(Item::Verbatim(quote! {
+                pub struct StateBuilder<RegisterStateBuilder>(pub(crate) RegisterStateBuilder)
+                where
+                    RegisterStateBuilder: super::Refine;
+
+                impl<RegisterStateBuilder> StateBuilder<RegisterStateBuilder>
+                where
+                    RegisterStateBuilder: super::Refine,
+                {
+                    #(
+                        pub fn #state_accessor_idents(self) -> RegisterStateBuilder::#field_ty<#state_idents> {
+                            self.0.#field_ident()
+                        }
+                    )*
+
+                    pub fn generic<S>(self) -> RegisterStateBuilder::#field_ty<S>
+                    where
+                        S: State,
+                    {
+                        self.0.#field_ident()
+                    }
+                }
+            }));
+        }
     } else {
         // field is stateless
 
@@ -689,19 +731,31 @@ fn process_register(
                     )*
                 >;
 
-                pub struct TransitionBuilder<#(#stateful_field_tys,)*> {
+                pub struct StateBuilder<#(#stateful_field_tys,)*> {
                     #(
-                        pub #stateful_field_idents: core::marker::PhantomData<#stateful_field_tys>,
+                        pub(crate) #stateful_field_idents: core::marker::PhantomData<#stateful_field_tys>,
                     )*
                 }
 
-                impl<#(#stateful_field_tys,)*> TransitionBuilder<#(#stateful_field_tys,)*>
+                pub trait Refine {
+                    #(
+                        type #writable_stateful_field_tys<S>;
+                    )*
+
+                    #(
+                        fn #writable_stateful_field_idents<S>(self) -> Self::#writable_stateful_field_tys<S>
+                        where
+                            S: #writable_stateful_field_idents::State;
+                    )*
+                }
+
+                impl<#(#stateful_field_tys,)*> StateBuilder<#(#stateful_field_tys,)*>
                 where
                     #(
                         #stateful_field_tys: #stateful_field_idents::State,
                     )*
                 {
-                    pub unsafe fn conjure() -> Self {
+                    pub(crate) unsafe fn conjure() -> Self {
                         Self {
                             #(
                                 #stateful_field_idents: core::marker::PhantomData,
@@ -742,15 +796,17 @@ fn process_register(
                         )*
                     {
                         // SAFETY: `self` is destroyed
-                        unsafe { TransitionBuilder::conjure() }.finish()
+                        unsafe { StateBuilder::conjure() }.finish()
                     }
 
-                    pub fn build_transition(self) -> TransitionBuilder<#(#stateful_field_tys,)*> {
+                    pub fn build_state(self) -> StateBuilder<#(#stateful_field_tys,)*> {
                         // SAFETY: `self` is destroyed
-                        unsafe { TransitionBuilder::conjure() }
+                        unsafe { StateBuilder::conjure() }
                     }
                 }
             }));
+
+            let mut refine_impl = quote! {};
 
             stateful_fields
                 .iter()
@@ -758,44 +814,74 @@ fn process_register(
                 .filter(|(_, field)| field.args.write.is_some())
                 .for_each(|(i, field)| {
                     let ident = &field.ident;
+                    let ty = Ident::new(
+                        &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
+                        Span::call_site(),
+                    );
 
                     let prev_field_tys = stateful_field_tys.get(..i).unwrap();
                     let next_field_tys = stateful_field_tys.get(i + 1..).unwrap();
 
                     let entitlement_bounds = if !field.entitlement_fields.is_empty() {
-                        let entitled_field_tys = field.entitlement_fields
+                        let entitled_field_tys = field
+                            .entitlement_fields
                             .iter()
                             .map(|ident| {
                                 Ident::new(
-                                    &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
+                                    &inflector::cases::pascalcase::to_pascal_case(
+                                        &ident.to_string(),
+                                    ),
                                     Span::call_site(),
                                 )
-                            }).collect::<Vec<_>>();
+                            })
+                            .collect::<Vec<_>>();
 
                         Some(quote! {
-                            #(+ ::proto_hal::stasis::Entitled<#entitled_field_tys>)*
+                            where
+                                #ty: #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*,
                         })
                     } else {
                         None
                     };
 
                     items.push(Item::Verbatim(quote! {
-                        impl<#(#stateful_field_tys,)*> TransitionBuilder<#(#stateful_field_tys,)*>
+                        impl<#(#stateful_field_tys,)*> StateBuilder<#(#stateful_field_tys,)*>
                         where
                             #(
                                 #stateful_field_tys: #stateful_field_idents::State,
                             )*
                         {
-                            pub fn #ident<S>(self) -> TransitionBuilder<#(#prev_field_tys,)* S, #(#next_field_tys,)*>
-                            where
-                                S: #ident::State #entitlement_bounds,
+                            pub fn #ident(self) -> #ident::StateBuilder<Self>
+                            #entitlement_bounds
                             {
-                                // SAFETY: `self` is destroyed
-                                unsafe { TransitionBuilder::conjure() }
+                                #ident::StateBuilder(self)
                             }
                         }
                     }));
+
+                    refine_impl.extend(quote! {
+                        type #ty<S> = StateBuilder<#(#prev_field_tys,)* S, #(#next_field_tys,)*>;
+
+                        fn #ident<S>(self) -> Self::#ty<S>
+                        where
+                            S: #ident::State,
+                        {
+                            // SAFETY: `self` is destroyed
+                            unsafe { StateBuilder::conjure() }
+                        }
+                    });
                 });
+
+            items.push(Item::Verbatim(quote! {
+                impl<#(#stateful_field_tys,)*> Refine for StateBuilder<#(#stateful_field_tys,)*>
+                where
+                    #(
+                        #stateful_field_tys: #stateful_field_idents::State,
+                    )*
+                {
+                    #refine_impl
+                }
+            }));
         }
 
         // reader
