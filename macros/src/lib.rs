@@ -83,6 +83,7 @@ struct FieldInfo {
     args: FieldArgs,
     ident: Ident,
     reset_state: Option<Ident>,
+    states: Vec<StateInfo>,
     entitlement_fields: HashSet<Ident>,
     stateful: bool,
 }
@@ -460,48 +461,6 @@ fn process_field(
                 unsafe fn conjure() -> Self;
             }
         }));
-
-        let state_accessor_idents = state_idents
-            .iter()
-            .map(|ident| {
-                Ident::new(
-                    &inflector::cases::snakecase::to_snake_case(&ident.to_string()),
-                    Span::call_site(),
-                )
-            })
-            .collect::<Vec<_>>();
-        let field_ty = Ident::new(
-            &inflector::cases::pascalcase::to_pascal_case(&module.ident.to_string()),
-            Span::call_site(),
-        );
-        let field_ident = &module.ident;
-
-        if field_args.write.is_some() {
-            // state builder
-            items.push(Item::Verbatim(quote! {
-                pub struct StateBuilder<RegisterStateBuilder>(pub(crate) RegisterStateBuilder)
-                where
-                    RegisterStateBuilder: super::Refine;
-
-                impl<RegisterStateBuilder> StateBuilder<RegisterStateBuilder>
-                where
-                    RegisterStateBuilder: super::Refine,
-                {
-                    #(
-                        pub fn #state_accessor_idents(self) -> RegisterStateBuilder::#field_ty<#state_idents> {
-                            self.0.#field_ident()
-                        }
-                    )*
-
-                    pub fn generic<S>(self) -> RegisterStateBuilder::#field_ty<S>
-                    where
-                        S: State,
-                    {
-                        self.0.#field_ident()
-                    }
-                }
-            }));
-        }
     } else {
         // field is stateless
 
@@ -575,6 +534,7 @@ fn process_field(
         args: field_args,
         ident: module.ident.clone(),
         reset_state,
+        states: states.clone(),
         entitlement_fields: {
             states
                 .iter()
@@ -724,6 +684,32 @@ fn process_register(
                 })
                 .collect::<Vec<_>>();
 
+            let entitlement_bounds = stateful_fields
+                .iter()
+                .map(|field| {
+                    if !field.entitlement_fields.is_empty() {
+                        let entitled_field_tys = field
+                            .entitlement_fields
+                            .iter()
+                            .map(|ident| {
+                                Ident::new(
+                                    &inflector::cases::pascalcase::to_pascal_case(
+                                        &ident.to_string(),
+                                    ),
+                                    Span::call_site(),
+                                )
+                            })
+                            .collect::<Vec<_>>();
+
+                        Some(quote! {
+                            + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
             items.push(Item::Verbatim(quote! {
                 pub type Reset = Register<
                     #(
@@ -734,18 +720,6 @@ fn process_register(
                 pub struct StateBuilder<#(#stateful_field_tys,)*> {
                     #(
                         pub(crate) #stateful_field_idents: core::marker::PhantomData<#stateful_field_tys>,
-                    )*
-                }
-
-                pub trait Refine {
-                    #(
-                        type #writable_stateful_field_tys<S>;
-                    )*
-
-                    #(
-                        fn #writable_stateful_field_idents<S>(self) -> Self::#writable_stateful_field_tys<S>
-                        where
-                            S: #writable_stateful_field_idents::State;
                     )*
                 }
 
@@ -846,82 +820,140 @@ fn process_register(
                 }
             }));
 
-            let mut refine_impl = quote! {};
-
             stateful_fields
                 .iter()
                 .enumerate()
-                .filter(|(_, field)| field.args.write.is_some())
-                .for_each(|(i, field)| {
+                .zip(entitlement_bounds.iter())
+                .for_each(|((i, field), local_entitlement_bounds)| {
                     let ident = &field.ident;
-                    let ty = Ident::new(
+                    let field_state_builder_ty = format_ident!(
+                        "{}StateBuilder",
                         &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
-                        Span::call_site(),
                     );
 
                     let prev_field_tys = stateful_field_tys.get(..i).unwrap();
                     let next_field_tys = stateful_field_tys.get(i + 1..).unwrap();
 
-                    let entitlement_bounds = if !field.entitlement_fields.is_empty() {
-                        let entitled_field_tys = field
-                            .entitlement_fields
-                            .iter()
-                            .map(|ident| {
-                                Ident::new(
-                                    &inflector::cases::pascalcase::to_pascal_case(
-                                        &ident.to_string(),
-                                    ),
-                                    Span::call_site(),
-                                )
-                            })
-                            .collect::<Vec<_>>();
+                    let state_tys = field.states.iter().map(|state| state.ident.clone()).collect::<Vec<_>>();
+                    let state_accessor_idents = state_tys.iter().map(|ident| {
+                        Ident::new(
+                            &inflector::cases::snakecase::to_snake_case(&ident.to_string()),
+                            Span::call_site(),
+                        )
+                    }).collect::<Vec<_>>();
 
-                        Some(quote! {
-                            where
-                                #ty: #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*,
-                        })
-                    } else {
-                        None
-                    };
+                    field.states.iter().for_each(|state| {
+                        if state.entitlement_fields.is_empty() {
+                            let state_ty = &state.ident;
 
-                    items.push(Item::Verbatim(quote! {
-                        impl<#(#stateful_field_tys,)*> StateBuilder<#(#stateful_field_tys,)*>
-                        where
-                            #(
-                                #stateful_field_tys: #stateful_field_idents::State,
-                            )*
-                        {
-                            pub fn #ident(self) -> #ident::StateBuilder<Self>
-                            #entitlement_bounds
-                            {
-                                #ident::StateBuilder(self)
-                            }
-                        }
-                    }));
-
-                    refine_impl.extend(quote! {
-                        type #ty<S> = StateBuilder<#(#prev_field_tys,)* S, #(#next_field_tys,)*>;
-
-                        fn #ident<S>(self) -> Self::#ty<S>
-                        where
-                            S: #ident::State,
-                        {
-                            // SAFETY: `self` is destroyed
-                            unsafe { StateBuilder::conjure() }
+                            items.push(Item::Verbatim(quote! {
+                                unsafe impl<T> ::proto_hal::stasis::Entitled<T> for #ident::#state_ty {}
+                            }));
                         }
                     });
-                });
 
-            items.push(Item::Verbatim(quote! {
-                impl<#(#stateful_field_tys,)*> Refine for StateBuilder<#(#stateful_field_tys,)*>
-                where
-                    #(
-                        #stateful_field_tys: #stateful_field_idents::State,
-                    )*
-                {
-                    #refine_impl
-                }
-            }));
+                    if field.args.write.is_some() {
+                        items.push(Item::Verbatim(quote! {
+                            impl<#(#stateful_field_tys,)*> StateBuilder<#(#stateful_field_tys,)*>
+                            where
+                                #(
+                                    #stateful_field_tys: #stateful_field_idents::State,
+                                )*
+                            {
+                                pub fn #ident(self) -> #field_state_builder_ty<#(#stateful_field_tys,)*> {
+                                    unsafe { core::mem::transmute(()) }
+                                }
+                            }
+
+                            pub struct #field_state_builder_ty<#(#stateful_field_tys,)*> {
+                                #(
+                                    #stateful_field_idents: core::marker::PhantomData<#stateful_field_tys>,
+                                )*
+                            }
+
+                            impl<#(#stateful_field_tys,)*> #field_state_builder_ty<#(#stateful_field_tys,)*>
+                            where
+                                #(
+                                    #stateful_field_tys: #stateful_field_idents::State,
+                                )*
+                            {
+                                pub fn generic<S>(self) -> StateBuilder<#(#prev_field_tys,)* S, #(#next_field_tys,)*>
+                                where
+                                    S: #ident::State #local_entitlement_bounds,
+                                {
+                                    // SAFETY: `self` is destroyed
+                                    unsafe { StateBuilder::conjure() }
+                                }
+                            }
+                        }));
+
+                        let field_ident = ident;
+
+                        state_tys.iter().zip(state_accessor_idents).for_each(|(ty, accessor)| {
+                            let entitlement_bounds = stateful_fields
+                                .iter()
+                                .map(|field| {
+                                    if !field.entitlement_fields.is_empty() {
+                                        let entitled_field_tys = field
+                                            .entitlement_fields
+                                            .iter()
+                                            .map(|ident| {
+                                                if ident.eq(field_ident) {
+                                                    quote! {
+                                                        #field_ident::#ty
+                                                    }
+                                                } else {
+                                                    let ident_as_ty = Ident::new(
+                                                        &inflector::cases::pascalcase::to_pascal_case(
+                                                            &ident.to_string(),
+                                                        ),
+                                                        Span::call_site(),
+                                                    );
+
+                                                    quote! {
+                                                        #ident_as_ty
+                                                    }
+                                                }
+                                            })
+                                            .collect::<Vec<_>>();
+
+                                        let field_ty = Ident::new(
+                                            &inflector::cases::pascalcase::to_pascal_case(
+                                                &field.ident.to_string(),
+                                            ),
+                                            Span::call_site(),
+                                        );
+
+                                        Some(quote! {
+                                            #field_ty: #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*,
+                                        })
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+
+                            items.push(Item::Verbatim(quote! {
+                                impl<#(#stateful_field_tys,)*> #field_state_builder_ty<#(#stateful_field_tys,)*>
+                                where
+                                    #(
+                                        #stateful_field_tys: #stateful_field_idents::State,
+                                    )*
+                                {
+                                    pub fn #accessor(self) -> StateBuilder<#(#prev_field_tys,)* #ident::#ty, #(#next_field_tys,)*>
+                                    where
+                                        #ident::#ty: #ident::State #local_entitlement_bounds,
+                                        #(
+                                            #entitlement_bounds
+                                        )*
+                                    {
+                                        self.generic()
+                                    }
+                                }
+                            }));
+                        });
+                    }
+                });
         }
 
         // reader
