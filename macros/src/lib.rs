@@ -710,6 +710,32 @@ fn process_register(
                 })
                 .collect::<Vec<_>>();
 
+            let new_entitlement_bounds = stateful_fields
+                .iter()
+                .map(|field| {
+                    if !field.entitlement_fields.is_empty() {
+                        let entitled_field_tys = field
+                            .entitlement_fields
+                            .iter()
+                            .map(|ident| {
+                                format_ident!(
+                                    "New{}",
+                                    &inflector::cases::pascalcase::to_pascal_case(
+                                        &ident.to_string(),
+                                    ),
+                                )
+                            })
+                            .collect::<Vec<_>>();
+
+                        Some(quote! {
+                            + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
             items.push(Item::Verbatim(quote! {
                 pub type Reset = Register<
                     #(
@@ -737,7 +763,10 @@ fn process_register(
                         }
                     }
 
-                    pub fn finish(self) -> Register<#(#stateful_field_tys,)*> {
+                    pub fn finish(self) -> Register<#(#stateful_field_tys,)*>
+                    where
+                        Self: ::proto_hal::macro_utils::AsRegister,
+                    {
                         let reg_value = #(
                             ((#writable_stateful_field_tys::RAW as u32) << #writable_stateful_field_idents::OFFSET)
                         )|*;
@@ -766,7 +795,7 @@ fn process_register(
                     pub fn transition<#(#new_stateful_field_tys,)*>(self) -> Register<#(#new_stateful_field_tys,)*>
                     where
                         #(
-                            #new_stateful_field_tys: #stateful_field_idents::State,
+                            #new_stateful_field_tys: #stateful_field_idents::State #new_entitlement_bounds,
                         )*
                     {
                         // SAFETY: `self` is destroyed
@@ -791,7 +820,7 @@ fn process_register(
                 impl<#(#stateful_field_tys,)*> ::proto_hal::macro_utils::AsRegister for StateBuilder<#(#stateful_field_tys,)*>
                 where
                     #(
-                        #stateful_field_tys: #stateful_field_idents::State,
+                        #stateful_field_tys: #stateful_field_idents::State #entitlement_bounds,
                     )*
                 {
                     type Register = Register<#(#stateful_field_tys,)*>;
@@ -813,6 +842,7 @@ fn process_register(
                     #(
                         #stateful_field_tys: #stateful_field_idents::State,
                     )*
+                    Self: ::proto_hal::macro_utils::AsRegister,
                 {
                     fn into(self) -> Register<#(#stateful_field_tys,)*> {
                         self.finish()
@@ -879,7 +909,7 @@ fn process_register(
                             {
                                 pub fn generic<S>(self) -> StateBuilder<#(#prev_field_tys,)* S, #(#next_field_tys,)*>
                                 where
-                                    S: #ident::State #local_entitlement_bounds,
+                                    S: #ident::State,
                                 {
                                     // SAFETY: `self` is destroyed
                                     unsafe { StateBuilder::conjure() }
@@ -942,10 +972,7 @@ fn process_register(
                                 {
                                     pub fn #accessor(self) -> StateBuilder<#(#prev_field_tys,)* #ident::#ty, #(#next_field_tys,)*>
                                     where
-                                        #ident::#ty: #ident::State #local_entitlement_bounds,
-                                        #(
-                                            #entitlement_bounds
-                                        )*
+                                        #ident::#ty: #ident::State,
                                     {
                                         self.generic()
                                     }
