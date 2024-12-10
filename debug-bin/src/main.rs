@@ -33,11 +33,7 @@ fn configure_cordic(
     >,
     proto_hal::stasis::Entitlement<rcc::ahb1enr::cordicen::Enabled>,
 > {
-    cordic.csr(|reg| {
-        reg.build_transition()
-            .func::<cordic::csr::func::Sqrt>()
-            .finish()
-    })
+    cordic.csr(|state| state.func().sqrt())
 }
 
 #[entry]
@@ -52,18 +48,15 @@ unsafe fn main() -> ! {
 
     let gpioaen = rcc
         .ahb2enr
-        .build_transition()
-        .gpioaen::<rcc::ahb2enr::gpioaen::Enabled>()
+        .build_state()
+        .gpioaen()
+        .enabled()
         .finish()
         .gpioaen;
 
     let gpioa = gpioa.attach(gpioaen.into());
 
-    let gpioa = gpioa.moder(|reg| {
-        reg.build_transition()
-            .mode5::<gpioa::moder::mode5::Output>()
-            .finish()
-    });
+    let gpioa = gpioa.moder(|state| state.mode5().output());
 
     gpioa.odr.write(|w| w.od5(true));
 
@@ -82,8 +75,9 @@ unsafe fn main() -> ! {
 
     let cordicen = rcc
         .ahb1enr
-        .build_transition()
-        .cordicen::<rcc::ahb1enr::cordicen::Enabled>()
+        .build_state()
+        .cordicen()
+        .enabled()
         .finish()
         .cordicen;
 
