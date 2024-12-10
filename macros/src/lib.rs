@@ -1272,6 +1272,12 @@ fn process_block(block_args: &BlockArgs, module: &mut ItemMod) -> Result<(), syn
                     #reset_entitlement_tys,
                 )*
             >;
+
+            impl Reset {
+                pub unsafe fn conjure() -> Self {
+                    core::mem::transmute(())
+                }
+            }
         }));
 
         let entitlements = block_args
