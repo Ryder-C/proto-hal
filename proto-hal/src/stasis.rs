@@ -36,6 +36,12 @@ where
 
 /// Indicates a type-state is
 /// entitled to another type-state.
+///
+/// # Safety
+///
+/// If a type implements this trait
+/// erroneously, the generated
+/// peripheral interfaces will be invalid.
 pub unsafe trait Entitled<State> {}
 
 /// A struct to represent an entitlement

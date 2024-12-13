@@ -1,7 +1,5 @@
 #![no_std]
 
-pub mod regs;
-
 pub mod gpio;
 
 #[cfg(feature = "stm32")]

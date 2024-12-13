@@ -12,8 +12,12 @@ for TARGET in "${TARGETS[@]}"; do
 
     # test proto-hal features
     for FEATURE in "${FEATURES[@]}"; do
-        cargo build -p proto-hal--features "$FEATURE" --target "$TARGET"
+        cargo build -p proto-hal --features "$FEATURE" --target "$TARGET"
         cargo test -p proto-hal --features "$FEATURE"
         cargo clippy -p proto-hal -- --deny warnings
     done
 done
+
+# temporary
+cd stm32/g4
+cargo build --all-features

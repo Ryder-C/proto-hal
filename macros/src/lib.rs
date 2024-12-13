@@ -52,11 +52,11 @@ impl FromMeta for PathArray {
     }
 }
 
-impl PathArray {
-    const fn new() -> Self {
-        Self { elems: Vec::new() }
-    }
-}
+// impl PathArray {
+//     const fn new() -> Self {
+//         Self { elems: Vec::new() }
+//     }
+// }
 
 #[derive(Debug, Clone, Default, FromMeta)]
 #[darling(default)]
@@ -82,7 +82,6 @@ struct FieldArgs {
 struct FieldInfo {
     args: FieldArgs,
     ident: Ident,
-    reset_state: Option<Ident>,
     states: Vec<StateInfo>,
     entitlement_fields: HashSet<Ident>,
     stateful: bool,
@@ -109,14 +108,9 @@ struct ValueArgs;
 
 #[derive(Debug, Clone)]
 struct RegisterInfo {
-    args: RegisterArgs,
+    _args: RegisterArgs,
     ident: Ident,
     stateful: bool,
-}
-
-struct BlockInfo {
-    args: BlockArgs,
-    ident: Ident,
 }
 
 struct GenPrimitiveModsArgs {
@@ -167,9 +161,9 @@ impl SynErrorCombinator {
         Self { errors: Vec::new() }
     }
 
-    pub fn push(&mut self, error: syn::Error) {
-        self.errors.push(error);
-    }
+    // pub fn push(&mut self, error: syn::Error) {
+    //     self.errors.push(error);
+    // }
 
     // TODO: better name
     pub fn try_maybe_then<F, T, E>(&mut self, result: Result<T, E>, mut f: F)
@@ -203,12 +197,12 @@ impl SynErrorCombinator {
     }
 
     // TODO: better name
-    pub fn maybe<T, E>(&mut self, result: Result<T, E>)
-    where
-        E: Into<syn::Error>,
-    {
-        self.maybe_then(result, |_| {});
-    }
+    // pub fn maybe<T, E>(&mut self, result: Result<T, E>)
+    // where
+    //     E: Into<syn::Error>,
+    // {
+    //     self.maybe_then(result, |_| {});
+    // }
 
     pub fn coalesce(self) -> Result<(), syn::Error> {
         if let Some(error) = self.errors.iter().cloned().reduce(|mut acc, e| {
@@ -533,7 +527,6 @@ fn process_field(
     Ok(FieldInfo {
         args: field_args,
         ident: module.ident.clone(),
-        reset_state,
         states: states.clone(),
         entitlement_fields: {
             states
@@ -853,8 +846,7 @@ fn process_register(
             stateful_fields
                 .iter()
                 .enumerate()
-                .zip(entitlement_bounds.iter())
-                .for_each(|((i, field), local_entitlement_bounds)| {
+                .for_each(|(i, field)| {
                     let ident = &field.ident;
                     let field_state_builder_ty = format_ident!(
                         "{}StateBuilder",
@@ -914,55 +906,14 @@ fn process_register(
                                     // SAFETY: `self` is destroyed
                                     unsafe { StateBuilder::conjure() }
                                 }
+
+                                pub fn dynamic(self, state: #ident::States) -> StateBuilder<#(#prev_field_tys,)* #ident::States, #(#next_field_tys,)*> {
+                                    todo!()
+                                }
                             }
                         }));
 
-                        let field_ident = ident;
-
                         state_tys.iter().zip(state_accessor_idents).for_each(|(ty, accessor)| {
-                            let entitlement_bounds = stateful_fields
-                                .iter()
-                                .map(|field| {
-                                    if !field.entitlement_fields.is_empty() {
-                                        let entitled_field_tys = field
-                                            .entitlement_fields
-                                            .iter()
-                                            .map(|ident| {
-                                                if ident.eq(field_ident) {
-                                                    quote! {
-                                                        #field_ident::#ty
-                                                    }
-                                                } else {
-                                                    let ident_as_ty = Ident::new(
-                                                        &inflector::cases::pascalcase::to_pascal_case(
-                                                            &ident.to_string(),
-                                                        ),
-                                                        Span::call_site(),
-                                                    );
-
-                                                    quote! {
-                                                        #ident_as_ty
-                                                    }
-                                                }
-                                            })
-                                            .collect::<Vec<_>>();
-
-                                        let field_ty = Ident::new(
-                                            &inflector::cases::pascalcase::to_pascal_case(
-                                                &field.ident.to_string(),
-                                            ),
-                                            Span::call_site(),
-                                        );
-
-                                        Some(quote! {
-                                            #field_ty: #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*,
-                                        })
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect::<Vec<_>>();
-
                             items.push(Item::Verbatim(quote! {
                                 impl<#(#stateful_field_tys,)*> #field_state_builder_ty<#(#stateful_field_tys,)*>
                                 where
@@ -1140,7 +1091,7 @@ fn process_register(
     }
 
     Ok(RegisterInfo {
-        args: register_args,
+        _args: register_args,
         ident: module.ident.clone(),
         stateful,
     })
