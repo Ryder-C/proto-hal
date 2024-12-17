@@ -8,182 +8,29 @@ use proto_hal::macros::block;
 pub mod gpioa {
     #[register(auto_increment)]
     mod moder {
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode0 {
+        #[schema(width = 2, auto_increment)]
+        mod mode {
             #[state]
             struct Input;
             #[state]
             struct Output;
             #[state]
             struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode1 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode2 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode3 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode4 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode5 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode6 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode7 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode8 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode9 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode10 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode11 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode12 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state]
-            struct Alternate;
-            #[state(reset)]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode13 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state(reset)]
-            struct Alternate;
             #[state]
             struct Analog;
         }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode14 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state(reset)]
-            struct Alternate;
-            #[state]
-            struct Analog;
-        }
-        #[field(width = 2, read, write, auto_increment)]
-        mod mode15 {
-            #[state]
-            struct Input;
-            #[state]
-            struct Output;
-            #[state(reset)]
-            struct Alternate;
-            #[state]
-            struct Analog;
-        }
+
+        #[field_array(range = 0..13, field(schema = mode, read, write, reset = Analog))]
+        mod modeX {}
+
+        #[field(schema = mode, read, write, reset = Alternate)]
+        mod mode13 {}
+
+        #[field(schema = mode, read, write, reset = Alternate)]
+        mod mode14 {}
+
+        #[field(schema = mode, read, write, reset = Alternate)]
+        mod mode15 {}
     }
 
     #[register(auto_increment)]
