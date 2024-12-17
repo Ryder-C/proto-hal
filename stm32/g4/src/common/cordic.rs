@@ -2,8 +2,8 @@ use proto_hal::macros::block;
 
 #[block(
     base_addr = 0x4002_0c00,
-    auto_increment,
     entitlements = [super::rcc::ahb1enr::cordicen::Enabled],
+    auto_increment,
     erase_mod,
 )]
 mod cordic {

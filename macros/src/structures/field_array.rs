@@ -1,7 +1,7 @@
 use darling::FromMeta;
 use syn::{ExprRange, Ident, Item};
 
-use super::{field::FieldArgs, Args, Spec};
+use super::{field::FieldArgs, schema::SchemaSpec, Args};
 
 #[derive(Debug, Clone, FromMeta)]
 pub struct FieldArrayArgs {
@@ -16,15 +16,14 @@ impl Args for FieldArrayArgs {
 #[derive(Debug)]
 pub struct FieldArraySpec {
     pub ident: Ident,
+    pub range: ExprRange,
+    pub schema: SchemaSpec,
 }
 
-impl Spec for FieldArraySpec {
-    type Inherited = Ident;
-    type Args = FieldArrayArgs;
-
-    fn parse<'a>(
-        inherited: Self::Inherited,
-        args: Self::Args,
+impl FieldArraySpec {
+    pub fn parse<'a>(
+        ident: Ident,
+        args: FieldArrayArgs,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         todo!()

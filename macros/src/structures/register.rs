@@ -9,7 +9,7 @@ use super::{
     field::{FieldArgs, FieldSpec},
     field_array::{FieldArrayArgs, FieldArraySpec},
     schema::{SchemaArgs, SchemaSpec},
-    Args, Spec,
+    Args,
 };
 
 #[derive(Debug, Clone, Default, FromMeta)]
@@ -33,13 +33,11 @@ pub struct RegisterSpec {
     pub field_arrays: Vec<FieldArraySpec>,
 }
 
-impl Spec for RegisterSpec {
-    type Inherited = (Ident, Offset);
-    type Args = RegisterArgs;
-
-    fn parse<'a>(
-        (ident, offset): (Ident, Offset),
-        register_args: Self::Args,
+impl RegisterSpec {
+    pub fn parse<'a>(
+        ident: Ident,
+        offset: Offset,
+        register_args: RegisterArgs,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let mut register = Self {
@@ -49,6 +47,8 @@ impl Spec for RegisterSpec {
             fields: Vec::new(),
             field_arrays: Vec::new(),
         };
+
+        let mut field_offset = 0u8;
 
         for item in items {
             let module = require_module(item)?;
@@ -73,9 +73,13 @@ impl Spec for RegisterSpec {
 
                 let field = FieldSpec::parse(
                     module.ident.clone(),
-                    field_args,
+                    field_args.offset.unwrap_or(field_offset),
+                    &register.schemas,
+                    field_args.clone(),
                     extract_items_from(module)?.iter(),
                 )?;
+
+                field_offset = field_args.offset.unwrap_or(field_offset) + field.schema.width;
 
                 register.fields.push(field);
             }
@@ -92,5 +96,9 @@ impl Spec for RegisterSpec {
         }
 
         Ok(register)
+    }
+
+    pub fn stateful(&self) -> bool {
+        todo!()
     }
 }

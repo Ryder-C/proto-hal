@@ -33,14 +33,3 @@ pub trait Args: FromMeta + Sized {
         Ok(found)
     }
 }
-
-pub trait Spec: Sized {
-    type Inherited;
-    type Args: FromMeta;
-
-    fn parse<'a>(
-        inherited: Self::Inherited,
-        args: Self::Args,
-        items: impl Iterator<Item = &'a Item>,
-    ) -> syn::Result<Self>;
-}

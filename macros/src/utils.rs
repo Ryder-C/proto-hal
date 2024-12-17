@@ -54,13 +54,6 @@ impl FromMeta for PathArray {
     }
 }
 
-#[derive(Debug, Clone, Default, FromMeta)]
-#[darling(default)]
-pub struct Access {
-    pub entitlements: PathArray,
-    pub effect: Option<Meta>,
-}
-
 pub type Offset = u8;
 pub type Width = u8;
 

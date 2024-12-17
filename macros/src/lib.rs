@@ -1,22 +1,11 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Range,
-};
-
 use darling::{ast::NestedMeta, FromMeta};
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{format_ident, quote, quote_spanned, ToTokens};
-use structures::{
-    block::{BlockArgs, BlockSpec},
-    Spec,
-};
-use syn::{
-    parse::Parse, parse2, parse_macro_input, spanned::Spanned, Attribute, Expr, ExprArray,
-    ExprRange, Fields, Ident, Index, Item, ItemMod, ItemStruct, LitInt, Meta, Path, Token, Type,
-    Visibility,
-};
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
+use structures::block::{BlockArgs, BlockSpec};
+use syn::{parse2, ItemMod};
 
+mod access;
 mod structures;
 mod utils;
 
@@ -31,9 +20,9 @@ fn block_inner(args: TokenStream, item: TokenStream) -> Result<TokenStream2, syn
         utils::extract_items_from(&module)?.iter(),
     )?;
 
-    println!("{:?}", block);
-
-    Ok(quote! {})
+    Ok(quote! {
+        #block
+    })
 }
 
 #[proc_macro_attribute]

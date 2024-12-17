@@ -1,13 +1,14 @@
 use std::collections::HashSet;
 
 use darling::FromMeta;
+use quote::{quote, ToTokens};
 use syn::{Ident, Item, Path};
 
 use crate::utils::{extract_items_from, require_module, PathArray};
 
 use super::{
     register::{RegisterArgs, RegisterSpec},
-    Args, Spec,
+    Args,
 };
 
 #[derive(Debug, Clone, Default, FromMeta)]
@@ -25,15 +26,14 @@ pub struct BlockSpec {
     pub base_addr: u32,
     pub entitlements: HashSet<Path>,
     pub registers: Vec<RegisterSpec>,
+
+    pub erase_mod: bool,
 }
 
-impl Spec for BlockSpec {
-    type Inherited = Ident;
-    type Args = BlockArgs;
-
-    fn parse<'a>(
+impl BlockSpec {
+    pub fn parse<'a>(
         ident: Ident,
-        block_args: Self::Args,
+        block_args: BlockArgs,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let mut block = Self {
@@ -41,6 +41,7 @@ impl Spec for BlockSpec {
             base_addr: block_args.base_addr,
             entitlements: HashSet::new(),
             registers: Vec::new(),
+            erase_mod: block_args.erase_mod,
         };
 
         for entitlement in block_args.entitlements.elems {
@@ -64,10 +65,8 @@ impl Spec for BlockSpec {
                 }
 
                 let register = RegisterSpec::parse(
-                    (
-                        module.ident.clone(),
-                        register_args.offset.unwrap_or(register_offset),
-                    ),
+                    module.ident.clone(),
+                    register_args.offset.unwrap_or(register_offset),
                     register_args.clone(),
                     extract_items_from(module)?.iter(),
                 )?;
@@ -81,5 +80,26 @@ impl Spec for BlockSpec {
         }
 
         Ok(block)
+    }
+}
+
+impl ToTokens for BlockSpec {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let ident = &self.ident;
+        let base_addr = self.base_addr;
+
+        let body = quote! {
+            const BASE_ADDR: u32 = #base_addr;
+        };
+
+        tokens.extend(if self.erase_mod {
+            body
+        } else {
+            quote! {
+                mod #ident {
+                    #body
+                }
+            }
+        })
     }
 }

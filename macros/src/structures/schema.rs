@@ -1,11 +1,11 @@
 use darling::FromMeta;
 use syn::{Ident, Item};
 
-use crate::utils::{extract_items_from, require_module, Width};
+use crate::utils::{extract_items_from, require_module, require_struct, Width};
 
 use super::{
     state::{StateArgs, StateSpec},
-    Args, Spec,
+    Args,
 };
 
 #[derive(Debug, Clone, Default, FromMeta)]
@@ -19,20 +19,17 @@ impl Args for SchemaArgs {
     const NAME: &str = "schema";
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SchemaSpec {
     pub ident: Ident,
     pub width: Width,
     pub states: Vec<StateSpec>,
 }
 
-impl Spec for SchemaSpec {
-    type Inherited = Ident;
-    type Args = SchemaArgs;
-
-    fn parse<'a>(
-        ident: Self::Inherited,
-        args: Self::Args,
+impl SchemaSpec {
+    pub fn parse<'a>(
+        ident: Ident,
+        args: SchemaArgs,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let mut schema = Self {
@@ -42,13 +39,19 @@ impl Spec for SchemaSpec {
         };
 
         for item in items {
-            let module = require_module(item)?;
+            let s = require_struct(item)?;
 
-            if let Some(state_args) = StateArgs::get(module.attrs.iter())? {
-                let state = StateSpec::parse((), state_args, extract_items_from(module)?.iter())?;
+            if let Some(state_args) = StateArgs::get(s.attrs.iter())? {
+                let state = StateSpec::parse(s.ident.clone(), state_args)?;
+
+                schema.states.push(state);
             }
         }
 
         Ok(schema)
+    }
+
+    pub fn stateful(&self) -> bool {
+        !self.states.is_empty()
     }
 }
