@@ -1,6 +1,6 @@
 use darling::FromMeta;
 use proc_macro2::Span;
-use syn::{spanned::Spanned, Attribute, Item};
+use syn::{spanned::Spanned, Attribute};
 
 pub mod block;
 pub mod field;

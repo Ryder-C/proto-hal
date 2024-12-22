@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use darling::FromMeta;
 use proc_macro2::Span;
@@ -6,7 +6,7 @@ use quote::{quote, ToTokens};
 use syn::{Expr, Ident, Item};
 
 use crate::{
-    access::{Access, AccessArgs, Read, ReadWrite, Write},
+    access::{Access, AccessArgs},
     utils::{get_access_from_split, get_schema_from_set, Offset, Width},
 };
 

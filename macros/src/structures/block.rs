@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use darling::FromMeta;
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use syn::{parse_quote, Ident, Item, Path};
 

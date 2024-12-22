@@ -8,7 +8,7 @@ use syn::{parse_quote, Ident, Index, Item, Path};
 use crate::utils::{extract_items_from, require_module, Offset};
 
 use super::{
-    field::{FieldArgs, FieldSpec, StatefulFieldSpec},
+    field::{FieldArgs, FieldSpec},
     field_array::{FieldArrayArgs, FieldArraySpec},
     schema::{SchemaArgs, SchemaSpec},
     Args,

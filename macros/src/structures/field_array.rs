@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    field::{FieldArgs, FieldSpec, StatefulFieldSpec, StatelessFieldSpec},
+    field::{FieldSpec, StatefulFieldSpec, StatelessFieldSpec},
     schema::{SchemaArgs, SchemaSpec},
     Args,
 };

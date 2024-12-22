@@ -4,7 +4,7 @@ use darling::FromMeta;
 use proc_macro2::Span;
 use syn::{Ident, Item};
 
-use crate::utils::{extract_items_from, require_module, require_struct, Width};
+use crate::utils::{require_struct, Width};
 
 use super::{
     state::{StateArgs, StateSpec},
