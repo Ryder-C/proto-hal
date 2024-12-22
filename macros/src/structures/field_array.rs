@@ -45,6 +45,7 @@ impl Args for FieldArrayArgs {
 pub struct FieldArraySpec {
     pub ident: Ident,
     pub range: Range<u8>,
+    pub offset: Offset,
     pub schema: SchemaSpec,
     pub access: Access,
     pub reset: Option<Expr>,
@@ -53,6 +54,7 @@ pub struct FieldArraySpec {
 impl FieldArraySpec {
     pub fn parse<'a>(
         ident: Ident,
+        offset: Offset,
         schemas: &HashMap<Ident, SchemaSpec>,
         field_array_args: FieldArrayArgs,
         mut items: impl Iterator<Item = &'a Item>,
@@ -142,9 +144,12 @@ impl FieldArraySpec {
             RangeLimits::HalfOpen(_) => start..end,
         };
 
+        let offset = field_array_args.offset.unwrap_or(offset);
+
         Ok(Self {
             ident,
             range,
+            offset,
             schema,
             access,
             reset: field_array_args.reset,

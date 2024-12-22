@@ -9,9 +9,9 @@ use proto_hal::macros::block;
 mod cordic {
     #[register(auto_increment)]
     mod csr {
-        #[field(width = 4, read, write, auto_increment)]
+        #[field(width = 4, read, write, reset = Cos, auto_increment)]
         mod func {
-            #[state(entitlements = [scale::N0], reset)]
+            #[state(entitlements = [scale::N0])]
             struct Cos;
 
             #[state(entitlements = [scale::N0])]
@@ -42,7 +42,7 @@ mod cordic {
             struct Sqrt;
         }
 
-        #[field(width = 4, read, write, auto_increment)]
+        #[field(width = 4, read, write, reset = P20, auto_increment)]
         /// custom docs
         mod precision {
             #[state(bits = 1)]
@@ -53,7 +53,7 @@ mod cordic {
             struct P12;
             #[state]
             struct P16;
-            #[state(reset)]
+            #[state]
             struct P20;
             #[state]
             struct P24;
@@ -77,9 +77,9 @@ mod cordic {
             struct P60;
         }
 
-        #[field(width = 3, read, write, auto_increment)]
+        #[field(width = 3, read, write, reset = N0, auto_increment)]
         mod scale {
-            #[state(reset)]
+            #[state]
             struct N0;
             #[state]
             struct N1;
@@ -97,65 +97,58 @@ mod cordic {
             struct N7;
         }
 
-        #[field(offset = 16, width = 1, read, write)]
-        mod ien {
-            #[state(reset, bits = 0)]
+        #[schema(width = 1)]
+        mod enable {
+            #[state(bits = 0)]
             struct Disabled;
             #[state(bits = 1)]
             struct Enabled;
         }
 
-        #[field(width = 1, read, write)]
-        mod dmaren {
-            #[state(reset, bits = 0)]
-            struct Disabled;
-            #[state(bits = 1)]
-            struct Enabled;
-        }
+        #[field(offset = 16, schema = enable, read, write, reset = Disabled)]
+        mod ien {}
 
-        #[field(width = 1, read, write)]
-        mod dmawen {
-            #[state(reset, bits = 0)]
-            struct Disabled;
-            #[state(bits = 1)]
-            struct Enabled;
-        }
+        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        mod dmaren {}
 
-        #[field(width = 1, read, write)]
+        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        mod dmawen {}
+
+        #[field(width = 1, read, write, reset = OneRead)]
         mod nres {
-            #[state(reset, bits = 0)]
+            #[state(bits = 0)]
             struct OneRead;
             #[state(bits = 1, entitlements = [ressize::Q31])]
             struct TwoReads;
         }
 
-        #[field(width = 1, read, write)]
+        #[field(width = 1, read, write, reset = OneWrite)]
         mod nargs {
-            #[state(reset, bits = 0)]
+            #[state(bits = 0)]
             struct OneWrite;
             #[state(bits = 1, entitlements = [argsize::Q31])]
             struct TwoWrites;
         }
 
-        #[field(width = 1, read, write)]
+        #[field(width = 1, read, write, reset = Q31)]
         mod ressize {
-            #[state(reset, bits = 0)]
+            #[state(bits = 0)]
             struct Q31;
             #[state(bits = 1)]
             struct Q15;
         }
 
-        #[field(width = 1, read, write)]
+        #[field(width = 1, read, write, reset = Q31)]
         mod argsize {
-            #[state(reset, bits = 0)]
+            #[state(bits = 0)]
             struct Q31;
             #[state(bits = 1)]
             struct Q15;
         }
 
-        #[field(offset = 31, width = 1, read)]
+        #[field(offset = 31, width = 1, read, reset = NoData)]
         mod rrdy {
-            #[state(reset, bits = 0)]
+            #[state(bits = 0)]
             struct NoData;
             #[state(bits = 1)]
             struct DataReady;

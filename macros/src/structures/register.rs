@@ -88,7 +88,7 @@ impl RegisterSpec {
                     extract_items_from(module)?.iter(),
                 )?;
 
-                field_offset = field_args.offset.unwrap_or(field_offset) + field.schema().width();
+                field_offset = field.offset() + field.schema().width();
 
                 register.fields.push(field);
             }
@@ -96,13 +96,14 @@ impl RegisterSpec {
             if let Some(field_array_args) = FieldArrayArgs::get(module.attrs.iter())? {
                 let field_array = FieldArraySpec::parse(
                     module.ident.clone(),
+                    field_array_args.offset.unwrap_or(field_offset),
                     &register.schemas,
                     field_array_args.clone(),
                     extract_items_from(module)?.iter(),
                 )?;
 
-                field_offset = field_array_args.offset.unwrap_or(field_offset)
-                    + field_array.schema.width() * field_array.count();
+                field_offset =
+                    field_array.offset + field_array.schema.width() * field_array.count();
 
                 register.fields.extend(field_array.to_fields(field_offset)?);
             }

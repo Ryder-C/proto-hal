@@ -13,7 +13,6 @@ use super::Args;
 pub struct StateArgs {
     #[darling(default)]
     pub bits: Option<u32>,
-    pub reset: bool,
     pub entitlements: PathArray,
 
     #[darling(skip)]
