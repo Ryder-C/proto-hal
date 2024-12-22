@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
 use darling::FromMeta;
-use quote::{quote, ToTokens};
-use syn::{Ident, Item, Path};
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, ToTokens};
+use syn::{parse_quote, Ident, Item, Path};
 
 use crate::utils::{extract_items_from, require_module, PathArray};
 
@@ -88,9 +89,149 @@ impl ToTokens for BlockSpec {
         let ident = &self.ident;
         let base_addr = self.base_addr;
 
-        let body = quote! {
+        let (stateful_registers, stateless_registers) = self
+            .registers
+            .iter()
+            .partition::<Vec<_>, _>(|register| register.is_stateful());
+
+        let stateful_register_idents = stateful_registers
+            .iter()
+            .map(|register| &register.ident)
+            .collect::<Vec<_>>();
+
+        let stateless_register_idents = stateless_registers
+            .iter()
+            .map(|register| &register.ident)
+            .collect::<Vec<_>>();
+
+        let stateful_register_tys = stateful_registers
+            .iter()
+            .map(|register| {
+                Ident::new(
+                    &inflector::cases::pascalcase::to_pascal_case(&register.ident.to_string()),
+                    Span::call_site(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let entitlement_idents = (0..self.entitlements.len())
+            .map(|i| format_ident!("entitlement{}", i))
+            .collect::<Vec<_>>();
+
+        let entitlement_tys = (0..self.entitlements.len())
+            .map(|i| format_ident!("Entitlement{}", i))
+            .collect::<Vec<_>>();
+
+        let reset_entitlement_tys = entitlement_tys
+            .iter()
+            .map(|_| {
+                parse_quote! {
+                    ::proto_hal::stasis::Unsatisfied
+                }
+            })
+            .collect::<Vec<Path>>();
+
+        let register_bodies = self.registers.iter().map(|register| quote! { #register });
+
+        let mut body = quote! {
+            #(
+                #register_bodies
+            )*
+
             const BASE_ADDR: u32 = #base_addr;
+
+            pub struct Block<
+                #(
+                    #stateful_register_tys,
+                )*
+
+                #(
+                    #entitlement_tys,
+                )*
+            > {
+                #(
+                    pub #stateful_register_idents: #stateful_register_tys,
+                )*
+
+                #(
+                    pub #stateless_register_idents: #stateless_register_idents::Register,
+                )*
+
+                #(
+                    pub #entitlement_idents: #entitlement_tys,
+                )*
+            }
+
+            pub type Reset = Block<
+                #(
+                    #stateful_register_idents::Reset,
+                )*
+
+                #(
+                    #reset_entitlement_tys,
+                )*
+            >;
+
+            impl Reset {
+                pub unsafe fn conjure() -> Self {
+                    ::core::mem::transmute(())
+                }
+            }
         };
+
+        let entitlements = self
+            .entitlements
+            .iter()
+            .map(|path| {
+                parse_quote! {
+                    ::proto_hal::stasis::Entitlement<#path>
+                }
+            })
+            .collect::<Vec<Path>>();
+
+        for (i, (ident, ty)) in stateful_register_idents
+            .iter()
+            .zip(stateful_register_tys.iter())
+            .enumerate()
+        {
+            let prev_register_idents = stateful_register_idents.get(..i).unwrap();
+            let next_register_idents = stateful_register_idents.get(i + 1..).unwrap();
+
+            let prev_register_tys = stateful_register_tys.get(..i).unwrap();
+            let next_register_tys = stateful_register_tys.get(i + 1..).unwrap();
+
+            body.extend(quote! {
+                impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)* #(#entitlements,)*>
+                where
+                    #ty: ::proto_hal::macro_utils::AsBuilder,
+                {
+                    pub fn #ident<R, B>(self, f: impl FnOnce(#ty::Builder) -> B) -> Block<#(#prev_register_tys,)* R, #(#next_register_tys,)* #(#entitlements,)*>
+                    where
+                        B: ::proto_hal::macro_utils::AsRegister<Register = R>,
+                    {
+                        Block {
+                            #(
+                                #prev_register_idents: self.#prev_register_idents,
+                            )*
+
+                            #ident: f(self.#ident.into()).into(),
+
+                            #(
+                                #next_register_idents: self.#next_register_idents,
+                            )*
+
+                            #(
+                                #stateless_register_idents: self.#stateless_register_idents,
+                            )*
+
+                            #(
+                                #entitlement_idents: self.#entitlement_idents,
+                            )*
+                        }
+                    }
+                }
+            });
+        }
 
         tokens.extend(if self.erase_mod {
             body

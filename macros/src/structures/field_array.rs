@@ -1,16 +1,16 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use darling::FromMeta;
 use proc_macro2::Span;
 use syn::{spanned::Spanned, Expr, ExprLit, ExprRange, Ident, Item, Lit, LitInt, RangeLimits};
 
 use crate::{
-    access::Access,
-    utils::{get_access_from_split, get_schema_from_set},
+    access::{Access, AccessArgs},
+    utils::{get_access_from_split, get_schema_from_set, Offset, Width},
 };
 
 use super::{
-    field::{FieldArgs, FieldSpec},
+    field::{FieldArgs, FieldSpec, StatefulFieldSpec, StatelessFieldSpec},
     schema::{SchemaArgs, SchemaSpec},
     Args,
 };
@@ -18,22 +18,36 @@ use super::{
 #[derive(Debug, Clone, FromMeta)]
 pub struct FieldArrayArgs {
     pub range: ExprRange,
-    #[darling(rename = "field")]
-    pub field_args: FieldArgs,
+    pub offset: Option<Offset>,
+    pub width: Option<Width>,
+    pub read: Option<AccessArgs>,
+    pub write: Option<AccessArgs>,
+    pub reset: Option<Expr>,
+    pub schema: Option<Ident>,
     #[darling(default)]
     pub auto_increment: bool,
+
+    #[darling(skip)]
+    pub span: Option<Span>,
 }
 
 impl Args for FieldArrayArgs {
     const NAME: &str = "field_array";
+
+    fn attach_span(mut self, span: proc_macro2::Span) -> Self {
+        self.span.replace(span);
+
+        self
+    }
 }
 
 #[derive(Debug)]
 pub struct FieldArraySpec {
     pub ident: Ident,
-    pub range: ExprRange,
+    pub range: Range<u8>,
     pub schema: SchemaSpec,
     pub access: Access,
+    pub reset: Option<Expr>,
 }
 
 impl FieldArraySpec {
@@ -43,7 +57,7 @@ impl FieldArraySpec {
         field_array_args: FieldArrayArgs,
         mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
-        let schema = if let Some(schema) = &field_array_args.field_args.schema {
+        let schema = if let Some(schema) = &field_array_args.schema {
             if items.next().is_some() {
                 Err(syn::Error::new_spanned(
                     ident.clone(),
@@ -58,37 +72,24 @@ impl FieldArraySpec {
                 ident.clone(),
                 SchemaArgs {
                     auto_increment: field_array_args.auto_increment,
-                    width: field_array_args
-                        .field_args
-                        .width
-                        .ok_or(syn::Error::new_spanned(
-                            ident.clone(),
-                            "width must be specified",
-                        ))?,
+                    width: field_array_args.width.ok_or(syn::Error::new_spanned(
+                        ident.clone(),
+                        "width must be specified",
+                    ))?,
+                    span: None,
                 },
                 items,
             )?
         };
 
         let access = get_access_from_split(
-            &field_array_args.field_args.read,
-            &field_array_args.field_args.write,
+            &field_array_args.read,
+            &field_array_args.write,
             ident.span(),
         )?;
 
-        Ok(Self {
-            ident,
-            range: field_array_args.range,
-            schema,
-            access,
-        })
-    }
-
-    pub fn to_fields(&self, mut offset: u8) -> syn::Result<Vec<FieldSpec>> {
-        let mut fields = Vec::new();
-
         // get range from range expr (so stupid)
-        let expr = *(self
+        let expr = *(field_array_args
             .range
             .start
             .clone()
@@ -98,21 +99,21 @@ impl FieldArraySpec {
             }))));
         let Expr::Lit(lit) = expr else {
             Err(syn::Error::new(
-                self.range.start.span(),
+                field_array_args.range.start.span(),
                 "range bounds must be literals",
             ))?
         };
 
         let Lit::Int(lit) = lit.lit else {
             Err(syn::Error::new(
-                self.range.start.span(),
+                field_array_args.range.start.span(),
                 "range bound literals must be integers",
             ))?
         };
 
         let start = lit.base10_parse::<u8>()?;
 
-        let expr = *(self
+        let expr = *(field_array_args
             .range
             .end
             .clone()
@@ -122,38 +123,69 @@ impl FieldArraySpec {
             }))));
         let Expr::Lit(lit) = expr else {
             Err(syn::Error::new(
-                self.range.end.span(),
+                field_array_args.range.end.span(),
                 "range bounds must be literals",
             ))?
         };
 
         let Lit::Int(lit) = lit.lit else {
             Err(syn::Error::new(
-                self.range.end.span(),
+                field_array_args.range.end.span(),
                 "range bound literals must be integers",
             ))?
         };
 
         let end = lit.base10_parse::<u8>()?;
 
-        let range: Box<dyn Iterator<Item = u8>> = match self.range.limits {
-            RangeLimits::Closed(_) => Box::new(start..=end),
-            RangeLimits::HalfOpen(_) => Box::new(start..end),
+        let range = match field_array_args.range.limits {
+            RangeLimits::Closed(_) => start..end + 1,
+            RangeLimits::HalfOpen(_) => start..end,
         };
 
+        Ok(Self {
+            ident,
+            range,
+            schema,
+            access,
+            reset: field_array_args.reset,
+        })
+    }
+
+    pub fn count(&self) -> u8 {
+        self.range.clone().count() as _
+    }
+
+    pub fn to_fields(&self, mut offset: u8) -> syn::Result<Vec<FieldSpec>> {
+        let mut fields = Vec::new();
+
         // generate fields
-        for i in range {
-            let field = FieldSpec {
-                ident: Ident::new(
-                    &self.ident.to_string().replace("X", &i.to_string()),
-                    Span::call_site(),
-                ),
-                offset,
-                schema: self.schema.clone(),
-                access: self.access.clone(),
+        for i in self.range.clone() {
+            let ident = Ident::new(
+                &self.ident.to_string().replace("X", &i.to_string()),
+                Span::call_site(),
+            );
+
+            let field = match self.schema.clone() {
+                SchemaSpec::Stateful(schema) => FieldSpec::Stateful(StatefulFieldSpec {
+                    ident,
+                    offset,
+                    schema,
+                    access: self.access.clone(),
+                    reset: self.reset.clone().ok_or(syn::Error::new_spanned(
+                        self.ident.clone(),
+                        "stateful fields must have reset specified",
+                    ))?,
+                }),
+                SchemaSpec::Stateless(schema) => FieldSpec::Stateless(StatelessFieldSpec {
+                    ident,
+                    offset,
+                    schema,
+                    access: self.access.clone(),
+                    reset: self.reset.clone(),
+                }),
             };
 
-            offset += field.schema.width;
+            offset += field.schema().width();
 
             fields.push(field);
         }

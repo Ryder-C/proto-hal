@@ -20,7 +20,7 @@ pub mod gpioa {
             struct Analog;
         }
 
-        #[field_array(range = 0..13, field(schema = mode, read, write, reset = Analog))]
+        #[field_array(range = ..13, field(schema = mode, read, write, reset = Analog))]
         mod modeX {}
 
         #[field(schema = mode, read, write, reset = Alternate)]

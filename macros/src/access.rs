@@ -36,3 +36,19 @@ pub enum Access {
     Write(Write),
     ReadWrite(ReadWrite),
 }
+
+impl Access {
+    pub fn is_read(&self) -> bool {
+        match self {
+            Self::Read(_) | Self::ReadWrite(_) => true,
+            Self::Write(_) => false,
+        }
+    }
+
+    pub fn is_write(&self) -> bool {
+        match self {
+            Self::Write(_) | Self::ReadWrite(_) => true,
+            Self::Read(_) => false,
+        }
+    }
+}
