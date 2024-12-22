@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use darling::FromMeta;
 use proc_macro2::Span;
+use quote::{quote, ToTokens};
 use syn::{Ident, Path};
 
 use crate::utils::PathArray;
@@ -68,5 +69,37 @@ impl StateSpec {
             entitlements,
             entitlement_fields,
         })
+    }
+}
+
+impl ToTokens for StateSpec {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let ident = &self.ident;
+
+        tokens.extend(quote! {
+            pub struct #ident {
+                sealed: (),
+            }
+
+            impl State for #ident {
+                const RAW: States = States::#ident;
+
+                unsafe fn conjure() -> Self {
+                    Self {
+                        sealed: (),
+                    }
+                }
+            }
+        });
+
+        if !self.entitlements.is_empty() {
+            let entitlement_paths = self.entitlements.iter();
+
+            tokens.extend(quote! {
+                #(
+                    unsafe impl ::proto_hal::stasis::Entitled<super::#entitlement_paths> for #ident {}
+                )*
+            });
+        }
     }
 }

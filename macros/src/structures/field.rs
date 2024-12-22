@@ -171,38 +171,59 @@ impl ToTokens for FieldSpec {
             pub const WIDTH: u8 = #width;
         };
 
-        if let Self::Stateful(field) = self {
-            let reset_state = &field.reset;
+        match self {
+            Self::Stateful(field) => {
+                let reset_state = &field.reset;
 
-            let state_idents = field
-                .schema
-                .states
-                .iter()
-                .map(|state| state.ident.clone())
-                .collect::<Vec<_>>();
+                let state_idents = field
+                    .schema
+                    .states
+                    .iter()
+                    .map(|state| state.ident.clone())
+                    .collect::<Vec<_>>();
 
-            let state_bits = field
-                .schema
-                .states
-                .iter()
-                .map(|state| state.bits)
-                .collect::<Vec<_>>();
+                let state_bits = field
+                    .schema
+                    .states
+                    .iter()
+                    .map(|state| state.bits)
+                    .collect::<Vec<_>>();
 
-            body.extend(quote! {
-                pub struct Any {
-                    state: States,
-                }
+                let state_bodies = field.schema.states.iter().map(|state| quote! { #state });
 
-                pub type Reset = #reset_state;
-                pub const RESET: u32 = Reset::RAW as u32;
-
-                #[repr(u32)]
-                pub enum States {
+                body.extend(quote! {
                     #(
-                        #state_idents #state_bits,
+                        #state_bodies
                     )*
+
+                    pub struct Any {
+                        state: States,
+                    }
+
+                    pub type Reset = #reset_state;
+                    pub const RESET: u32 = Reset::RAW as u32;
+
+                    #[repr(u32)]
+                    pub enum States {
+                        #(
+                            #state_idents = #state_bits,
+                        )*
+                    }
+
+                    pub trait State {
+                        const RAW: States;
+
+                        unsafe fn conjure() -> Self;
+                    }
+                });
+            }
+            Self::Stateless(field) => {
+                if let Some(reset) = &field.reset {
+                    body.extend(quote! {
+                        pub const RESET: u32 = #reset;
+                    });
                 }
-            });
+            }
         }
 
         tokens.extend(quote! {

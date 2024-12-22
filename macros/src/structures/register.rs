@@ -162,7 +162,13 @@ impl ToTokens for RegisterSpec {
             .map(|ident| format_ident!("New{}", ident))
             .collect::<Vec<_>>();
 
+        let field_bodies = self.fields.iter().map(|field| quote! { #field });
+
         let mut body = quote! {
+            #(
+                #field_bodies
+            )*
+
             pub const OFFSET: u32 = #offset as _;
 
             pub struct Register<#(#stateful_field_tys,)*> {
@@ -436,24 +442,24 @@ impl ToTokens for RegisterSpec {
                             }
                         }
                     });
-                }
 
-                for (ty, accessor) in state_tys.iter().zip(state_accessor_idents) {
-                    body.extend(quote! {
-                        impl<#(#stateful_field_tys,)*> #field_state_builder_ty<#(#stateful_field_tys,)*>
-                        where
-                            #(
-                                #stateful_field_tys: #stateful_field_idents::State,
-                            )*
-                        {
-                            pub fn #accessor(self) -> StateBuilder<#(#prev_field_tys,)* #ident::#ty, #(#next_field_tys,)*>
+                    for (ty, accessor) in state_tys.iter().zip(state_accessor_idents) {
+                        body.extend(quote! {
+                            impl<#(#stateful_field_tys,)*> #field_state_builder_ty<#(#stateful_field_tys,)*>
                             where
-                                #ident::#ty: #ident::State,
+                                #(
+                                    #stateful_field_tys: #stateful_field_idents::State,
+                                )*
                             {
-                                self.generic()
+                                pub fn #accessor(self) -> StateBuilder<#(#prev_field_tys,)* #ident::#ty, #(#next_field_tys,)*>
+                                where
+                                    #ident::#ty: #ident::State,
+                                {
+                                    self.generic()
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
             }
         }

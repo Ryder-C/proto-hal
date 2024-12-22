@@ -4,9 +4,9 @@ use proto_hal::macros::block;
 mod rcc {
     #[register(offset = 0x48)]
     mod ahb1enr {
-        #[field(offset = 3, width = 1, read, write)]
+        #[field(offset = 3, width = 1, read, write, reset = Disabled)]
         mod cordicen {
-            #[state(bits = 0, reset)]
+            #[state(bits = 0)]
             struct Disabled;
             #[state(bits = 1)]
             struct Enabled;
@@ -15,62 +15,35 @@ mod rcc {
 
     #[register(auto_increment)]
     mod ahb2enr {
-        #[field(width = 1, read, write)]
-        mod gpioaen {
-            #[state(bits = 0, reset)]
+        #[schema(width = 1)]
+        mod enable {
+            #[state(bits = 0)]
             struct Disabled;
             #[state(bits = 1)]
             struct Enabled;
         }
-        #[field(width = 1, read, write)]
-        mod gpioben {
-            #[state(bits = 0, reset)]
-            struct Disabled;
-            #[state(bits = 1)]
-            struct Enabled;
-        }
-        #[field(width = 1, read, write)]
-        mod gpiocen {
-            #[state(bits = 0, reset)]
-            struct Disabled;
-            #[state(bits = 1)]
-            struct Enabled;
-        }
-        #[field(width = 1, read, write)]
-        mod gpioden {
-            #[state(bits = 0, reset)]
-            struct Disabled;
-            #[state(bits = 1)]
-            struct Enabled;
-        }
-        #[field(width = 1, read, write)]
-        mod gpioeen {
-            #[state(bits = 0, reset)]
-            struct Disabled;
-            #[state(bits = 1)]
-            struct Enabled;
-        }
-        #[field(width = 1, read, write)]
-        mod gpiofen {
-            #[state(bits = 0, reset)]
-            struct Disabled;
-            #[state(bits = 1)]
-            struct Enabled;
-        }
-        #[field(width = 1, read, write)]
-        mod gpiogen {
-            #[state(bits = 0, reset)]
-            struct Disabled;
-            #[state(bits = 1)]
-            struct Enabled;
-        }
+
+        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        mod gpioaen {}
+        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        mod gpioben {}
+        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        mod gpiocen {}
+        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        mod gpioden {}
+        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        mod gpioeen {}
+        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        mod gpiofen {}
+        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        mod gpiogen {}
     }
 
     #[register(offset = 0x60)]
     mod apb2enr {
-        #[field(offset = 0, width = 1, read, write)]
+        #[field(offset = 0, width = 1, read, write, reset = Disabled)]
         mod syscfgen {
-            #[state(bits = 0, reset)]
+            #[state(bits = 0)]
             struct Disabled;
             #[state(bits = 1)]
             struct Enabled;
