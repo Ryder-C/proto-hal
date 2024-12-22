@@ -1,5 +1,13 @@
+use std::collections::{HashMap, HashSet};
+
 use darling::FromMeta;
-use syn::{Expr, ExprArray, Item, ItemMod, ItemStruct, Meta, Path};
+use proc_macro2::Span;
+use syn::{Expr, ExprArray, Ident, Item, ItemMod, ItemStruct, Meta, Path};
+
+use crate::{
+    access::{Access, AccessArgs, Read, ReadWrite, Write},
+    structures::schema::SchemaSpec,
+};
 
 pub fn require_module(item: &Item) -> syn::Result<&ItemMod> {
     if let Item::Mod(module) = item {
@@ -26,6 +34,55 @@ pub fn extract_items_from(module: &ItemMod) -> syn::Result<&Vec<Item>> {
             "module must be a definition, not an import",
         ))?
         .1)
+}
+
+pub fn get_schema_from_set(
+    ident: &Ident,
+    set: &HashMap<Ident, SchemaSpec>,
+) -> syn::Result<SchemaSpec> {
+    set.get(ident)
+        .cloned()
+        .ok_or(syn::Error::new_spanned(ident, "schema does not exist"))
+}
+
+pub fn get_access_from_split(
+    read: &Option<AccessArgs>,
+    write: &Option<AccessArgs>,
+    err_span: Span,
+) -> syn::Result<Access> {
+    let mut access_entitlements = HashSet::new();
+
+    for access_arg in [read, write] {
+        if let Some(read) = access_arg {
+            for entitlement in read.entitlements.elems.iter().cloned() {
+                if !access_entitlements.insert(entitlement.clone()) {
+                    Err(syn::Error::new_spanned(
+                        entitlement,
+                        "entitlement exists already",
+                    ))?
+                }
+            }
+        }
+    }
+
+    Ok(match (read, write) {
+        (Some(_), Some(_)) => Access::ReadWrite(ReadWrite {
+            entitlements: access_entitlements,
+            effects: (),
+        }),
+        (Some(_), None) => Access::Read(Read {
+            entitlements: access_entitlements,
+            effects: (),
+        }),
+        (None, Some(_)) => Access::Write(Write {
+            entitlements: access_entitlements,
+            effects: (),
+        }),
+        (None, None) => Err(syn::Error::new(
+            err_span,
+            "fields must be readable or writable",
+        ))?,
+    })
 }
 
 #[derive(Debug, Clone, Default)]

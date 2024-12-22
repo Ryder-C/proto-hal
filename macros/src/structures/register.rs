@@ -30,7 +30,6 @@ pub struct RegisterSpec {
     pub offset: Offset,
     pub schemas: HashMap<Ident, SchemaSpec>,
     pub fields: Vec<FieldSpec>,
-    pub field_arrays: Vec<FieldArraySpec>,
 }
 
 impl RegisterSpec {
@@ -45,7 +44,6 @@ impl RegisterSpec {
             offset,
             schemas: HashMap::new(),
             fields: Vec::new(),
-            field_arrays: Vec::new(),
         };
 
         let mut field_offset = 0u8;
@@ -87,18 +85,15 @@ impl RegisterSpec {
             if let Some(field_array_args) = FieldArrayArgs::get(module.attrs.iter())? {
                 let field_array = FieldArraySpec::parse(
                     module.ident.clone(),
+                    &register.schemas,
                     field_array_args,
                     extract_items_from(module)?.iter(),
                 )?;
 
-                register.field_arrays.push(field_array);
+                register.fields.extend(field_array.to_fields(field_offset)?);
             }
         }
 
         Ok(register)
-    }
-
-    pub fn stateful(&self) -> bool {
-        todo!()
     }
 }

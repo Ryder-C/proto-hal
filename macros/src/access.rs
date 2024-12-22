@@ -12,25 +12,25 @@ pub struct AccessArgs {
     pub effect: Option<Meta>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Read {
     pub entitlements: HashSet<Path>,
     pub effects: (),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Write {
     pub entitlements: HashSet<Path>,
     pub effects: (),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReadWrite {
     pub entitlements: HashSet<Path>,
     pub effects: (),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Access {
     Read(Read),
     Write(Write),

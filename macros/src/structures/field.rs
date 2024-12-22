@@ -5,7 +5,7 @@ use syn::{Expr, Ident, Item};
 
 use crate::{
     access::{Access, AccessArgs, Read, ReadWrite, Write},
-    utils::{Offset, Width},
+    utils::{get_access_from_split, get_schema_from_set, Offset, Width},
 };
 
 use super::{
@@ -45,7 +45,7 @@ impl FieldSpec {
         field_args: FieldArgs,
         mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
-        let schema = if let Some(schema) = field_args.schema {
+        let schema = if let Some(schema) = &field_args.schema {
             if items.next().is_some() {
                 Err(syn::Error::new_spanned(
                     ident.clone(),
@@ -53,10 +53,7 @@ impl FieldSpec {
                 ))?
             }
 
-            schemas
-                .get(&schema)
-                .cloned()
-                .ok_or(syn::Error::new_spanned(schema, "schema does not exist"))?
+            get_schema_from_set(schema, schemas)?
         } else {
             // the schema will be derived from the module contents
             SchemaSpec::parse(
@@ -72,39 +69,7 @@ impl FieldSpec {
             )?
         };
 
-        let mut access_entitlements = HashSet::new();
-
-        for access_arg in [&field_args.read, &field_args.write] {
-            if let Some(read) = access_arg {
-                for entitlement in read.entitlements.elems.iter().cloned() {
-                    if !access_entitlements.insert(entitlement.clone()) {
-                        Err(syn::Error::new_spanned(
-                            entitlement,
-                            "entitlement exists already",
-                        ))?
-                    }
-                }
-            }
-        }
-
-        let access = match (field_args.read, field_args.write) {
-            (Some(_), Some(_)) => Access::ReadWrite(ReadWrite {
-                entitlements: access_entitlements,
-                effects: (),
-            }),
-            (Some(_), None) => Access::Read(Read {
-                entitlements: access_entitlements,
-                effects: (),
-            }),
-            (None, Some(_)) => Access::Write(Write {
-                entitlements: access_entitlements,
-                effects: (),
-            }),
-            (None, None) => Err(syn::Error::new_spanned(
-                ident.clone(),
-                "fields must be readable or writable",
-            ))?,
-        };
+        let access = get_access_from_split(&field_args.read, &field_args.write, ident.span())?;
 
         Ok(Self {
             ident,
@@ -112,9 +77,5 @@ impl FieldSpec {
             schema,
             access,
         })
-    }
-
-    pub fn stateful(&self) -> bool {
-        self.schema.stateful()
     }
 }

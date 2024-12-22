@@ -50,8 +50,4 @@ impl SchemaSpec {
 
         Ok(schema)
     }
-
-    pub fn stateful(&self) -> bool {
-        !self.states.is_empty()
-    }
 }
