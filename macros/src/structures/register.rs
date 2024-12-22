@@ -39,13 +39,13 @@ impl Args for RegisterArgs {
 pub struct RegisterSpec {
     pub ident: Ident,
     pub offset: Offset,
-    pub schemas: HashMap<Ident, SchemaSpec>,
     pub fields: Vec<FieldSpec>,
 }
 
 impl RegisterSpec {
     pub fn parse<'a>(
         ident: Ident,
+        schemas: &mut HashMap<Ident, SchemaSpec>,
         offset: Offset,
         register_args: RegisterArgs,
         items: impl Iterator<Item = &'a Item>,
@@ -53,7 +53,6 @@ impl RegisterSpec {
         let mut register = Self {
             ident,
             offset,
-            schemas: HashMap::new(),
             fields: Vec::new(),
         };
 
@@ -71,7 +70,7 @@ impl RegisterSpec {
                     extract_items_from(module)?.iter(),
                 )?;
 
-                register.schemas.insert(schema.ident().clone(), schema);
+                schemas.insert(schema.ident().clone(), schema);
             }
 
             if let Some(field_args) = FieldArgs::get(module.attrs.iter())? {
@@ -83,7 +82,7 @@ impl RegisterSpec {
                 let field = FieldSpec::parse(
                     module.ident.clone(),
                     field_args.offset.unwrap_or(field_offset),
-                    &register.schemas,
+                    schemas,
                     field_args.clone(),
                     extract_items_from(module)?.iter(),
                 )?;
@@ -97,7 +96,7 @@ impl RegisterSpec {
                 let field_array = FieldArraySpec::parse(
                     module.ident.clone(),
                     field_array_args.offset.unwrap_or(field_offset),
-                    &register.schemas,
+                    schemas,
                     field_array_args.clone(),
                     extract_items_from(module)?.iter(),
                 )?;

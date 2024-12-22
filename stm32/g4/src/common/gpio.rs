@@ -122,82 +122,52 @@ pub mod gpioa {
         mod brX {}
     }
 
+    #[schema(width = 4)]
+    mod afr {
+        #[state]
+        struct AF0;
+        #[state]
+        struct AF1;
+        #[state]
+        struct AF2;
+        #[state]
+        struct AF3;
+        #[state]
+        struct AF4;
+        #[state]
+        struct AF5;
+        #[state]
+        struct AF6;
+        #[state]
+        struct AF7;
+        #[state]
+        struct AF8;
+        #[state]
+        struct AF9;
+        #[state]
+        struct AF10;
+        #[state]
+        struct AF11;
+        #[state]
+        struct AF12;
+        #[state]
+        struct AF13;
+        #[state]
+        struct AF14;
+        #[state]
+        struct AF15;
+    }
+
     #[register(offset = 0x20, auto_increment)]
     mod afrl {
-        #[field_array(range = ..8, width = 4, read, write, reset = AF0, auto_increment)]
-        mod afselX {
-            #[state]
-            struct AF0;
-            #[state]
-            struct AF1;
-            #[state]
-            struct AF2;
-            #[state]
-            struct AF3;
-            #[state]
-            struct AF4;
-            #[state]
-            struct AF5;
-            #[state]
-            struct AF6;
-            #[state]
-            struct AF7;
-            #[state]
-            struct AF8;
-            #[state]
-            struct AF9;
-            #[state]
-            struct AF10;
-            #[state]
-            struct AF11;
-            #[state]
-            struct AF12;
-            #[state]
-            struct AF13;
-            #[state]
-            struct AF14;
-            #[state]
-            struct AF15;
-        }
+        #[field_array(range = ..8, schema = afr, read, write, reset = AF0)]
+        mod afselX {}
     }
 
     #[register(auto_increment)]
     mod afrh {
-        #[field_array(range = 8..16, width = 4, read, write, reset = AF0, auto_increment)]
-        mod afselX {
-            #[state]
-            struct AF0;
-            #[state]
-            struct AF1;
-            #[state]
-            struct AF2;
-            #[state]
-            struct AF3;
-            #[state]
-            struct AF4;
-            #[state]
-            struct AF5;
-            #[state]
-            struct AF6;
-            #[state]
-            struct AF7;
-            #[state]
-            struct AF8;
-            #[state]
-            struct AF9;
-            #[state]
-            struct AF10;
-            #[state]
-            struct AF11;
-            #[state]
-            struct AF12;
-            #[state]
-            struct AF13;
-            #[state]
-            struct AF14;
-            #[state]
-            struct AF15;
-        }
+        #[field_array(range = 8..16, schema = afr, read, write, reset = AF0)]
+        mod afselX {}
     }
 
     #[register]

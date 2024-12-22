@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use darling::FromMeta;
 use proc_macro2::Span;
@@ -9,6 +9,7 @@ use crate::utils::{extract_items_from, require_module, PathArray};
 
 use super::{
     register::{RegisterArgs, RegisterSpec},
+    schema::{SchemaArgs, SchemaSpec},
     Args,
 };
 
@@ -27,6 +28,7 @@ pub struct BlockSpec {
     pub base_addr: u32,
     pub entitlements: HashSet<Path>,
     pub registers: Vec<RegisterSpec>,
+    pub schemas: HashMap<Ident, SchemaSpec>,
 
     pub erase_mod: bool,
     pub vis: Visibility,
@@ -44,6 +46,7 @@ impl BlockSpec {
             base_addr: block_args.base_addr,
             entitlements: HashSet::new(),
             registers: Vec::new(),
+            schemas: HashMap::new(),
             erase_mod: block_args.erase_mod,
             vis,
         };
@@ -62,7 +65,15 @@ impl BlockSpec {
         for item in items {
             let module = require_module(item)?;
 
-            if let Some(register_args) = RegisterArgs::get(module.attrs.iter())? {
+            if let Some(schema_args) = SchemaArgs::get(module.attrs.iter())? {
+                let schema = SchemaSpec::parse(
+                    module.ident.clone(),
+                    schema_args,
+                    extract_items_from(module)?.iter(),
+                )?;
+
+                block.schemas.insert(schema.ident().clone(), schema);
+            } else if let Some(register_args) = RegisterArgs::get(module.attrs.iter())? {
                 if !block_args.auto_increment && register_args.offset.is_none() {
                     // TODO: improve the span of this error
                     Err(syn::Error::new_spanned(block.ident.clone(), "register offset must be specified. to infer offsets, add the `auto_increment` argument to the block attribute macro"))?
@@ -70,6 +81,7 @@ impl BlockSpec {
 
                 let register = RegisterSpec::parse(
                     module.ident.clone(),
+                    &mut block.schemas,
                     register_args.offset.unwrap_or(register_offset),
                     register_args.clone(),
                     extract_items_from(module)?.iter(),
