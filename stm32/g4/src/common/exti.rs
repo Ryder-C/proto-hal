@@ -37,10 +37,10 @@ mod exti {
         #[field_array(range = ..18, schema = enable, read, write, reset = Disabled)]
         mod rtX {}
 
-        #[field_array(range = 19..23, schema = enable, read, write, reset = Disabled)]
+        #[field_array(range = 19..23, offset = 19, schema = enable, read, write, reset = Disabled)]
         mod rtX {}
 
-        #[field_array(range = 29..32, schema = enable, read, write, reset = Disabled)]
+        #[field_array(range = 29..32, offset = 29, schema = enable, read, write, reset = Disabled)]
         mod rtX {}
     }
 
@@ -49,10 +49,10 @@ mod exti {
         #[field_array(range = ..18, schema = enable, read, write, reset = Disabled)]
         mod ftX {}
 
-        #[field_array(range = 19..23, schema = enable, read, write, reset = Disabled)]
+        #[field_array(range = 19..23, offset = 19, schema = enable, read, write, reset = Disabled)]
         mod ftX {}
 
-        #[field_array(range = 29..32, schema = enable, read, write, reset = Disabled)]
+        #[field_array(range = 29..32, offset = 29, schema = enable, read, write, reset = Disabled)]
         mod ftX {}
     }
 
@@ -64,10 +64,10 @@ mod exti {
         #[field_array(range = ..18, schema = enable, read, write, reset = Disabled)]
         mod swiX {}
 
-        #[field_array(range = 19..23, schema = enable, read, write, reset = Disabled)]
+        #[field_array(range = 19..23, offset = 19, schema = enable, read, write, reset = Disabled)]
         mod swiX {}
 
-        #[field_array(range = 29..32, schema = enable, read, write, reset = Disabled)]
+        #[field_array(range = 29..32, offset = 29, schema = enable, read, write, reset = Disabled)]
         mod swiX {}
     }
 
@@ -79,10 +79,10 @@ mod exti {
         #[field_array(range = ..18, schema = enable, read, write, reset = Disabled)]
         mod pifX {}
 
-        #[field_array(range = 19..23, schema = enable, read, write, reset = Disabled)]
+        #[field_array(range = 19..23, offset = 19, schema = enable, read, write, reset = Disabled)]
         mod pifX {}
 
-        #[field_array(range = 29..32, schema = enable, read, write, reset = Disabled)]
+        #[field_array(range = 29..32, offset = 29, schema = enable, read, write, reset = Disabled)]
         mod pifX {}
     }
 

@@ -101,7 +101,7 @@ impl RegisterSpec {
                     extract_items_from(module)?.iter(),
                 )?;
 
-                register.fields.extend(field_array.to_fields(field_offset)?);
+                register.fields.extend(field_array.to_fields()?);
 
                 field_offset =
                     field_array.offset + field_array.schema.width() * field_array.count();

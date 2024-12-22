@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Range};
+use std::{collections::HashMap, mem::offset_of, ops::Range};
 
 use darling::FromMeta;
 use proc_macro2::Span;
@@ -160,7 +160,7 @@ impl FieldArraySpec {
         self.range.clone().count() as _
     }
 
-    pub fn to_fields(&self, mut offset: u8) -> syn::Result<Vec<FieldSpec>> {
+    pub fn to_fields(&self) -> syn::Result<Vec<FieldSpec>> {
         let mut fields = Vec::new();
 
         if !self.ident.to_string().contains("X") {
@@ -169,6 +169,8 @@ impl FieldArraySpec {
                 "field array module ident must contain 'X's to indicate replacement patterns",
             ))?
         }
+
+        let mut offset = self.offset;
 
         // generate fields
         for i in self.range.clone() {
