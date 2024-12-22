@@ -52,15 +52,13 @@ pub fn get_access_from_split(
 ) -> syn::Result<Access> {
     let mut access_entitlements = HashSet::new();
 
-    for access_arg in [read, write] {
-        if let Some(read) = access_arg {
-            for entitlement in read.entitlements.elems.iter().cloned() {
-                if !access_entitlements.insert(entitlement.clone()) {
-                    Err(syn::Error::new_spanned(
-                        entitlement,
-                        "entitlement exists already",
-                    ))?
-                }
+    for access_arg in [read, write].into_iter().flatten() {
+        for entitlement in access_arg.entitlements.elems.iter().cloned() {
+            if !access_entitlements.insert(entitlement.clone()) {
+                Err(syn::Error::new_spanned(
+                    entitlement,
+                    "entitlement exists already",
+                ))?
             }
         }
     }

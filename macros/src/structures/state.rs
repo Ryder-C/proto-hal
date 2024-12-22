@@ -39,7 +39,7 @@ pub struct StateSpec {
 }
 
 impl StateSpec {
-    pub fn parse<'a>(ident: Ident, bits: u32, state_args: StateArgs) -> syn::Result<Self> {
+    pub fn parse(ident: Ident, bits: u32, state_args: StateArgs) -> syn::Result<Self> {
         let bits = state_args.bits.unwrap_or(bits);
         let mut entitlements = HashSet::new();
         let mut entitlement_fields = HashSet::new();
