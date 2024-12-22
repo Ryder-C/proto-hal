@@ -16,6 +16,7 @@ fn block_inner(args: TokenStream, item: TokenStream) -> Result<TokenStream2, syn
 
     let block = BlockSpec::parse(
         module.ident.clone(),
+        module.vis.clone(),
         block_args.clone(),
         utils::extract_items_from(&module)?.iter(),
     )?;

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use darling::FromMeta;
 use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
-use syn::{parse_quote, Ident, Item, Path};
+use syn::{parse_quote, Ident, Item, Path, Visibility};
 
 use crate::utils::{extract_items_from, require_module, PathArray};
 
@@ -29,11 +29,13 @@ pub struct BlockSpec {
     pub registers: Vec<RegisterSpec>,
 
     pub erase_mod: bool,
+    pub vis: Visibility,
 }
 
 impl BlockSpec {
     pub fn parse<'a>(
         ident: Ident,
+        vis: Visibility,
         block_args: BlockArgs,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
@@ -43,6 +45,7 @@ impl BlockSpec {
             entitlements: HashSet::new(),
             registers: Vec::new(),
             erase_mod: block_args.erase_mod,
+            vis,
         };
 
         for entitlement in block_args.entitlements.elems {
@@ -233,11 +236,35 @@ impl ToTokens for BlockSpec {
             });
         }
 
+        if !self.entitlements.is_empty() {
+            body.extend(quote! {
+                impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)* #(#reset_entitlement_tys,)*> {
+                    pub fn attach(self, #(#entitlement_idents: #entitlements,)*) -> Block<#(#stateful_register_tys,)* #(#entitlements,)*> {
+                        Block {
+                            #(
+                                #stateful_register_idents: self.#stateful_register_idents,
+                            )*
+
+                            #(
+                                #stateless_register_idents: self.#stateless_register_idents,
+                            )*
+
+                            #(
+                                #entitlement_idents,
+                            )*
+                        }
+                    }
+                }
+            });
+        }
+
+        let vis = &self.vis;
+
         tokens.extend(if self.erase_mod {
             body
         } else {
             quote! {
-                mod #ident {
+                #vis mod #ident {
                     #body
                 }
             }
