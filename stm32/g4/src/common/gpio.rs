@@ -158,13 +158,13 @@ pub mod gpioa {
         struct AF15;
     }
 
-    #[register(offset = 0x20, auto_increment)]
+    #[register(offset = 0x20)]
     mod afrl {
         #[field_array(range = ..8, schema = afr, read, write, reset = AF0)]
         mod afselX {}
     }
 
-    #[register(auto_increment)]
+    #[register]
     mod afrh {
         #[field_array(range = 8..16, schema = afr, read, write, reset = AF0)]
         mod afselX {}

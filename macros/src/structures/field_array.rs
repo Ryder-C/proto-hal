@@ -163,6 +163,13 @@ impl FieldArraySpec {
     pub fn to_fields(&self, mut offset: u8) -> syn::Result<Vec<FieldSpec>> {
         let mut fields = Vec::new();
 
+        if !self.ident.to_string().contains("X") {
+            Err(syn::Error::new(
+                self.ident.span(),
+                "field array module ident must contain 'X's to indicate replacement patterns",
+            ))?
+        }
+
         // generate fields
         for i in self.range.clone() {
             let ident = Ident::new(
