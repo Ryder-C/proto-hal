@@ -25,14 +25,15 @@ impl Args for StateArgs {
 }
 
 #[derive(Debug, Clone)]
-pub struct StateSpec {
+pub struct State {
+    pub args: Spanned<StateArgs>,
     pub ident: Ident,
     pub bits: u32,
     pub entitlements: HashSet<Path>,
     pub entitlement_fields: HashSet<Ident>,
 }
 
-impl StateSpec {
+impl State {
     pub fn parse(ident: Ident, bits: u32, state_args: Spanned<StateArgs>) -> syn::Result<Self> {
         let bits = state_args.bits.unwrap_or(bits);
         let mut entitlements = HashSet::new();
@@ -58,6 +59,7 @@ impl StateSpec {
         }
 
         Ok(Self {
+            args: state_args,
             ident,
             bits,
             entitlements,
@@ -66,7 +68,9 @@ impl StateSpec {
     }
 }
 
-impl ToTokens for StateSpec {
+// no validation necessary...
+
+impl ToTokens for State {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let ident = &self.ident;
 

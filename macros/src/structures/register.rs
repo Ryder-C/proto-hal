@@ -1,16 +1,17 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 use darling::FromMeta;
 use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use syn::{parse_quote, Ident, Index, Item, Path};
+use tiva::{Validate, Validator};
 
 use crate::utils::{extract_items_from, require_module, Offset, Spanned};
 
 use super::{
-    field::{FieldArgs, FieldSpec},
-    field_array::{FieldArrayArgs, FieldArraySpec},
-    schema::{SchemaArgs, SchemaSpec},
+    field::{Field, FieldArgs, FieldSpec},
+    field_array::{FieldArray, FieldArrayArgs, FieldArraySpec},
+    schema::{Schema, SchemaArgs, SchemaSpec},
     Args,
 };
 
@@ -18,6 +19,7 @@ use super::{
 #[darling(default)]
 pub struct RegisterArgs {
     pub offset: Option<u8>,
+
     #[darling(default)]
     pub auto_increment: bool,
 }
@@ -28,20 +30,35 @@ impl Args for RegisterArgs {
 
 #[derive(Debug)]
 pub struct RegisterSpec {
+    pub args: Spanned<RegisterArgs>,
     pub ident: Ident,
     pub offset: Offset,
-    pub fields: Vec<FieldSpec>,
+    pub fields: Vec<Field>,
+}
+
+#[derive(Debug)]
+pub struct Register {
+    spec: RegisterSpec,
+}
+
+impl Deref for Register {
+    type Target = RegisterSpec;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spec
+    }
 }
 
 impl RegisterSpec {
     pub fn parse<'a>(
         ident: Ident,
-        schemas: &mut HashMap<Ident, SchemaSpec>,
+        schemas: &mut HashMap<Ident, Schema>,
         offset: Offset,
-        register_args: Spanned<RegisterArgs>,
+        args: Spanned<RegisterArgs>,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let mut register = Self {
+            args: args.clone(),
             ident,
             offset,
             fields: Vec::new(),
@@ -55,28 +72,25 @@ impl RegisterSpec {
             // TODO: deny multiple different attributes on one item
 
             if let Some(schema_args) = SchemaArgs::get(module.attrs.iter())? {
-                let schema = SchemaSpec::parse(
+                let schema: Schema = SchemaSpec::parse(
                     module.ident.clone(),
                     schema_args,
                     extract_items_from(module)?.iter(),
-                )?;
+                )?
+                .validate()?;
 
                 schemas.insert(schema.ident().clone(), schema);
             }
 
             if let Some(field_args) = FieldArgs::get(module.attrs.iter())? {
-                if !register_args.auto_increment && field_args.offset.is_none() {
-                    // TODO: improve the span of this error
-                    Err(syn::Error::new_spanned(register.ident.clone(), "field offset must be specified. to infer offsets, add the `auto_increment` argument to the register attribute macro"))?
-                }
-
-                let field = FieldSpec::parse(
+                let field: Field = FieldSpec::parse(
                     module.ident.clone(),
                     field_args.offset.unwrap_or(field_offset),
                     schemas,
                     field_args,
                     extract_items_from(module)?.iter(),
-                )?;
+                )?
+                .validate()?;
 
                 field_offset = field.offset() + field.schema().width();
 
@@ -84,13 +98,14 @@ impl RegisterSpec {
             }
 
             if let Some(field_array_args) = FieldArrayArgs::get(module.attrs.iter())? {
-                let field_array = FieldArraySpec::parse(
+                let field_array: FieldArray = FieldArraySpec::parse(
                     module.ident.clone(),
                     field_array_args.offset.unwrap_or(field_offset),
                     schemas,
                     field_array_args,
                     extract_items_from(module)?.iter(),
-                )?;
+                )?
+                .validate()?;
 
                 register.fields.extend(field_array.to_fields()?);
 
@@ -107,7 +122,39 @@ impl RegisterSpec {
     }
 }
 
-impl ToTokens for RegisterSpec {
+impl Validator<RegisterSpec> for Register {
+    type Error = syn::Error;
+
+    fn validate(spec: RegisterSpec) -> Result<Self, Self::Error> {
+        for field in &spec.fields {
+            if field.args().offset.is_none() && !spec.args.auto_increment {
+                return Err(syn::Error::new(
+                    field.args().span(),
+                    "field offset must be specified. to infer offsets, use `auto_increment`",
+                ));
+            }
+        }
+
+        for slice in spec.fields.windows(2) {
+            let lhs = slice.first().unwrap();
+            let rhs = slice.last().unwrap();
+            if lhs.offset() + lhs.schema().width() > *rhs.offset() {
+                let msg =
+                    format!(
+                    "field domains overlapping. {} {{ domain: {}..{} }}, {} {{ domain: {}..{} }}",
+                    lhs.ident(), lhs.offset(), lhs.offset() + lhs.schema().width(),
+                    rhs.ident(), rhs.offset(), rhs.offset() + rhs.schema().width(),
+                );
+
+                Err(syn::Error::new(spec.args.span(), msg))?
+            }
+        }
+
+        Ok(Self { spec })
+    }
+}
+
+impl ToTokens for Register {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let ident = &self.ident;
         let offset = self.offset;
@@ -116,7 +163,7 @@ impl ToTokens for RegisterSpec {
             .fields
             .iter()
             .filter_map(|field| match field {
-                FieldSpec::Stateful(field) => Some(field),
+                Field::Stateful(field) => Some(field),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -125,7 +172,7 @@ impl ToTokens for RegisterSpec {
             .fields
             .iter()
             .filter_map(|field| match field {
-                FieldSpec::Stateless(field) => Some(field),
+                Field::Stateless(field) => Some(field),
                 _ => None,
             })
             .collect::<Vec<_>>();

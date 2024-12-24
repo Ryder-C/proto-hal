@@ -1,14 +1,14 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, convert::Infallible, ops::Deref};
 
 use darling::FromMeta;
 use syn::{Ident, Item};
 
-use crate::utils::{require_struct, Spanned, Width};
-
 use super::{
-    state::{StateArgs, StateSpec},
+    state::{State, StateArgs},
     Args,
 };
+use crate::utils::{require_struct, Spanned, Width};
+use tiva::{Validate, Validator};
 
 #[derive(Debug, Clone, Default, FromMeta)]
 pub struct SchemaArgs {
@@ -23,10 +23,16 @@ impl Args for SchemaArgs {
 
 #[derive(Debug, Clone)]
 pub struct StatefulSchemaSpec {
+    pub args: Spanned<SchemaArgs>,
     pub ident: Ident,
     pub width: Width,
-    pub states: Vec<StateSpec>,
+    pub states: Vec<State>,
     pub entitlement_fields: HashSet<Ident>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StatefulSchema {
+    spec: StatefulSchemaSpec,
 }
 
 #[derive(Debug, Clone)]
@@ -36,12 +42,23 @@ pub struct StatelessSchemaSpec {
 }
 
 #[derive(Debug, Clone)]
+pub struct StatelessSchema {
+    spec: StatelessSchemaSpec,
+}
+
+#[derive(Debug, Clone)]
 pub enum SchemaSpec {
     Stateful(StatefulSchemaSpec),
     Stateless(StatelessSchemaSpec),
 }
 
-impl SchemaSpec {
+#[derive(Debug, Clone)]
+pub enum Schema {
+    Stateful(StatefulSchema),
+    Stateless(StatelessSchema),
+}
+
+impl Schema {
     pub fn ident(&self) -> &Ident {
         match self {
             Self::Stateful(schema) => &schema.ident,
@@ -54,6 +71,22 @@ impl SchemaSpec {
             Self::Stateful(schema) => &schema.width,
             Self::Stateless(schema) => &schema.width,
         }
+    }
+}
+
+impl Deref for StatefulSchema {
+    type Target = StatefulSchemaSpec;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spec
+    }
+}
+
+impl Deref for StatelessSchema {
+    type Target = StatelessSchemaSpec;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spec
     }
 }
 
@@ -73,10 +106,6 @@ impl SchemaSpec {
             let s = require_struct(item)?;
 
             if let Some(state_args) = StateArgs::get(s.attrs.iter())? {
-                if state_args.bits.is_none() && !args.auto_increment {
-                    Err(syn::Error::new(state_args.span.unwrap(), "state bit value `bits` must be specified. to infer the bit value, use `auto_increment`"))?
-                }
-
                 // collect fields of state entitlements (specified in state args)
                 for entitlement in &state_args.entitlements.elems {
                     // TODO: this can't be correct
@@ -91,7 +120,7 @@ impl SchemaSpec {
                     );
                 }
 
-                let state = StateSpec::parse(s.ident.clone(), state_bits, state_args)?;
+                let state = State::parse(s.ident.clone(), state_bits, state_args)?;
 
                 state_bits = state.bits + 1;
 
@@ -103,11 +132,48 @@ impl SchemaSpec {
             Self::Stateless(StatelessSchemaSpec { ident, width })
         } else {
             Self::Stateful(StatefulSchemaSpec {
+                args,
                 ident,
                 width,
                 states,
                 entitlement_fields,
             })
+        })
+    }
+}
+
+impl Validator<StatefulSchemaSpec> for StatefulSchema {
+    type Error = syn::Error;
+
+    fn validate(spec: StatefulSchemaSpec) -> Result<Self, Self::Error> {
+        for state in &spec.states {
+            if state.args.bits.is_none() && !spec.args.auto_increment {
+                return Err(syn::Error::new(state.args.span(), "state bit value `bits` must be specified. to infer the bit value, use `auto_increment`"));
+            }
+        }
+
+        Ok(Self { spec })
+    }
+}
+
+impl Validator<StatelessSchemaSpec> for StatelessSchema {
+    type Error = Infallible;
+
+    fn validate(spec: StatelessSchemaSpec) -> Result<Self, Self::Error> {
+        Ok(Self { spec })
+    }
+}
+
+impl Validator<SchemaSpec> for Schema {
+    type Error = syn::Error;
+
+    fn validate(src: SchemaSpec) -> Result<Self, Self::Error> {
+        Ok(match src {
+            SchemaSpec::Stateful(spec) => Self::Stateful(spec.validate()?),
+            SchemaSpec::Stateless(spec) => Self::Stateless(match spec.validate() {
+                Ok(v) => v,
+                Err(_infalllible) => unreachable!(),
+            }),
         })
     }
 }

@@ -1,15 +1,19 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
 use darling::FromMeta;
 use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use syn::{parse_quote, Ident, Item, Path, Visibility};
+use tiva::{Validate, Validator};
 
 use crate::utils::{extract_items_from, require_module, PathArray, Spanned};
 
 use super::{
-    register::{RegisterArgs, RegisterSpec},
-    schema::{SchemaArgs, SchemaSpec},
+    register::{Register, RegisterArgs, RegisterSpec},
+    schema::{Schema, SchemaArgs, SchemaSpec},
     Args,
 };
 
@@ -18,7 +22,10 @@ use super::{
 pub struct BlockArgs {
     pub base_addr: u32,
     pub entitlements: PathArray,
+
+    #[darling(default)]
     pub auto_increment: bool,
+    #[darling(default)]
     pub erase_mod: bool,
 }
 
@@ -28,34 +35,47 @@ impl Args for BlockArgs {
 
 #[derive(Debug)]
 pub struct BlockSpec {
+    pub args: Spanned<BlockArgs>,
     pub ident: Ident,
     pub base_addr: u32,
     pub entitlements: HashSet<Path>,
-    pub registers: Vec<RegisterSpec>,
-    pub schemas: HashMap<Ident, SchemaSpec>,
+    pub registers: Vec<Register>,
+    pub schemas: HashMap<Ident, Schema>,
 
-    pub erase_mod: bool,
     pub vis: Visibility,
+}
+
+#[derive(Debug)]
+pub struct Block {
+    spec: BlockSpec,
+}
+
+impl Deref for Block {
+    type Target = BlockSpec;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spec
+    }
 }
 
 impl BlockSpec {
     pub fn parse<'a>(
         ident: Ident,
         vis: Visibility,
-        block_args: Spanned<BlockArgs>,
+        args: Spanned<BlockArgs>,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let mut block = Self {
+            args: args.clone(),
             ident,
-            base_addr: block_args.base_addr,
+            base_addr: args.base_addr,
             entitlements: HashSet::new(),
             registers: Vec::new(),
             schemas: HashMap::new(),
-            erase_mod: block_args.erase_mod,
             vis,
         };
 
-        for entitlement in &block_args.entitlements.elems {
+        for entitlement in &args.entitlements.elems {
             if !block.entitlements.insert(entitlement.clone()) {
                 Err(syn::Error::new_spanned(
                     entitlement,
@@ -70,15 +90,16 @@ impl BlockSpec {
             let module = require_module(item)?;
 
             if let Some(schema_args) = SchemaArgs::get(module.attrs.iter())? {
-                let schema = SchemaSpec::parse(
+                let schema: Schema = SchemaSpec::parse(
                     module.ident.clone(),
                     schema_args,
                     extract_items_from(module)?.iter(),
-                )?;
+                )?
+                .validate()?;
 
                 block.schemas.insert(schema.ident().clone(), schema);
             } else if let Some(register_args) = RegisterArgs::get(module.attrs.iter())? {
-                if !block_args.auto_increment && register_args.offset.is_none() {
+                if !args.auto_increment && register_args.offset.is_none() {
                     // TODO: improve the span of this error
                     Err(syn::Error::new_spanned(block.ident.clone(), "register offset must be specified. to infer offsets, add the `auto_increment` argument to the block attribute macro"))?
                 }
@@ -91,7 +112,8 @@ impl BlockSpec {
                     register_args.offset.unwrap_or(register_offset),
                     register_args,
                     extract_items_from(module)?.iter(),
-                )?;
+                )?
+                .validate()?;
 
                 register_offset = offset.unwrap_or(register_offset) + 0x4;
 
@@ -105,7 +127,38 @@ impl BlockSpec {
     }
 }
 
-impl ToTokens for BlockSpec {
+impl Validator<BlockSpec> for Block {
+    type Error = syn::Error;
+
+    fn validate(spec: BlockSpec) -> Result<Self, Self::Error> {
+        for register in &spec.registers {
+            if register.args.offset.is_none() && !spec.args.auto_increment {
+                return Err(syn::Error::new(
+                    register.args.span(),
+                    "register offset must be specified. to infer offsets, use `auto_increment`",
+                ));
+            }
+        }
+
+        for slice in spec.registers.windows(2) {
+            let lhs = slice.first().unwrap();
+            let rhs = slice.last().unwrap();
+            if lhs.offset + 4 > rhs.offset {
+                let msg = format!(
+                    "register domains overlapping. {} {{ domain: {}..{} }}, {} {{ domain: {}..{} }}",
+                    lhs.ident, lhs.offset, lhs.offset + 4,
+                    rhs.ident, rhs.offset, rhs.offset + 4,
+                );
+
+                Err(syn::Error::new(spec.args.span(), msg))?
+            }
+        }
+
+        Ok(Self { spec })
+    }
+}
+
+impl ToTokens for Block {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let ident = &self.ident;
         let base_addr = self.base_addr;
@@ -278,7 +331,7 @@ impl ToTokens for BlockSpec {
 
         let vis = &self.vis;
 
-        tokens.extend(if self.erase_mod {
+        tokens.extend(if self.args.erase_mod {
             body
         } else {
             quote! {

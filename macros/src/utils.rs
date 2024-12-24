@@ -9,7 +9,7 @@ use syn::{Expr, ExprArray, Ident, Item, ItemMod, ItemStruct, Meta, Path};
 
 use crate::{
     access::{Access, AccessArgs, Read, ReadWrite, Write},
-    structures::schema::SchemaSpec,
+    structures::schema::{Schema, SchemaSpec},
 };
 
 pub fn require_module(item: &Item) -> syn::Result<&ItemMod> {
@@ -39,10 +39,7 @@ pub fn extract_items_from(module: &ItemMod) -> syn::Result<&Vec<Item>> {
         .1)
 }
 
-pub fn get_schema_from_set(
-    ident: &Ident,
-    set: &HashMap<Ident, SchemaSpec>,
-) -> syn::Result<SchemaSpec> {
+pub fn get_schema_from_set(ident: &Ident, set: &HashMap<Ident, Schema>) -> syn::Result<Schema> {
     set.get(ident)
         .cloned()
         .ok_or(syn::Error::new_spanned(ident, "schema does not exist"))
@@ -112,6 +109,7 @@ impl FromMeta for PathArray {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Spanned<T> {
     item: T,
     span: Span,

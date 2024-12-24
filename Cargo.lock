@@ -298,9 +298,9 @@ dependencies = [
 
 [[package]]
 name = "tiva"
-version = "0.1.4"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1ad8e94be640ff03b4faa926b6f0cde990c1a7058a0ffff390b28766a11ef77"
+checksum = "a6d893c34e75ee023009a552d173bb5fc34fe51c5bb4262fa2c6f700990d0ab5"
 
 [[package]]
 name = "typenum"

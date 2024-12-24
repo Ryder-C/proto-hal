@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 use darling::FromMeta;
 use quote::{quote, ToTokens};
 use syn::{Expr, Ident, Item};
+use tiva::{Validate, Validator};
 
 use crate::{
     access::{Access, AccessArgs},
@@ -10,7 +11,10 @@ use crate::{
 };
 
 use super::{
-    schema::{SchemaArgs, SchemaSpec, StatefulSchemaSpec, StatelessSchemaSpec},
+    schema::{
+        Schema, SchemaArgs, SchemaSpec, StatefulSchema, StatefulSchemaSpec, StatelessSchema,
+        StatelessSchemaSpec,
+    },
     Args,
 };
 
@@ -22,6 +26,7 @@ pub struct FieldArgs {
     pub write: Option<AccessArgs>,
     pub reset: Option<Expr>,
     pub schema: Option<Ident>,
+
     #[darling(default)]
     pub auto_increment: bool,
 }
@@ -32,20 +37,32 @@ impl Args for FieldArgs {
 
 #[derive(Debug)]
 pub struct StatefulFieldSpec {
+    pub args: Spanned<FieldArgs>,
     pub ident: Ident,
     pub offset: Offset,
-    pub schema: StatefulSchemaSpec,
+    pub schema: StatefulSchema,
     pub access: Access,
     pub reset: Expr,
 }
 
 #[derive(Debug)]
+pub struct StatefulField {
+    spec: StatefulFieldSpec,
+}
+
+#[derive(Debug)]
 pub struct StatelessFieldSpec {
+    pub args: Spanned<FieldArgs>,
     pub ident: Ident,
     pub offset: Offset,
-    pub schema: StatelessSchemaSpec,
+    pub schema: StatelessSchema,
     pub access: Access,
     pub reset: Option<Expr>,
+}
+
+#[derive(Debug)]
+pub struct StatelessField {
+    spec: StatelessFieldSpec,
 }
 
 #[derive(Debug)]
@@ -54,7 +71,20 @@ pub enum FieldSpec {
     Stateless(StatelessFieldSpec),
 }
 
-impl FieldSpec {
+#[derive(Debug)]
+pub enum Field {
+    Stateful(StatefulField),
+    Stateless(StatelessField),
+}
+
+impl Field {
+    pub fn args(&self) -> &Spanned<FieldArgs> {
+        match self {
+            Self::Stateful(field) => &field.args,
+            Self::Stateless(field) => &field.args,
+        }
+    }
+
     pub fn ident(&self) -> &Ident {
         match self {
             Self::Stateful(field) => &field.ident,
@@ -69,11 +99,27 @@ impl FieldSpec {
         }
     }
 
-    pub fn schema(&self) -> SchemaSpec {
+    pub fn schema(&self) -> Schema {
         match self {
-            Self::Stateful(field) => SchemaSpec::Stateful(field.schema.clone()),
-            Self::Stateless(field) => SchemaSpec::Stateless(field.schema.clone()),
+            Self::Stateful(field) => Schema::Stateful(field.schema.clone()),
+            Self::Stateless(field) => Schema::Stateless(field.schema.clone()),
         }
+    }
+}
+
+impl Deref for StatefulField {
+    type Target = StatefulFieldSpec;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spec
+    }
+}
+
+impl Deref for StatelessField {
+    type Target = StatelessFieldSpec;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spec
     }
 }
 
@@ -81,46 +127,41 @@ impl FieldSpec {
     pub fn parse<'a>(
         ident: Ident,
         offset: Offset,
-        schemas: &HashMap<Ident, SchemaSpec>,
-        field_args: Spanned<FieldArgs>,
-        mut items: impl Iterator<Item = &'a Item>,
+        schemas: &HashMap<Ident, Schema>,
+        args: Spanned<FieldArgs>,
+        items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
-        let schema = if let Some(schema) = &field_args.schema {
-            if items.next().is_some() {
-                Err(syn::Error::new_spanned(
-                    ident.clone(),
-                    "fields with imported schemas should be empty",
-                ))?
-            }
-
+        let schema = if let Some(schema) = &args.schema {
             get_schema_from_set(schema, schemas)?
         } else {
             // the schema will be derived from the module contents
             SchemaSpec::parse(
                 ident.clone(),
                 SchemaArgs {
-                    auto_increment: field_args.auto_increment,
-                    width: field_args.width.ok_or(syn::Error::new_spanned(
+                    auto_increment: args.auto_increment,
+                    width: args.width.ok_or(syn::Error::new_spanned(
                         ident.clone(),
                         "width must be specified",
                     ))?,
                 }
-                .with_span(field_args.span()),
+                .with_span(args.span()),
                 items,
             )?
+            .validate()?
         };
 
-        let offset = field_args.offset.unwrap_or(offset);
-        let access = get_access_from_split(&field_args.read, &field_args.write, ident.span())?;
+        let offset = args.offset.unwrap_or(offset);
+        let access = get_access_from_split(&args.read, &args.write, args.span())?;
 
         Ok(match schema {
-            SchemaSpec::Stateful(schema) => {
-                let reset = field_args.reset.clone().ok_or(syn::Error::new(
-                    field_args.span(),
+            Schema::Stateful(schema) => {
+                let reset = args.reset.clone().ok_or(syn::Error::new(
+                    args.span(),
                     "stateful fields must have a reset specified",
                 ))?;
 
                 Self::Stateful(StatefulFieldSpec {
+                    args,
                     ident,
                     offset,
                     schema,
@@ -128,22 +169,70 @@ impl FieldSpec {
                     reset,
                 })
             }
-            SchemaSpec::Stateless(schema) => Self::Stateless(StatelessFieldSpec {
-                ident,
-                offset,
-                schema,
-                access,
-                reset: field_args.reset.clone(),
-            }),
+            Schema::Stateless(schema) => {
+                let reset = args.reset.clone();
+
+                Self::Stateless(StatelessFieldSpec {
+                    args,
+                    ident,
+                    offset,
+                    schema,
+                    access,
+                    reset,
+                })
+            }
         })
     }
+}
 
+impl Field {
     pub fn is_stateful(&self) -> bool {
         matches!(self, Self::Stateful(_))
     }
 }
 
-impl ToTokens for FieldSpec {
+impl Validator<StatefulFieldSpec> for StatefulField {
+    type Error = syn::Error;
+
+    fn validate(spec: StatefulFieldSpec) -> Result<Self, Self::Error> {
+        if spec.offset + spec.schema.width > 32 {
+            Err(Self::Error::new(
+                spec.args.span(),
+                "field domain exceeds register domain",
+            ))
+        } else {
+            Ok(Self { spec })
+        }
+    }
+}
+
+impl Validator<StatelessFieldSpec> for StatelessField {
+    type Error = syn::Error;
+
+    fn validate(spec: StatelessFieldSpec) -> Result<Self, Self::Error> {
+        if spec.offset + spec.schema.width > 32 {
+            Err(Self::Error::new(
+                spec.args.span(),
+                "field domain exceeds register domain",
+            ))
+        } else {
+            Ok(Self { spec })
+        }
+    }
+}
+
+impl Validator<FieldSpec> for Field {
+    type Error = syn::Error;
+
+    fn validate(src: FieldSpec) -> Result<Self, Self::Error> {
+        Ok(match src {
+            FieldSpec::Stateful(spec) => Self::Stateful(spec.validate()?),
+            FieldSpec::Stateless(spec) => Self::Stateless(spec.validate()?),
+        })
+    }
+}
+
+impl ToTokens for Field {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let ident = self.ident();
         let offset = self.offset();
@@ -156,11 +245,13 @@ impl ToTokens for FieldSpec {
 
         match self {
             Self::Stateful(field) => {
-                let reset_state = &field.reset;
+                let spec = &field.spec;
 
-                let state_idents = field.schema.states.iter().map(|state| state.ident.clone());
-                let state_bits = field.schema.states.iter().map(|state| state.bits);
-                let state_bodies = field.schema.states.iter().map(|state| quote! { #state });
+                let reset_state = &spec.reset;
+
+                let state_idents = spec.schema.states.iter().map(|state| state.ident.clone());
+                let state_bits = spec.schema.states.iter().map(|state| state.bits);
+                let state_bodies = spec.schema.states.iter().map(|state| quote! { #state });
 
                 body.extend(quote! {
                     #(
@@ -189,7 +280,9 @@ impl ToTokens for FieldSpec {
                 });
             }
             Self::Stateless(field) => {
-                if let Some(reset) = &field.reset {
+                let spec = &field.spec;
+
+                if let Some(reset) = &spec.reset {
                     body.extend(quote! {
                         pub const RESET: u32 = #reset;
                     });
