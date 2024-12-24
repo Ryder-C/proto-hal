@@ -5,7 +5,7 @@ use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{Ident, Path};
 
-use crate::utils::PathArray;
+use crate::utils::{PathArray, Spanned};
 
 use super::Args;
 
@@ -22,12 +22,6 @@ pub struct StateArgs {
 
 impl Args for StateArgs {
     const NAME: &str = "state";
-
-    fn attach_span(mut self, span: proc_macro2::Span) -> Self {
-        self.span.replace(span);
-
-        self
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -39,7 +33,7 @@ pub struct StateSpec {
 }
 
 impl StateSpec {
-    pub fn parse(ident: Ident, bits: u32, state_args: StateArgs) -> syn::Result<Self> {
+    pub fn parse(ident: Ident, bits: u32, state_args: Spanned<StateArgs>) -> syn::Result<Self> {
         let bits = state_args.bits.unwrap_or(bits);
         let mut entitlements = HashSet::new();
         let mut entitlement_fields = HashSet::new();

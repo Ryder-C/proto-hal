@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::{Deref, DerefMut},
+};
 
 use darling::FromMeta;
 use proc_macro2::Span;
@@ -106,6 +109,35 @@ impl FromMeta for PathArray {
                 })
                 .collect::<Result<_, _>>()?,
         })
+    }
+}
+
+pub struct Spanned<T> {
+    item: T,
+    span: Span,
+}
+
+impl<T> Spanned<T> {
+    pub const fn new(item: T, span: Span) -> Self {
+        Self { item, span }
+    }
+
+    pub const fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl<T> Deref for Spanned<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.item
+    }
+}
+
+impl<T> DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.item
     }
 }
 

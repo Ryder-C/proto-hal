@@ -5,7 +5,7 @@ use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use syn::{parse_quote, Ident, Index, Item, Path};
 
-use crate::utils::{extract_items_from, require_module, Offset};
+use crate::utils::{extract_items_from, require_module, Offset, Spanned};
 
 use super::{
     field::{FieldArgs, FieldSpec},
@@ -20,19 +20,10 @@ pub struct RegisterArgs {
     pub offset: Option<u8>,
     #[darling(default)]
     pub auto_increment: bool,
-
-    #[darling(skip)]
-    pub span: Option<Span>,
 }
 
 impl Args for RegisterArgs {
     const NAME: &str = "register";
-
-    fn attach_span(mut self, span: proc_macro2::Span) -> Self {
-        self.span.replace(span);
-
-        self
-    }
 }
 
 #[derive(Debug)]
@@ -47,7 +38,7 @@ impl RegisterSpec {
         ident: Ident,
         schemas: &mut HashMap<Ident, SchemaSpec>,
         offset: Offset,
-        register_args: RegisterArgs,
+        register_args: Spanned<RegisterArgs>,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let mut register = Self {
@@ -83,7 +74,7 @@ impl RegisterSpec {
                     module.ident.clone(),
                     field_args.offset.unwrap_or(field_offset),
                     schemas,
-                    field_args.clone(),
+                    field_args,
                     extract_items_from(module)?.iter(),
                 )?;
 
@@ -97,7 +88,7 @@ impl RegisterSpec {
                     module.ident.clone(),
                     field_array_args.offset.unwrap_or(field_offset),
                     schemas,
-                    field_array_args.clone(),
+                    field_array_args,
                     extract_items_from(module)?.iter(),
                 )?;
 

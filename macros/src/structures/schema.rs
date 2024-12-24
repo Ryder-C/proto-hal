@@ -1,10 +1,9 @@
 use std::collections::HashSet;
 
 use darling::FromMeta;
-use proc_macro2::Span;
 use syn::{Ident, Item};
 
-use crate::utils::{require_struct, Width};
+use crate::utils::{require_struct, Spanned, Width};
 
 use super::{
     state::{StateArgs, StateSpec},
@@ -16,19 +15,10 @@ pub struct SchemaArgs {
     #[darling(default)]
     pub auto_increment: bool,
     pub width: u8,
-
-    #[darling(skip)]
-    pub span: Option<Span>,
 }
 
 impl Args for SchemaArgs {
     const NAME: &str = "schema";
-
-    fn attach_span(mut self, span: proc_macro2::Span) -> Self {
-        self.span.replace(span);
-
-        self
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -70,7 +60,7 @@ impl SchemaSpec {
 impl SchemaSpec {
     pub fn parse<'a>(
         ident: Ident,
-        args: SchemaArgs,
+        args: Spanned<SchemaArgs>,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let width = args.width;
@@ -83,6 +73,10 @@ impl SchemaSpec {
             let s = require_struct(item)?;
 
             if let Some(state_args) = StateArgs::get(s.attrs.iter())? {
+                if state_args.bits.is_none() && !args.auto_increment {
+                    Err(syn::Error::new(state_args.span.unwrap(), "state bit value `bits` must be specified. to infer the bit value, use `auto_increment`"))?
+                }
+
                 // collect fields of state entitlements (specified in state args)
                 for entitlement in &state_args.entitlements.elems {
                     // TODO: this can't be correct
@@ -115,9 +109,5 @@ impl SchemaSpec {
                 entitlement_fields,
             })
         })
-    }
-
-    pub fn is_stateful(&self) -> bool {
-        matches!(self, Self::Stateful(_))
     }
 }

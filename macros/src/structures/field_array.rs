@@ -1,12 +1,12 @@
-use std::{collections::HashMap, mem::offset_of, ops::Range};
+use std::{collections::HashMap, ops::Range};
 
 use darling::FromMeta;
 use proc_macro2::Span;
-use syn::{spanned::Spanned, Expr, ExprLit, ExprRange, Ident, Item, Lit, LitInt, RangeLimits};
+use syn::{spanned::Spanned as _, Expr, ExprLit, ExprRange, Ident, Item, Lit, LitInt, RangeLimits};
 
 use crate::{
     access::{Access, AccessArgs},
-    utils::{get_access_from_split, get_schema_from_set, Offset, Width},
+    utils::{get_access_from_split, get_schema_from_set, Offset, Spanned, Width},
 };
 
 use super::{
@@ -26,19 +26,10 @@ pub struct FieldArrayArgs {
     pub schema: Option<Ident>,
     #[darling(default)]
     pub auto_increment: bool,
-
-    #[darling(skip)]
-    pub span: Option<Span>,
 }
 
 impl Args for FieldArrayArgs {
     const NAME: &str = "field_array";
-
-    fn attach_span(mut self, span: proc_macro2::Span) -> Self {
-        self.span.replace(span);
-
-        self
-    }
 }
 
 #[derive(Debug)]
@@ -56,7 +47,7 @@ impl FieldArraySpec {
         ident: Ident,
         offset: Offset,
         schemas: &HashMap<Ident, SchemaSpec>,
-        field_array_args: FieldArrayArgs,
+        field_array_args: Spanned<FieldArrayArgs>,
         mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let schema = if let Some(schema) = &field_array_args.schema {
@@ -78,8 +69,8 @@ impl FieldArraySpec {
                         ident.clone(),
                         "width must be specified",
                     ))?,
-                    span: None,
-                },
+                }
+                .with_span(field_array_args.span()),
                 items,
             )?
         };
@@ -152,7 +143,7 @@ impl FieldArraySpec {
             offset,
             schema,
             access,
-            reset: field_array_args.reset,
+            reset: field_array_args.reset.clone(),
         })
     }
 

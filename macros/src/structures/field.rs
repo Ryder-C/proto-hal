@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
 use darling::FromMeta;
-use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{Expr, Ident, Item};
 
 use crate::{
     access::{Access, AccessArgs},
-    utils::{get_access_from_split, get_schema_from_set, Offset, Width},
+    utils::{get_access_from_split, get_schema_from_set, Offset, Spanned, Width},
 };
 
 use super::{
@@ -25,19 +24,10 @@ pub struct FieldArgs {
     pub schema: Option<Ident>,
     #[darling(default)]
     pub auto_increment: bool,
-
-    #[darling(skip)]
-    pub span: Option<Span>,
 }
 
 impl Args for FieldArgs {
     const NAME: &str = "field";
-
-    fn attach_span(mut self, span: Span) -> Self {
-        self.span.replace(span);
-
-        self
-    }
 }
 
 #[derive(Debug)]
@@ -85,13 +75,6 @@ impl FieldSpec {
             Self::Stateless(field) => SchemaSpec::Stateless(field.schema.clone()),
         }
     }
-
-    pub fn access(&self) -> &Access {
-        match self {
-            Self::Stateful(s) => &s.access,
-            Self::Stateless(s) => &s.access,
-        }
-    }
 }
 
 impl FieldSpec {
@@ -99,7 +82,7 @@ impl FieldSpec {
         ident: Ident,
         offset: Offset,
         schemas: &HashMap<Ident, SchemaSpec>,
-        field_args: FieldArgs,
+        field_args: Spanned<FieldArgs>,
         mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let schema = if let Some(schema) = &field_args.schema {
@@ -121,8 +104,8 @@ impl FieldSpec {
                         ident.clone(),
                         "width must be specified",
                     ))?,
-                    span: None,
-                },
+                }
+                .with_span(field_args.span()),
                 items,
             )?
         };
@@ -132,8 +115,8 @@ impl FieldSpec {
 
         Ok(match schema {
             SchemaSpec::Stateful(schema) => {
-                let reset = field_args.reset.ok_or(syn::Error::new(
-                    field_args.span.unwrap(),
+                let reset = field_args.reset.clone().ok_or(syn::Error::new(
+                    field_args.span(),
                     "stateful fields must have a reset specified",
                 ))?;
 
@@ -150,7 +133,7 @@ impl FieldSpec {
                 offset,
                 schema,
                 access,
-                reset: field_args.reset,
+                reset: field_args.reset.clone(),
             }),
         })
     }
@@ -175,20 +158,8 @@ impl ToTokens for FieldSpec {
             Self::Stateful(field) => {
                 let reset_state = &field.reset;
 
-                let state_idents = field
-                    .schema
-                    .states
-                    .iter()
-                    .map(|state| state.ident.clone())
-                    .collect::<Vec<_>>();
-
-                let state_bits = field
-                    .schema
-                    .states
-                    .iter()
-                    .map(|state| state.bits)
-                    .collect::<Vec<_>>();
-
+                let state_idents = field.schema.states.iter().map(|state| state.ident.clone());
+                let state_bits = field.schema.states.iter().map(|state| state.bits);
                 let state_bodies = field.schema.states.iter().map(|state| quote! { #state });
 
                 body.extend(quote! {

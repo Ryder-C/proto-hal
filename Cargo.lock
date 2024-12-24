@@ -170,6 +170,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+ "tiva",
 ]
 
 [[package]]
@@ -294,6 +295,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "tiva"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1ad8e94be640ff03b4faa926b6f0cde990c1a7058a0ffff390b28766a11ef77"
 
 [[package]]
 name = "typenum"

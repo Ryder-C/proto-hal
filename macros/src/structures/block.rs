@@ -5,7 +5,7 @@ use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use syn::{parse_quote, Ident, Item, Path, Visibility};
 
-use crate::utils::{extract_items_from, require_module, PathArray};
+use crate::utils::{extract_items_from, require_module, PathArray, Spanned};
 
 use super::{
     register::{RegisterArgs, RegisterSpec},
@@ -20,6 +20,10 @@ pub struct BlockArgs {
     pub entitlements: PathArray,
     pub auto_increment: bool,
     pub erase_mod: bool,
+}
+
+impl Args for BlockArgs {
+    const NAME: &str = "block";
 }
 
 #[derive(Debug)]
@@ -38,7 +42,7 @@ impl BlockSpec {
     pub fn parse<'a>(
         ident: Ident,
         vis: Visibility,
-        block_args: BlockArgs,
+        block_args: Spanned<BlockArgs>,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let mut block = Self {
@@ -51,7 +55,7 @@ impl BlockSpec {
             vis,
         };
 
-        for entitlement in block_args.entitlements.elems {
+        for entitlement in &block_args.entitlements.elems {
             if !block.entitlements.insert(entitlement.clone()) {
                 Err(syn::Error::new_spanned(
                     entitlement,
@@ -79,15 +83,17 @@ impl BlockSpec {
                     Err(syn::Error::new_spanned(block.ident.clone(), "register offset must be specified. to infer offsets, add the `auto_increment` argument to the block attribute macro"))?
                 }
 
+                let offset = register_args.offset;
+
                 let register = RegisterSpec::parse(
                     module.ident.clone(),
                     &mut block.schemas,
                     register_args.offset.unwrap_or(register_offset),
-                    register_args.clone(),
+                    register_args,
                     extract_items_from(module)?.iter(),
                 )?;
 
-                register_offset = register_args.offset.unwrap_or(register_offset) + 0x4;
+                register_offset = offset.unwrap_or(register_offset) + 0x4;
 
                 block.registers.push(register);
             } else {

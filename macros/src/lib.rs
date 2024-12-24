@@ -1,8 +1,11 @@
 use darling::{ast::NestedMeta, FromMeta};
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use structures::block::{BlockArgs, BlockSpec};
+use structures::{
+    block::{BlockArgs, BlockSpec},
+    Args,
+};
 use syn::{parse2, ItemMod};
 
 mod access;
@@ -10,14 +13,15 @@ mod structures;
 mod utils;
 
 fn block_inner(args: TokenStream, item: TokenStream) -> Result<TokenStream2, syn::Error> {
-    let block_args = BlockArgs::from_list(&NestedMeta::parse_meta_list(args.into())?)?;
+    let block_args = BlockArgs::from_list(&NestedMeta::parse_meta_list(args.into())?)?
+        .with_span(Span::call_site());
 
     let module = parse2::<ItemMod>(item.into())?;
 
     let block = BlockSpec::parse(
         module.ident.clone(),
         module.vis.clone(),
-        block_args.clone(),
+        block_args,
         utils::extract_items_from(&module)?.iter(),
     )?;
 
