@@ -9,7 +9,7 @@ use syn::{Expr, ExprArray, Ident, Item, ItemMod, ItemStruct, Meta, Path};
 
 use crate::{
     access::{Access, AccessArgs, Read, ReadWrite, Write},
-    structures::schema::{Schema, SchemaSpec},
+    structures::schema::Schema,
 };
 
 pub fn require_module(item: &Item) -> syn::Result<&ItemMod> {

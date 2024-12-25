@@ -2,7 +2,7 @@ use proto_hal::macros::block;
 
 #[block(base_addr = 0x4001_0000, entitlements = [super::rcc::apb2enr::syscfgen::Enabled], erase_mod)]
 mod syscfg {
-    #[schema(width = 4)]
+    #[schema(width = 4, auto_increment)]
     mod port {
         #[state]
         struct PA;

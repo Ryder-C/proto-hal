@@ -5,7 +5,7 @@ use std::{
 
 use darling::FromMeta;
 use proc_macro2::Span;
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote_spanned, ToTokens};
 use syn::{parse_quote, Ident, Item, Path, Visibility};
 use tiva::{Validate, Validator};
 
@@ -163,6 +163,8 @@ impl ToTokens for Block {
         let ident = &self.ident;
         let base_addr = self.base_addr;
 
+        let span = self.args.span();
+
         let (stateful_registers, stateless_registers) = self
             .registers
             .iter()
@@ -205,9 +207,12 @@ impl ToTokens for Block {
             })
             .collect::<Vec<Path>>();
 
-        let register_bodies = self.registers.iter().map(|register| quote! { #register });
+        let register_bodies = self
+            .registers
+            .iter()
+            .map(|register| quote_spanned! { span => #register });
 
-        let mut body = quote! {
+        let mut body = quote_spanned! { span =>
             #(
                 #register_bodies
             )*
@@ -274,7 +279,7 @@ impl ToTokens for Block {
             let prev_register_tys = stateful_register_tys.get(..i).unwrap();
             let next_register_tys = stateful_register_tys.get(i + 1..).unwrap();
 
-            body.extend(quote! {
+            body.extend(quote_spanned! { span =>
                 impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)* #(#entitlements,)*>
                 where
                     #ty: ::proto_hal::macro_utils::AsBuilder,
@@ -308,7 +313,7 @@ impl ToTokens for Block {
         }
 
         if !self.entitlements.is_empty() {
-            body.extend(quote! {
+            body.extend(quote_spanned! { span =>
                 impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)* #(#reset_entitlement_tys,)*> {
                     pub fn attach(self, #(#entitlement_idents: #entitlements,)*) -> Block<#(#stateful_register_tys,)* #(#entitlements,)*> {
                         Block {
@@ -334,7 +339,7 @@ impl ToTokens for Block {
         tokens.extend(if self.args.erase_mod {
             body
         } else {
-            quote! {
+            quote_spanned! { span =>
                 #vis mod #ident {
                     #body
                 }

@@ -37,9 +37,9 @@ pub mod gpioa {
     mod otyper {
         #[schema(width = 1)]
         mod otype {
-            #[state]
+            #[state(bits = 0)]
             struct PushPull;
-            #[state]
+            #[state(bits = 1)]
             struct OpenDrain;
         }
 
@@ -49,7 +49,7 @@ pub mod gpioa {
 
     #[register(auto_increment)]
     mod ospeedr {
-        #[schema(width = 2)]
+        #[schema(width = 2, auto_increment)]
         mod ospeed {
             #[state]
             struct Low;
@@ -76,7 +76,7 @@ pub mod gpioa {
 
     #[register(auto_increment)]
     mod pupdr {
-        #[schema(width = 2)]
+        #[schema(width = 2, auto_increment)]
         mod pupd {
             #[state]
             struct None;
@@ -101,13 +101,13 @@ pub mod gpioa {
 
     #[register]
     mod idr {
-        #[field_array(range = ..16, width = 1, read)]
+        #[field_array(offset = 0, range = ..16, width = 1, read)]
         mod idX {}
     }
 
     #[register]
     mod odr {
-        #[field_array(range = ..16, width = 1, read, write)]
+        #[field_array(offset = 0, range = ..16, width = 1, read, write)]
         mod odX {}
     }
 
@@ -122,7 +122,7 @@ pub mod gpioa {
         mod brX {}
     }
 
-    #[schema(width = 4)]
+    #[schema(width = 4, auto_increment)]
     mod afr {
         #[state]
         struct AF0;
@@ -160,19 +160,19 @@ pub mod gpioa {
 
     #[register(offset = 0x20)]
     mod afrl {
-        #[field_array(range = ..8, schema = afr, read, write, reset = AF0)]
+        #[field_array(offset = 0, range = ..8, schema = afr, read, write, reset = AF0)]
         mod afselX {}
     }
 
     #[register]
     mod afrh {
-        #[field_array(range = 8..16, schema = afr, read, write, reset = AF0)]
+        #[field_array(offset = 0, range = 8..16, schema = afr, read, write, reset = AF0)]
         mod afselX {}
     }
 
     #[register]
     mod brr {
-        #[field_array(range = ..16, width = 1, write, reset = 0)]
+        #[field_array(offset = 0, range = ..16, width = 1, write, reset = 0)]
         mod brX {}
     }
 }

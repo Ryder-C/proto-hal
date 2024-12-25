@@ -37,6 +37,7 @@ pub struct StatefulSchema {
 
 #[derive(Debug, Clone)]
 pub struct StatelessSchemaSpec {
+    pub args: Spanned<SchemaArgs>,
     pub ident: Ident,
     pub width: Width,
 }
@@ -59,6 +60,13 @@ pub enum Schema {
 }
 
 impl Schema {
+    pub fn args(&self) -> &Spanned<SchemaArgs> {
+        match self {
+            Self::Stateful(schema) => &schema.args,
+            Self::Stateless(schema) => &schema.args,
+        }
+    }
+
     pub fn ident(&self) -> &Ident {
         match self {
             Self::Stateful(schema) => &schema.ident,
@@ -129,7 +137,7 @@ impl SchemaSpec {
         }
 
         Ok(if states.is_empty() {
-            Self::Stateless(StatelessSchemaSpec { ident, width })
+            Self::Stateless(StatelessSchemaSpec { args, ident, width })
         } else {
             Self::Stateful(StatefulSchemaSpec {
                 args,
@@ -148,7 +156,14 @@ impl Validator<StatefulSchemaSpec> for StatefulSchema {
     fn validate(spec: StatefulSchemaSpec) -> Result<Self, Self::Error> {
         for state in &spec.states {
             if state.args.bits.is_none() && !spec.args.auto_increment {
-                return Err(syn::Error::new(state.args.span(), "state bit value `bits` must be specified. to infer the bit value, use `auto_increment`"));
+                Err(syn::Error::new(state.args.span(), "state bit value `bits` must be specified. to infer the bit value, use `auto_increment`"))?
+            }
+
+            if state.bits >> spec.width != 0 {
+                Err(syn::Error::new(
+                    state.args.span(),
+                    "state bit value does not fit within field width",
+                ))?
             }
         }
 

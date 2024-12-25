@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    field::{Field, FieldArgs, FieldSpec, StatefulFieldSpec, StatelessFieldSpec},
+    field::{Field, FieldArgs, StatefulFieldSpec, StatelessFieldSpec},
     schema::{Schema, SchemaArgs, SchemaSpec},
     Args,
 };
@@ -67,9 +67,16 @@ impl FieldArraySpec {
         offset: Offset,
         schemas: &HashMap<Ident, Schema>,
         args: Spanned<FieldArrayArgs>,
-        items: impl Iterator<Item = &'a Item>,
+        mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let schema = if let Some(schema) = &args.schema {
+            if items.next().is_some() {
+                Err(syn::Error::new(
+                    args.span(),
+                    "fields with imported schemas must be empty",
+                ))?
+            }
+
             get_schema_from_set(schema, schemas)?
         } else {
             // the schema will be derived from the module contents

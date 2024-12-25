@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ops::Deref};
 
 use darling::FromMeta;
-use quote::{quote, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{Expr, Ident, Item};
 use tiva::{Validate, Validator};
 
@@ -11,10 +11,7 @@ use crate::{
 };
 
 use super::{
-    schema::{
-        Schema, SchemaArgs, SchemaSpec, StatefulSchema, StatefulSchemaSpec, StatelessSchema,
-        StatelessSchemaSpec,
-    },
+    schema::{Schema, SchemaArgs, SchemaSpec, StatefulSchema, StatelessSchema},
     Args,
 };
 
@@ -129,9 +126,16 @@ impl FieldSpec {
         offset: Offset,
         schemas: &HashMap<Ident, Schema>,
         args: Spanned<FieldArgs>,
-        items: impl Iterator<Item = &'a Item>,
+        mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let schema = if let Some(schema) = &args.schema {
+            if items.next().is_some() {
+                Err(syn::Error::new(
+                    args.span(),
+                    "fields with imported schemas must be empty",
+                ))?
+            }
+
             get_schema_from_set(schema, schemas)?
         } else {
             // the schema will be derived from the module contents
@@ -196,10 +200,13 @@ impl Validator<StatefulFieldSpec> for StatefulField {
 
     fn validate(spec: StatefulFieldSpec) -> Result<Self, Self::Error> {
         if spec.offset + spec.schema.width > 32 {
-            Err(Self::Error::new(
-                spec.args.span(),
-                "field domain exceeds register domain",
-            ))
+            let msg = format!(
+                "field domain exceeds register domain. {{ domain: {}..{} }}",
+                spec.offset,
+                spec.offset + spec.schema.width
+            );
+
+            Err(Self::Error::new(spec.args.span(), msg))
         } else {
             Ok(Self { spec })
         }
@@ -238,7 +245,9 @@ impl ToTokens for Field {
         let offset = self.offset();
         let width = *self.schema().width();
 
-        let mut body = quote! {
+        let span = self.schema().args().span();
+
+        let mut body = quote_spanned! { span =>
             pub const OFFSET: u8 = #offset;
             pub const WIDTH: u8 = #width;
         };
@@ -253,7 +262,7 @@ impl ToTokens for Field {
                 let state_bits = spec.schema.states.iter().map(|state| state.bits);
                 let state_bodies = spec.schema.states.iter().map(|state| quote! { #state });
 
-                body.extend(quote! {
+                body.extend(quote_spanned! { span =>
                     #(
                         #state_bodies
                     )*
@@ -290,7 +299,7 @@ impl ToTokens for Field {
             }
         }
 
-        tokens.extend(quote! {
+        tokens.extend(quote_spanned! { span =>
             pub mod #ident {
                 #body
             }

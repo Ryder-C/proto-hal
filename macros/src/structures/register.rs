@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Deref};
 
 use darling::FromMeta;
 use proc_macro2::Span;
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote_spanned, ToTokens};
 use syn::{parse_quote, Ident, Index, Item, Path};
 use tiva::{Validate, Validator};
 
@@ -159,6 +159,8 @@ impl ToTokens for Register {
         let ident = &self.ident;
         let offset = self.offset;
 
+        let span = self.args.span();
+
         let stateful_fields = self
             .fields
             .iter()
@@ -199,9 +201,12 @@ impl ToTokens for Register {
             .map(|ident| format_ident!("New{}", ident))
             .collect::<Vec<_>>();
 
-        let field_bodies = self.fields.iter().map(|field| quote! { #field });
+        let field_bodies = self
+            .fields
+            .iter()
+            .map(|field| quote_spanned! { span => #field });
 
-        let mut body = quote! {
+        let mut body = quote_spanned! { span =>
             #(
                 #field_bodies
             )*
@@ -260,7 +265,7 @@ impl ToTokens for Register {
                         })
                         .collect::<Vec<_>>();
 
-                    Some(quote! {
+                    Some(quote_spanned! { span =>
                         + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
                     })
                 })
@@ -285,13 +290,13 @@ impl ToTokens for Register {
                         })
                         .collect::<Vec<_>>();
 
-                    Some(quote! {
+                    Some(quote_spanned! { span =>
                         + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
                     })
                 })
                 .collect::<Vec<_>>();
 
-            body.extend(quote! {
+            body.extend(quote_spanned! { span =>
                 pub type Reset = Register<
                     #(
                         #stateful_field_idents::Reset,
@@ -435,14 +440,14 @@ impl ToTokens for Register {
                     if state.entitlement_fields.is_empty() {
                         let state_ty = &state.ident;
 
-                        body.extend(quote! {
+                        body.extend(quote_spanned! { span =>
                             unsafe impl<T> ::proto_hal::stasis::Entitled<T> for #ident::#state_ty {}
                         });
                     }
                 }
 
                 if field.access.is_write() {
-                    body.extend(quote! {
+                    body.extend(quote_spanned! { span =>
                         impl<#(#stateful_field_tys,)*> StateBuilder<#(#stateful_field_tys,)*>
                         where
                             #(
@@ -481,7 +486,7 @@ impl ToTokens for Register {
                     });
 
                     for (ty, accessor) in state_tys.iter().zip(state_accessor_idents) {
-                        body.extend(quote! {
+                        body.extend(quote_spanned! { span =>
                             impl<#(#stateful_field_tys,)*> #field_state_builder_ty<#(#stateful_field_tys,)*>
                             where
                                 #(
@@ -537,7 +542,7 @@ impl ToTokens for Register {
                 .collect::<Vec<Path>>();
 
             if !readable_stateless_fields.is_empty() {
-                body.extend(quote! {
+                body.extend(quote_spanned! { span =>
                     pub struct Reader {
                         value: ::proto_hal::macro_utils::RegisterValue,
                     }
@@ -557,7 +562,7 @@ impl ToTokens for Register {
                     }
                 });
 
-                body.extend(quote! {
+                body.extend(quote_spanned! { span =>
                         impl<#(#stateful_field_tys,)*> Register<#(#stateful_field_tys,)*>
                         where
                             #(
@@ -612,7 +617,7 @@ impl ToTokens for Register {
                 .collect::<Vec<Path>>();
 
             if !writable_stateless_fields.is_empty() {
-                body.extend(quote! {
+                body.extend(quote_spanned! { span =>
                     pub struct Writer {
                         value: u32,
                     }
@@ -633,7 +638,7 @@ impl ToTokens for Register {
                     }
                 });
 
-                body.extend(quote! {
+                body.extend(quote_spanned! { span =>
                     impl<#(#stateful_field_tys,)*> Register<#(#stateful_field_tys,)*>
                     where
                         #(
@@ -656,7 +661,7 @@ impl ToTokens for Register {
             }
         }
 
-        tokens.extend(quote! {
+        tokens.extend(quote_spanned! { span =>
             pub mod #ident {
                 #body
             }

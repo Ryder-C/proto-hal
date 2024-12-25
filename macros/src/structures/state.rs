@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use darling::FromMeta;
 use proc_macro2::Span;
-use quote::{quote, ToTokens};
+use quote::{quote_spanned, ToTokens};
 use syn::{Ident, Path};
 
 use crate::utils::{PathArray, Spanned};
@@ -74,9 +74,11 @@ impl ToTokens for State {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let ident = &self.ident;
 
-        tokens.extend(quote! {
+        let span = self.args.span();
+
+        tokens.extend(quote_spanned! { span =>
             pub struct #ident {
-                sealed: (),
+                _sealed: (),
             }
 
             impl State for #ident {
@@ -84,7 +86,7 @@ impl ToTokens for State {
 
                 unsafe fn conjure() -> Self {
                     Self {
-                        sealed: (),
+                        _sealed: (),
                     }
                 }
             }
@@ -93,7 +95,7 @@ impl ToTokens for State {
         if !self.entitlements.is_empty() {
             let entitlement_paths = self.entitlements.iter();
 
-            tokens.extend(quote! {
+            tokens.extend(quote_spanned! { span =>
                 #(
                     unsafe impl ::proto_hal::stasis::Entitled<super::#entitlement_paths> for #ident {}
                 )*
