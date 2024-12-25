@@ -108,10 +108,10 @@ mod cordic {
         #[field(offset = 16, schema = enable, read, write, reset = Disabled)]
         mod ien {}
 
-        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, read, write, reset = Disabled)]
         mod dmaren {}
 
-        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, read, write, reset = Disabled)]
         mod dmawen {}
 
         #[field(width = 1, read, write, reset = OneRead)]

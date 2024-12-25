@@ -18,19 +18,19 @@ mod rcc {
 
     #[register(auto_increment)]
     mod ahb2enr {
-        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, read, write, reset = Disabled)]
         mod gpioaen {}
-        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, read, write, reset = Disabled)]
         mod gpioben {}
-        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, read, write, reset = Disabled)]
         mod gpiocen {}
-        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, read, write, reset = Disabled)]
         mod gpioden {}
-        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, read, write, reset = Disabled)]
         mod gpioeen {}
-        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, read, write, reset = Disabled)]
         mod gpiofen {}
-        #[field(width = 1, schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, read, write, reset = Disabled)]
         mod gpiogen {}
     }
 
