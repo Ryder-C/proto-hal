@@ -187,7 +187,7 @@ impl SynErrorCombinator {
         });
     }
 
-    // TODO: better name
+    // // TODO: better name
     // pub fn maybe<T, E>(&mut self, result: Result<T, E>)
     // where
     //     E: Into<syn::Error>,

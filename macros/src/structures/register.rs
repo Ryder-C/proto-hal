@@ -10,7 +10,7 @@ use crate::utils::{extract_items_from, require_module, Offset, Spanned, SynError
 
 use super::{
     field::{Field, FieldArgs, FieldSpec},
-    field_array::{FieldArray, FieldArrayArgs, FieldArraySpec},
+    field_array::{FieldArray, FieldArrayArgs},
     schema::{Schema, SchemaArgs, SchemaSpec},
     Args,
 };
@@ -111,16 +111,14 @@ impl RegisterSpec {
 
             if let Some(field_array_args) = FieldArrayArgs::get(module.attrs.iter())? {
                 errors.try_maybe_then(
-                    FieldArraySpec::parse(
+                    FieldArray::parse(
                         module.ident.clone(),
-                        field_array_args.offset.unwrap_or(field_offset),
+                        field_array_args.field.offset.unwrap_or(field_offset),
                         schemas,
                         field_array_args,
                         extract_items_from(module)?.iter(),
                     ),
-                    |spec| {
-                        let field_array = FieldArray::validate(spec)?;
-
+                    |field_array| {
                         register.fields.extend(field_array.to_fields()?);
                         field_offset =
                             field_array.offset + field_array.schema.width() * field_array.count();

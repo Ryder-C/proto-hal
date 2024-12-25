@@ -1,18 +1,13 @@
-use std::{
-    collections::HashMap,
-    ops::{Deref, Range},
-};
+use std::{collections::HashMap, ops::Range};
 
 use darling::FromMeta;
 use proc_macro2::Span;
 use syn::{spanned::Spanned as _, Expr, ExprLit, ExprRange, Ident, Item, Lit, LitInt, RangeLimits};
-use tiva::{Validate, Validator};
+use tiva::Validate;
 
 use crate::{
-    access::{Access, AccessArgs},
-    utils::{
-        get_access_from_split, get_schema_from_set, Offset, Spanned, SynErrorCombinator, Width,
-    },
+    access::Access,
+    utils::{get_access_from_split, get_schema_from_set, Offset, Spanned, SynErrorCombinator},
 };
 
 use super::{
@@ -24,15 +19,9 @@ use super::{
 #[derive(Debug, Clone, FromMeta)]
 pub struct FieldArrayArgs {
     pub range: ExprRange,
-    pub offset: Option<Offset>,
-    pub width: Option<Width>,
-    pub read: Option<AccessArgs>,
-    pub write: Option<AccessArgs>,
-    pub reset: Option<Expr>,
-    pub schema: Option<Ident>,
 
-    #[darling(default)]
-    pub auto_increment: bool,
+    #[darling(flatten)]
+    pub field: FieldArgs,
 }
 
 impl Args for FieldArrayArgs {
@@ -40,7 +29,7 @@ impl Args for FieldArrayArgs {
 }
 
 #[derive(Debug)]
-pub struct FieldArraySpec {
+pub struct FieldArray {
     pub args: Spanned<FieldArrayArgs>,
     pub ident: Ident,
     pub range: Range<u8>,
@@ -50,20 +39,7 @@ pub struct FieldArraySpec {
     pub reset: Option<Expr>,
 }
 
-#[derive(Debug)]
-pub struct FieldArray {
-    spec: FieldArraySpec,
-}
-
-impl Deref for FieldArray {
-    type Target = FieldArraySpec;
-
-    fn deref(&self) -> &Self::Target {
-        &self.spec
-    }
-}
-
-impl FieldArraySpec {
+impl FieldArray {
     pub fn parse<'a>(
         ident: Ident,
         offset: Offset,
@@ -71,7 +47,7 @@ impl FieldArraySpec {
         args: Spanned<FieldArrayArgs>,
         mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
-        let schema = if let Some(schema) = &args.schema {
+        let schema = if let Some(schema) = &args.field.schema {
             // Q: wish this wasn't here as it is a validation step... kind of?
             if items.next().is_some() {
                 Err(syn::Error::new(
@@ -86,8 +62,9 @@ impl FieldArraySpec {
             SchemaSpec::parse(
                 ident.clone(),
                 SchemaArgs {
-                    auto_increment: args.auto_increment,
+                    auto_increment: args.field.auto_increment,
                     width: args
+                        .field
                         .width
                         .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
                 }
@@ -97,7 +74,7 @@ impl FieldArraySpec {
             .validate()?
         };
 
-        let access = get_access_from_split(&args.read, &args.write, ident.span())?;
+        let access = get_access_from_split(&args.field.read, &args.field.write, args.span())?;
 
         // get range from range expr (so stupid)
         let expr = *(args
@@ -153,8 +130,8 @@ impl FieldArraySpec {
             RangeLimits::HalfOpen(_) => start..end,
         };
 
-        let offset = args.offset.unwrap_or(offset);
-        let reset = args.reset.clone();
+        let offset = args.field.offset.unwrap_or(offset);
+        let reset = args.field.reset.clone();
 
         Ok(Self {
             args,
@@ -194,16 +171,7 @@ impl FieldArray {
                 self.ident.span(),
             );
 
-            let args = FieldArgs {
-                offset: self.args.offset,
-                width: self.args.width,
-                read: self.args.read.clone(),
-                write: self.args.write.clone(),
-                reset: self.args.reset.clone(),
-                schema: self.args.schema.clone(),
-                auto_increment: self.args.auto_increment,
-            }
-            .with_span(self.args.span());
+            let args = self.args.field.clone().with_span(self.args.span());
 
             let get_field = || {
                 Ok::<_, syn::Error>(match self.schema.clone() {
@@ -245,20 +213,5 @@ impl FieldArray {
         errors.coalesce()?;
 
         Ok(fields)
-    }
-}
-
-impl Validator<FieldArraySpec> for FieldArray {
-    type Error = syn::Error;
-
-    fn validate(spec: FieldArraySpec) -> Result<Self, Self::Error> {
-        if spec.offset + spec.schema.width() > 32 {
-            Err(Self::Error::new(
-                spec.args.span(),
-                "field domain exceeds register domain",
-            ))
-        } else {
-            Ok(Self { spec })
-        }
     }
 }

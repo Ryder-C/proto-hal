@@ -201,6 +201,15 @@ impl Validator<StatefulFieldSpec> for StatefulField {
     type Error = syn::Error;
 
     fn validate(spec: StatefulFieldSpec) -> Result<Self, Self::Error> {
+        let mut errors = SynErrorCombinator::new();
+
+        if spec.args.width.is_some() && spec.args.schema.is_some() {
+            errors.push(syn::Error::new(
+                spec.args.span(),
+                "field width is inherited from imported schema.",
+            ));
+        }
+
         if spec.offset + spec.schema.width > 32 {
             let msg = format!(
                 "field domain exceeds register domain. {{ domain: {}..{} }}",
@@ -208,10 +217,12 @@ impl Validator<StatefulFieldSpec> for StatefulField {
                 spec.offset + spec.schema.width
             );
 
-            Err(Self::Error::new(spec.args.span(), msg))
-        } else {
-            Ok(Self { spec })
+            errors.push(Self::Error::new(spec.args.span(), msg));
         }
+
+        errors.coalesce()?;
+
+        Ok(Self { spec })
     }
 }
 
@@ -219,14 +230,25 @@ impl Validator<StatelessFieldSpec> for StatelessField {
     type Error = syn::Error;
 
     fn validate(spec: StatelessFieldSpec) -> Result<Self, Self::Error> {
+        let mut errors = SynErrorCombinator::new();
+
+        if spec.args.width.is_some() && spec.args.schema.is_some() {
+            errors.push(syn::Error::new(
+                spec.args.span(),
+                "field width is inherited from imported schema.",
+            ));
+        }
+
         if spec.offset + spec.schema.width > 32 {
-            Err(Self::Error::new(
+            errors.push(Self::Error::new(
                 spec.args.span(),
                 "field domain exceeds register domain",
-            ))
-        } else {
-            Ok(Self { spec })
+            ));
         }
+
+        errors.coalesce()?;
+
+        Ok(Self { spec })
     }
 }
 
