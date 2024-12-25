@@ -129,6 +129,7 @@ impl FieldSpec {
         mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let schema = if let Some(schema) = &args.schema {
+            // Q: wish this wasn't here as it is a validation step... kind of?
             if items.next().is_some() {
                 Err(syn::Error::new(
                     args.span(),
@@ -267,9 +268,9 @@ impl ToTokens for Field {
                         #state_bodies
                     )*
 
-                    pub struct Any {
-                        state: States,
-                    }
+                    // pub struct Any {
+                    //     state: States,
+                    // }
 
                     pub type Reset = #reset_state;
                     pub const RESET: u32 = Reset::RAW as u32;

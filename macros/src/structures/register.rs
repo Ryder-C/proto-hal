@@ -184,7 +184,9 @@ impl ToTokens for Register {
             .map(|field| &field.ident)
             .collect::<Vec<_>>();
 
-        let stateless_field_idents = stateless_fields.iter().map(|field| &field.ident);
+        let stateless_field_idents = stateless_fields
+            .iter()
+            .map(|field| format_ident!("_{}", field.ident));
 
         let stateful_field_tys = stateful_fields
             .iter()
@@ -327,6 +329,7 @@ impl ToTokens for Register {
                     where
                         Self: ::proto_hal::macro_utils::AsRegister,
                     {
+                        #[allow(unused_parens)]
                         let reg_value = #(
                             ((#writable_stateful_field_tys::RAW as u32) << #writable_stateful_field_idents::OFFSET)
                         )|*;
@@ -479,9 +482,9 @@ impl ToTokens for Register {
                                 unsafe { StateBuilder::conjure() }
                             }
 
-                            pub fn dynamic(self, state: #ident::States) -> StateBuilder<#(#prev_field_tys,)* #ident::States, #(#next_field_tys,)*> {
-                                todo!()
-                            }
+                            // pub fn dynamic(self, state: #ident::States) -> StateBuilder<#(#prev_field_tys,)* #ident::States, #(#next_field_tys,)*> {
+                            //     todo!()
+                            // }
                         }
                     });
 

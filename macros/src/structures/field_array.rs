@@ -70,6 +70,7 @@ impl FieldArraySpec {
         mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let schema = if let Some(schema) = &args.schema {
+            // Q: wish this wasn't here as it is a validation step... kind of?
             if items.next().is_some() {
                 Err(syn::Error::new(
                     args.span(),
