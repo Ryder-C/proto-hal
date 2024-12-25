@@ -101,14 +101,10 @@ impl FieldArray {
 
         let start = lit.base10_parse::<u8>()?;
 
-        let expr = *(args
-            .range
-            .end
-            .clone()
-            .unwrap_or(Box::new(Expr::Lit(ExprLit {
-                attrs: Vec::new(),
-                lit: Lit::Int(LitInt::new("0", Span::call_site())),
-            }))));
+        let expr = *(args.range.end.clone().ok_or(syn::Error::new(
+            args.range.span(),
+            "end bound must be specified",
+        ))?);
         let Expr::Lit(lit) = expr else {
             Err(syn::Error::new(
                 args.range.end.span(),
