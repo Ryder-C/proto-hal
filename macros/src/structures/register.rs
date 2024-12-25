@@ -71,61 +71,83 @@ impl RegisterSpec {
         for item in items {
             let module = require_module(item)?;
 
-            // TODO: deny multiple different attributes on one item
+            // TODO: this isn't the most flexible solution
+            // but it does work for now.
+            // args should be dispatched procedurally.
+            match (
+                SchemaArgs::get(module.attrs.iter())?,
+                FieldArgs::get(module.attrs.iter())?,
+                FieldArrayArgs::get(module.attrs.iter())?,
+            ) {
+                (Some(schema_args), None, None) => {
+                    errors.try_maybe_then(
+                        SchemaSpec::parse(
+                            module.ident.clone(),
+                            schema_args,
+                            extract_items_from(module)?.iter(),
+                        ),
+                        |spec| {
+                            let schema = Schema::validate(spec)?;
+                            schemas.insert(schema.ident().clone(), schema);
 
-            if let Some(schema_args) = SchemaArgs::get(module.attrs.iter())? {
-                errors.try_maybe_then(
-                    SchemaSpec::parse(
-                        module.ident.clone(),
-                        schema_args,
-                        extract_items_from(module)?.iter(),
-                    ),
-                    |spec| {
-                        let schema = Schema::validate(spec)?;
-                        schemas.insert(schema.ident().clone(), schema);
+                            Ok(())
+                        },
+                    );
+                }
+                (None, Some(field_args), None) => {
+                    errors.try_maybe_then(
+                        FieldSpec::parse(
+                            module.ident.clone(),
+                            field_args.offset.unwrap_or(field_offset),
+                            schemas,
+                            field_args,
+                            extract_items_from(module)?.iter(),
+                        ),
+                        |spec| {
+                            let field = Field::validate(spec)?;
 
-                        Ok(())
-                    },
-                );
-            }
+                            field_offset = field.offset() + field.schema().width();
+                            register.fields.push(field);
 
-            if let Some(field_args) = FieldArgs::get(module.attrs.iter())? {
-                errors.try_maybe_then(
-                    FieldSpec::parse(
-                        module.ident.clone(),
-                        field_args.offset.unwrap_or(field_offset),
-                        schemas,
-                        field_args,
-                        extract_items_from(module)?.iter(),
-                    ),
-                    |spec| {
-                        let field = Field::validate(spec)?;
+                            Ok(())
+                        },
+                    );
+                }
+                (None, None, Some(field_array_args)) => {
+                    errors.try_maybe_then(
+                        FieldArray::parse(
+                            module.ident.clone(),
+                            field_array_args.field.offset.unwrap_or(field_offset),
+                            schemas,
+                            field_array_args,
+                            extract_items_from(module)?.iter(),
+                        ),
+                        |field_array| {
+                            register.fields.extend(field_array.to_fields()?);
+                            field_offset = field_array.offset
+                                + field_array.schema.width() * field_array.count();
 
-                        field_offset = field.offset() + field.schema().width();
-                        register.fields.push(field);
+                            Ok(())
+                        },
+                    );
+                }
+                (None, None, None) => {
+                    errors.push(syn::Error::new_spanned(module, "extraneous item"));
+                }
+                (schema_args, field_args, field_array_args) => {
+                    let msg = "only one module annotation is permitted";
 
-                        Ok(())
-                    },
-                );
-            }
-
-            if let Some(field_array_args) = FieldArrayArgs::get(module.attrs.iter())? {
-                errors.try_maybe_then(
-                    FieldArray::parse(
-                        module.ident.clone(),
-                        field_array_args.field.offset.unwrap_or(field_offset),
-                        schemas,
-                        field_array_args,
-                        extract_items_from(module)?.iter(),
-                    ),
-                    |field_array| {
-                        register.fields.extend(field_array.to_fields()?);
-                        field_offset =
-                            field_array.offset + field_array.schema.width() * field_array.count();
-
-                        Ok(())
-                    },
-                );
+                    for span in [
+                        schema_args.and_then(|args| Some(args.span())),
+                        field_args.and_then(|args| Some(args.span())),
+                        field_array_args.and_then(|args| Some(args.span())),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    {
+                        errors.push(syn::Error::new(span, msg));
+                    }
+                }
             }
         }
 

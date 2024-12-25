@@ -91,48 +91,64 @@ impl BlockSpec {
         for item in items {
             let module = require_module(item)?;
 
-            if let Some(schema_args) = SchemaArgs::get(module.attrs.iter())? {
-                errors.try_maybe_then(
-                    SchemaSpec::parse(
-                        module.ident.clone(),
-                        schema_args,
-                        extract_items_from(module)?.iter(),
-                    ),
-                    |spec| {
-                        let schema = Schema::validate(spec)?;
+            // TODO: this isn't the most flexible solution
+            // but it does work for now.
+            // args should be dispatched procedurally.
+            match (
+                SchemaArgs::get(module.attrs.iter())?,
+                RegisterArgs::get(module.attrs.iter())?,
+            ) {
+                (Some(schema_args), None) => {
+                    errors.try_maybe_then(
+                        SchemaSpec::parse(
+                            module.ident.clone(),
+                            schema_args,
+                            extract_items_from(module)?.iter(),
+                        ),
+                        |spec| {
+                            let schema = Schema::validate(spec)?;
 
-                        block.schemas.insert(schema.ident().clone(), schema);
+                            block.schemas.insert(schema.ident().clone(), schema);
 
-                        Ok(())
-                    },
-                );
-            } else if let Some(register_args) = RegisterArgs::get(module.attrs.iter())? {
-                if !args.auto_increment && register_args.offset.is_none() {
-                    errors.push(syn::Error::new(
-                        register_args.span(),
-                        "register offset must be specified. to infer offsets, use `auto_increment`",
-                    ));
+                            Ok(())
+                        },
+                    );
                 }
+                (None, Some(register_args)) => {
+                    errors.try_maybe_then(
+                        RegisterSpec::parse(
+                            module.ident.clone(),
+                            &mut block.schemas,
+                            register_args.offset.unwrap_or(register_offset),
+                            register_args,
+                            extract_items_from(module)?.iter(),
+                        ),
+                        |spec| {
+                            let register = Register::validate(spec)?;
 
-                errors.try_maybe_then(
-                    RegisterSpec::parse(
-                        module.ident.clone(),
-                        &mut block.schemas,
-                        register_args.offset.unwrap_or(register_offset),
-                        register_args,
-                        extract_items_from(module)?.iter(),
-                    ),
-                    |spec| {
-                        let register = Register::validate(spec)?;
+                            register_offset = register.args.offset.unwrap_or(register_offset) + 0x4;
+                            block.registers.push(register);
 
-                        register_offset = register.args.offset.unwrap_or(register_offset) + 0x4;
-                        block.registers.push(register);
+                            Ok(())
+                        },
+                    );
+                }
+                (None, None) => {
+                    errors.push(syn::Error::new_spanned(module, "extraneous item"));
+                }
+                (schema_args, register_args) => {
+                    let msg = "only one module annotation is permitted";
 
-                        Ok(())
-                    },
-                );
-            } else {
-                errors.push(syn::Error::new_spanned(module, "erroneous item"));
+                    for span in [
+                        schema_args.and_then(|args| Some(args.span())),
+                        register_args.and_then(|args| Some(args.span())),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    {
+                        errors.push(syn::Error::new(span, msg));
+                    }
+                }
             }
         }
 
