@@ -7,7 +7,7 @@ use super::{
     state::{State, StateArgs},
     Args,
 };
-use crate::utils::{require_struct, Spanned, Width};
+use crate::utils::{require_struct, Spanned, SynErrorCombinator, Width};
 use tiva::{Validate, Validator};
 
 #[derive(Debug, Clone, Default, FromMeta)]
@@ -154,18 +154,22 @@ impl Validator<StatefulSchemaSpec> for StatefulSchema {
     type Error = syn::Error;
 
     fn validate(spec: StatefulSchemaSpec) -> Result<Self, Self::Error> {
+        let mut errors = SynErrorCombinator::new();
+
         for state in &spec.states {
             if state.args.bits.is_none() && !spec.args.auto_increment {
-                Err(syn::Error::new(state.args.span(), "state bit value `bits` must be specified. to infer the bit value, use `auto_increment`"))?
+                errors.push(syn::Error::new(state.args.span(), "state bit value `bits` must be specified. to infer the bit value, use `auto_increment`"));
             }
 
             if state.bits >> spec.width != 0 {
-                Err(syn::Error::new(
+                errors.push(syn::Error::new(
                     state.args.span(),
                     "state bit value does not fit within field width",
-                ))?
+                ));
             }
         }
+
+        errors.coalesce()?;
 
         Ok(Self { spec })
     }

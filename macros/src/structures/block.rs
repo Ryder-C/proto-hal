@@ -7,9 +7,9 @@ use darling::FromMeta;
 use proc_macro2::Span;
 use quote::{format_ident, quote_spanned, ToTokens};
 use syn::{parse_quote, Ident, Item, Path, Visibility};
-use tiva::{Validate, Validator};
+use tiva::Validator;
 
-use crate::utils::{extract_items_from, require_module, PathArray, Spanned};
+use crate::utils::{extract_items_from, require_module, PathArray, Spanned, SynErrorCombinator};
 
 use super::{
     register::{Register, RegisterArgs, RegisterSpec},
@@ -65,6 +65,8 @@ impl BlockSpec {
         args: Spanned<BlockArgs>,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
+        let mut errors = SynErrorCombinator::new();
+
         let mut block = Self {
             args: args.clone(),
             ident,
@@ -77,10 +79,10 @@ impl BlockSpec {
 
         for entitlement in &args.entitlements.elems {
             if !block.entitlements.insert(entitlement.clone()) {
-                Err(syn::Error::new_spanned(
+                errors.push(syn::Error::new_spanned(
                     entitlement,
                     "entitlement exists already",
-                ))?
+                ));
             }
         }
 
@@ -90,38 +92,51 @@ impl BlockSpec {
             let module = require_module(item)?;
 
             if let Some(schema_args) = SchemaArgs::get(module.attrs.iter())? {
-                let schema: Schema = SchemaSpec::parse(
-                    module.ident.clone(),
-                    schema_args,
-                    extract_items_from(module)?.iter(),
-                )?
-                .validate()?;
+                errors.try_maybe_then(
+                    SchemaSpec::parse(
+                        module.ident.clone(),
+                        schema_args,
+                        extract_items_from(module)?.iter(),
+                    ),
+                    |spec| {
+                        let schema = Schema::validate(spec)?;
 
-                block.schemas.insert(schema.ident().clone(), schema);
+                        block.schemas.insert(schema.ident().clone(), schema);
+
+                        Ok(())
+                    },
+                );
             } else if let Some(register_args) = RegisterArgs::get(module.attrs.iter())? {
                 if !args.auto_increment && register_args.offset.is_none() {
-                    // TODO: improve the span of this error
-                    Err(syn::Error::new_spanned(block.ident.clone(), "register offset must be specified. to infer offsets, add the `auto_increment` argument to the block attribute macro"))?
+                    errors.push(syn::Error::new(
+                        register_args.span(),
+                        "register offset must be specified. to infer offsets, use `auto_increment`",
+                    ));
                 }
 
-                let offset = register_args.offset;
+                errors.try_maybe_then(
+                    RegisterSpec::parse(
+                        module.ident.clone(),
+                        &mut block.schemas,
+                        register_args.offset.unwrap_or(register_offset),
+                        register_args,
+                        extract_items_from(module)?.iter(),
+                    ),
+                    |spec| {
+                        let register = Register::validate(spec)?;
 
-                let register = RegisterSpec::parse(
-                    module.ident.clone(),
-                    &mut block.schemas,
-                    register_args.offset.unwrap_or(register_offset),
-                    register_args,
-                    extract_items_from(module)?.iter(),
-                )?
-                .validate()?;
+                        register_offset = register.args.offset.unwrap_or(register_offset) + 0x4;
+                        block.registers.push(register);
 
-                register_offset = offset.unwrap_or(register_offset) + 0x4;
-
-                block.registers.push(register);
+                        Ok(())
+                    },
+                );
             } else {
-                Err(syn::Error::new_spanned(module, "erroneous module"))?
+                errors.push(syn::Error::new_spanned(module, "erroneous item"));
             }
         }
+
+        errors.coalesce()?;
 
         Ok(block)
     }
@@ -131,9 +146,11 @@ impl Validator<BlockSpec> for Block {
     type Error = syn::Error;
 
     fn validate(spec: BlockSpec) -> Result<Self, Self::Error> {
+        let mut errors = SynErrorCombinator::new();
+
         for register in &spec.registers {
             if register.args.offset.is_none() && !spec.args.auto_increment {
-                return Err(syn::Error::new(
+                errors.push(syn::Error::new(
                     register.args.span(),
                     "register offset must be specified. to infer offsets, use `auto_increment`",
                 ));
@@ -150,9 +167,11 @@ impl Validator<BlockSpec> for Block {
                     rhs.ident, rhs.offset, rhs.offset + 4,
                 );
 
-                Err(syn::Error::new(spec.args.span(), msg))?
+                errors.push(syn::Error::new(spec.args.span(), msg));
             }
         }
+
+        errors.coalesce()?;
 
         Ok(Self { spec })
     }

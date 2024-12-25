@@ -4,9 +4,9 @@ use darling::FromMeta;
 use proc_macro2::Span;
 use quote::{format_ident, quote_spanned, ToTokens};
 use syn::{parse_quote, Ident, Index, Item, Path};
-use tiva::{Validate, Validator};
+use tiva::Validator;
 
-use crate::utils::{extract_items_from, require_module, Offset, Spanned};
+use crate::utils::{extract_items_from, require_module, Offset, Spanned, SynErrorCombinator};
 
 use super::{
     field::{Field, FieldArgs, FieldSpec},
@@ -57,6 +57,8 @@ impl RegisterSpec {
         args: Spanned<RegisterArgs>,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
+        let mut errors = SynErrorCombinator::new();
+
         let mut register = Self {
             args: args.clone(),
             ident,
@@ -72,47 +74,64 @@ impl RegisterSpec {
             // TODO: deny multiple different attributes on one item
 
             if let Some(schema_args) = SchemaArgs::get(module.attrs.iter())? {
-                let schema: Schema = SchemaSpec::parse(
-                    module.ident.clone(),
-                    schema_args,
-                    extract_items_from(module)?.iter(),
-                )?
-                .validate()?;
+                errors.try_maybe_then(
+                    SchemaSpec::parse(
+                        module.ident.clone(),
+                        schema_args,
+                        extract_items_from(module)?.iter(),
+                    ),
+                    |spec| {
+                        let schema = Schema::validate(spec)?;
+                        schemas.insert(schema.ident().clone(), schema);
 
-                schemas.insert(schema.ident().clone(), schema);
+                        Ok(())
+                    },
+                );
             }
 
             if let Some(field_args) = FieldArgs::get(module.attrs.iter())? {
-                let field: Field = FieldSpec::parse(
-                    module.ident.clone(),
-                    field_args.offset.unwrap_or(field_offset),
-                    schemas,
-                    field_args,
-                    extract_items_from(module)?.iter(),
-                )?
-                .validate()?;
+                errors.try_maybe_then(
+                    FieldSpec::parse(
+                        module.ident.clone(),
+                        field_args.offset.unwrap_or(field_offset),
+                        schemas,
+                        field_args,
+                        extract_items_from(module)?.iter(),
+                    ),
+                    |spec| {
+                        let field = Field::validate(spec)?;
 
-                field_offset = field.offset() + field.schema().width();
+                        field_offset = field.offset() + field.schema().width();
+                        register.fields.push(field);
 
-                register.fields.push(field);
+                        Ok(())
+                    },
+                );
             }
 
             if let Some(field_array_args) = FieldArrayArgs::get(module.attrs.iter())? {
-                let field_array: FieldArray = FieldArraySpec::parse(
-                    module.ident.clone(),
-                    field_array_args.offset.unwrap_or(field_offset),
-                    schemas,
-                    field_array_args,
-                    extract_items_from(module)?.iter(),
-                )?
-                .validate()?;
+                errors.try_maybe_then(
+                    FieldArraySpec::parse(
+                        module.ident.clone(),
+                        field_array_args.offset.unwrap_or(field_offset),
+                        schemas,
+                        field_array_args,
+                        extract_items_from(module)?.iter(),
+                    ),
+                    |spec| {
+                        let field_array = FieldArray::validate(spec)?;
 
-                register.fields.extend(field_array.to_fields()?);
+                        register.fields.extend(field_array.to_fields()?);
+                        field_offset =
+                            field_array.offset + field_array.schema.width() * field_array.count();
 
-                field_offset =
-                    field_array.offset + field_array.schema.width() * field_array.count();
+                        Ok(())
+                    },
+                );
             }
         }
+
+        errors.coalesce()?;
 
         Ok(register)
     }
@@ -126,9 +145,11 @@ impl Validator<RegisterSpec> for Register {
     type Error = syn::Error;
 
     fn validate(spec: RegisterSpec) -> Result<Self, Self::Error> {
+        let mut errors = SynErrorCombinator::new();
+
         for field in &spec.fields {
             if field.args().offset.is_none() && !spec.args.auto_increment {
-                return Err(syn::Error::new(
+                errors.push(syn::Error::new(
                     field.args().span(),
                     "field offset must be specified. to infer offsets, use `auto_increment`",
                 ));
@@ -139,16 +160,46 @@ impl Validator<RegisterSpec> for Register {
             let lhs = slice.first().unwrap();
             let rhs = slice.last().unwrap();
             if lhs.offset() + lhs.schema().width() > *rhs.offset() {
-                let msg =
-                    format!(
-                    "field domains overlapping. {} {{ domain: {}..{} }}, {} {{ domain: {}..{} }}",
-                    lhs.ident(), lhs.offset(), lhs.offset() + lhs.schema().width(),
-                    rhs.ident(), rhs.offset(), rhs.offset() + rhs.schema().width(),
+                let msg = format!(
+                    "{} {{ domain: {}..{} }}, {} {{ domain: {}..{} }}",
+                    lhs.ident(),
+                    lhs.offset(),
+                    lhs.offset() + lhs.schema().width(),
+                    rhs.ident(),
+                    rhs.offset(),
+                    rhs.offset() + rhs.schema().width(),
                 );
 
-                Err(syn::Error::new(spec.args.span(), msg))?
+                let mut e = syn::Error::new(
+                    spec.args.span(),
+                    format!("field domains overlapping or unordered. {msg}"),
+                );
+
+                e.combine(syn::Error::new(
+                    lhs.ident().span(),
+                    format!(
+                        "field '{}' is overlapping or out of order with '{}'. {}",
+                        lhs.ident(),
+                        rhs.ident(),
+                        msg,
+                    ),
+                ));
+
+                e.combine(syn::Error::new(
+                    rhs.ident().span(),
+                    format!(
+                        "field '{}' is overlapping or out of order with '{}'. {}",
+                        rhs.ident(),
+                        lhs.ident(),
+                        msg,
+                    ),
+                ));
+
+                errors.push(e);
             }
         }
+
+        errors.coalesce()?;
 
         Ok(Self { spec })
     }

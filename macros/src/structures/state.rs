@@ -5,7 +5,7 @@ use proc_macro2::Span;
 use quote::{quote_spanned, ToTokens};
 use syn::{Ident, Path};
 
-use crate::utils::{PathArray, Spanned};
+use crate::utils::{PathArray, Spanned, SynErrorCombinator};
 
 use super::Args;
 
@@ -35,6 +35,8 @@ pub struct State {
 
 impl State {
     pub fn parse(ident: Ident, bits: u32, state_args: Spanned<StateArgs>) -> syn::Result<Self> {
+        let mut errors = SynErrorCombinator::new();
+
         let bits = state_args.bits.unwrap_or(bits);
         let mut entitlements = HashSet::new();
         let mut entitlement_fields = HashSet::new();
@@ -51,12 +53,14 @@ impl State {
             );
 
             if !entitlements.insert(entitlement.clone()) {
-                Err(syn::Error::new_spanned(
+                errors.push(syn::Error::new_spanned(
                     entitlement,
                     "entitlement already exists",
-                ))?
+                ));
             }
         }
+
+        errors.coalesce()?;
 
         Ok(Self {
             args: state_args,

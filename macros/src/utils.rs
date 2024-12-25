@@ -152,9 +152,9 @@ impl SynErrorCombinator {
         Self { errors: Vec::new() }
     }
 
-    // pub fn push(&mut self, error: syn::Error) {
-    //     self.errors.push(error);
-    // }
+    pub fn push(&mut self, error: syn::Error) {
+        self.errors.push(error);
+    }
 
     // TODO: better name
     pub fn try_maybe_then<F, T, E>(&mut self, result: Result<T, E>, mut f: F)

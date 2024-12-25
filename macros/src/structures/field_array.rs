@@ -10,7 +10,9 @@ use tiva::{Validate, Validator};
 
 use crate::{
     access::{Access, AccessArgs},
-    utils::{get_access_from_split, get_schema_from_set, Offset, Spanned, Width},
+    utils::{
+        get_access_from_split, get_schema_from_set, Offset, Spanned, SynErrorCombinator, Width,
+    },
 };
 
 use super::{
@@ -85,10 +87,9 @@ impl FieldArraySpec {
                 ident.clone(),
                 SchemaArgs {
                     auto_increment: args.auto_increment,
-                    width: args.width.ok_or(syn::Error::new_spanned(
-                        ident.clone(),
-                        "width must be specified",
-                    ))?,
+                    width: args
+                        .width
+                        .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
                 }
                 .with_span(args.span()),
                 items,
@@ -173,6 +174,8 @@ impl FieldArray {
     }
 
     pub fn to_fields(&self) -> syn::Result<Vec<Field>> {
+        let mut errors = SynErrorCombinator::new();
+
         let mut fields = Vec::new();
 
         if !self.ident.to_string().contains("X") {
@@ -188,21 +191,22 @@ impl FieldArray {
         for i in self.range.clone() {
             let ident = Ident::new(
                 &self.ident.to_string().replace("X", &i.to_string()),
-                Span::call_site(),
+                self.ident.span(),
             );
 
-            let field = {
-                let args = FieldArgs {
-                    offset: self.args.offset,
-                    width: self.args.width,
-                    read: self.args.read.clone(),
-                    write: self.args.write.clone(),
-                    reset: self.args.reset.clone(),
-                    schema: self.args.schema.clone(),
-                    auto_increment: self.args.auto_increment,
-                }
-                .with_span(self.args.span());
-                match self.schema.clone() {
+            let args = FieldArgs {
+                offset: self.args.offset,
+                width: self.args.width,
+                read: self.args.read.clone(),
+                write: self.args.write.clone(),
+                reset: self.args.reset.clone(),
+                schema: self.args.schema.clone(),
+                auto_increment: self.args.auto_increment,
+            }
+            .with_span(self.args.span());
+
+            let get_field = || {
+                Ok::<_, syn::Error>(match self.schema.clone() {
                     Schema::Stateful(schema) => Field::Stateful(
                         StatefulFieldSpec {
                             args,
@@ -210,8 +214,8 @@ impl FieldArray {
                             offset,
                             schema,
                             access: self.access.clone(),
-                            reset: self.reset.clone().ok_or(syn::Error::new_spanned(
-                                self.ident.clone(),
+                            reset: self.reset.clone().ok_or(syn::Error::new(
+                                self.args.span(),
                                 "stateful fields must have reset specified",
                             ))?,
                         }
@@ -228,13 +232,17 @@ impl FieldArray {
                         }
                         .validate()?,
                     ),
-                }
+                })
             };
 
-            offset += field.schema().width();
+            errors.maybe_then(get_field(), |field| {
+                offset += field.schema().width();
 
-            fields.push(field);
+                fields.push(field);
+            });
         }
+
+        errors.coalesce()?;
 
         Ok(fields)
     }

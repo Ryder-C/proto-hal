@@ -7,7 +7,9 @@ use tiva::{Validate, Validator};
 
 use crate::{
     access::{Access, AccessArgs},
-    utils::{get_access_from_split, get_schema_from_set, Offset, Spanned, Width},
+    utils::{
+        get_access_from_split, get_schema_from_set, Offset, Spanned, SynErrorCombinator, Width,
+    },
 };
 
 use super::{
@@ -144,10 +146,9 @@ impl FieldSpec {
                 ident.clone(),
                 SchemaArgs {
                     auto_increment: args.auto_increment,
-                    width: args.width.ok_or(syn::Error::new_spanned(
-                        ident.clone(),
-                        "width must be specified",
-                    ))?,
+                    width: args
+                        .width
+                        .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
                 }
                 .with_span(args.span()),
                 items,
