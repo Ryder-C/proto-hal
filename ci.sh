@@ -21,3 +21,4 @@ done
 # temporary
 cd stm32/g4
 cargo build --all-features
+cargo build --tests
