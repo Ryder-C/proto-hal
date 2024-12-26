@@ -346,10 +346,17 @@ impl ToTokens for Field {
             "- Type: stateless"
         };
 
+        let domain_doc = format!(
+            "- Domain: {}..{}",
+            self.offset(),
+            self.offset() + self.schema().width()
+        );
+
         tokens.extend(quote_spanned! { span =>
             #[doc = "A register field with the following properties:"]
             #[doc = #access_doc]
             #[doc = #stateful_doc]
+            #[doc = #domain_doc]
             pub mod #ident {
                 #body
             }
