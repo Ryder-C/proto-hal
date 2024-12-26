@@ -332,14 +332,21 @@ impl ToTokens for Field {
         }
 
         let access_doc = match self.access() {
-            Access::Read(_) => "This field is readable.",
-            Access::Write(_) => "This field is writable.",
-            Access::ReadWrite(_) => "This field is readable and writable.",
+            Access::Read(_) => "- Access: read",
+            Access::Write(_) => "- Access: write",
+            Access::ReadWrite(_) => "- Access: read/write",
+        };
+
+        let stateful_doc = if self.is_stateful() {
+            "- Type: stateful"
+        } else {
+            "- Type: stateless"
         };
 
         tokens.extend(quote_spanned! { span =>
-            #[doc = "A register field."]
+            #[doc = "A register field with the following properties:"]
             #[doc = #access_doc]
+            #[doc = #stateful_doc]
             pub mod #ident {
                 #body
             }
