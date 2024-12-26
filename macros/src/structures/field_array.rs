@@ -63,7 +63,7 @@ impl FieldArray {
                 ident.clone(),
                 SchemaArgs {
                     auto_increment: args.field.auto_increment,
-                    width: args
+                    width: *args
                         .field
                         .width
                         .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
@@ -131,7 +131,7 @@ impl FieldArray {
         };
 
         let offset = args.field.offset.unwrap_or(offset);
-        let reset = args.field.reset.clone();
+        let reset = args.field.reset.as_deref().cloned();
 
         Ok(Self {
             args,

@@ -153,15 +153,15 @@ mod cordic {
         }
     }
 
-    #[register]
+    #[register(width = 32, write(effect = unresolve(csr::rrdy)))]
     mod wdata {
-        #[field(offset = 0, width = 32, write(effect = unresolve(csr::rrdy)))]
+        #[field(offset = 0)]
         mod arg {}
     }
 
-    #[register]
+    #[register(width = 32, read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)), reset = 0)]
     mod rdata {
-        #[field(offset = 0, width = 32, reset = 0, read(entitlements = [csr::rrdy::Ready], effect = unresolve(csr::rrdy)))]
+        #[field(offset = 0)]
         mod res {}
     }
 }

@@ -107,28 +107,28 @@ pub mod gpioa {
         struct High;
     }
 
-    #[register]
+    #[register(schema = level, read, reset = Low)]
     mod idr {
         // since this is read only and is not registered under any effects,
         // this should be dynamic.
-        #[field_array(offset = 0, range = ..16, schema = level, read, reset = Low)]
+        #[field_array(offset = 0, range = ..16)]
         mod idX {}
     }
 
-    #[register]
+    #[register(schema = level, read, write, reset = Low)]
     mod odr {
-        #[field_array(offset = 0, range = ..16, schema = level, read, write, reset = Low)]
+        #[field_array(offset = 0, range = ..16)]
         mod odX {}
     }
 
     // this could probably be
     // stateful
-    #[register(write, auto_increment)]
+    #[register(width = 1, write, reset = 0, auto_increment)]
     mod bsrr {
-        #[field_array(range = ..16, width = 1, reset = 0)]
+        #[field_array(range = ..16)]
         mod bsX {}
 
-        #[field_array(range = ..16, width = 1, reset = 0)]
+        #[field_array(range = ..16)]
         mod brX {}
     }
 
@@ -168,21 +168,21 @@ pub mod gpioa {
         struct AF15;
     }
 
-    #[register(offset = 0x20, schema = afr, read, write)]
+    #[register(offset = 0x20, schema = afr, read, write, reset = AF0)]
     mod afrl {
-        #[field_array(offset = 0, range = ..8, reset = AF0)]
+        #[field_array(offset = 0, range = ..8)]
         mod afselX {}
     }
 
-    #[register(schema = afr, read, write)]
+    #[register(schema = afr, read, write, reset = AF0)]
     mod afrh {
-        #[field_array(offset = 0, range = 8..16, reset = AF0)]
+        #[field_array(offset = 0, range = 8..16)]
         mod afselX {}
     }
 
-    #[register(write)]
+    #[register(write, reset = 0)]
     mod brr {
-        #[field_array(offset = 0, range = ..16, width = 1, reset = 0)]
+        #[field_array(offset = 0, range = ..16, width = 1)]
         mod brX {}
     }
 }

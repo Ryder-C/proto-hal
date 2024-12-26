@@ -3,12 +3,12 @@ use std::{collections::HashMap, ops::Deref};
 use darling::{util::SpannedValue, FromMeta};
 use proc_macro2::Span;
 use quote::{format_ident, quote_spanned, ToTokens};
-use syn::{parse_quote, Ident, Index, Item, Path};
+use syn::{parse_quote, Expr, Ident, Index, Item, Path};
 use tiva::Validator;
 
 use crate::{
     access::AccessArgs,
-    utils::{extract_items_from, require_module, Offset, Spanned, SynErrorCombinator},
+    utils::{extract_items_from, require_module, Offset, Spanned, SynErrorCombinator, Width},
 };
 
 use super::{
@@ -27,9 +27,11 @@ pub struct RegisterArgs {
     pub auto_increment: bool,
 
     // field args to inherit
+    pub width: Option<SpannedValue<Width>>,
+    pub schema: Option<SpannedValue<Ident>>,
     pub read: Option<SpannedValue<AccessArgs>>,
     pub write: Option<SpannedValue<AccessArgs>>,
-    pub schema: Option<SpannedValue<Ident>>,
+    pub reset: Option<SpannedValue<Expr>>,
 }
 
 impl Args for RegisterArgs {
@@ -41,6 +43,22 @@ impl RegisterArgs {
         let mut errors = SynErrorCombinator::new();
 
         let msg = "property is inherited from register";
+
+        if let Some(inherited_width) = &self.width {
+            if let Some(width) = &field_args.width {
+                errors.push(syn::Error::new(width.span(), msg));
+            } else {
+                field_args.width.replace(inherited_width.clone());
+            }
+        }
+
+        if let Some(inherited_schema) = &self.schema {
+            if let Some(schema) = &field_args.schema {
+                errors.push(syn::Error::new(schema.span(), msg));
+            } else {
+                field_args.schema.replace(inherited_schema.clone());
+            }
+        }
 
         if let Some(inherited_read) = &self.read {
             if let Some(read) = &field_args.read {
@@ -58,11 +76,11 @@ impl RegisterArgs {
             }
         }
 
-        if let Some(inherited_schema) = &self.schema {
-            if let Some(schema) = &field_args.schema {
-                errors.push(syn::Error::new(schema.span(), msg));
+        if let Some(inherited_reset) = &self.reset {
+            if let Some(reset) = &field_args.reset {
+                errors.push(syn::Error::new(reset.span(), msg));
             } else {
-                field_args.schema.replace(inherited_schema.clone());
+                field_args.reset.replace(inherited_reset.clone());
             }
         }
 

@@ -20,11 +20,11 @@ use super::{
 #[derive(Debug, Clone, Default, FromMeta)]
 pub struct FieldArgs {
     pub offset: Option<Offset>,
-    pub width: Option<Width>,
+    pub width: Option<SpannedValue<Width>>,
+    pub schema: Option<SpannedValue<Ident>>,
     pub read: Option<SpannedValue<AccessArgs>>,
     pub write: Option<SpannedValue<AccessArgs>>,
-    pub reset: Option<Expr>,
-    pub schema: Option<SpannedValue<Ident>>,
+    pub reset: Option<SpannedValue<Expr>>,
 
     #[darling(default)]
     pub auto_increment: bool,
@@ -153,7 +153,7 @@ impl FieldSpec {
                 ident.clone(),
                 SchemaArgs {
                     auto_increment: args.auto_increment,
-                    width: args
+                    width: *args
                         .width
                         .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
                 }
@@ -169,7 +169,7 @@ impl FieldSpec {
 
         Ok(match schema {
             Schema::Stateful(schema) => {
-                let reset = args.reset.clone().ok_or(syn::Error::new(
+                let reset = args.reset.as_deref().cloned().ok_or(syn::Error::new(
                     args.span(),
                     "stateful fields must have a reset specified",
                 ))?;
@@ -184,7 +184,7 @@ impl FieldSpec {
                 })
             }
             Schema::Stateless(schema) => {
-                let reset = args.reset.clone();
+                let reset = args.reset.as_deref().cloned();
 
                 Self::Stateless(StatelessFieldSpec {
                     args,
@@ -214,7 +214,7 @@ impl Validator<StatefulFieldSpec> for StatefulField {
         if spec.args.width.is_some() && spec.args.schema.is_some() {
             errors.push(syn::Error::new(
                 spec.args.span(),
-                "field width is inherited from imported schema.",
+                "field width is inherited from imported schema",
             ));
         }
 
@@ -243,15 +243,18 @@ impl Validator<StatelessFieldSpec> for StatelessField {
         if spec.args.width.is_some() && spec.args.schema.is_some() {
             errors.push(syn::Error::new(
                 spec.args.span(),
-                "field width is inherited from imported schema.",
+                "field width is inherited from imported schema",
             ));
         }
 
         if spec.offset + spec.schema.width > 32 {
-            errors.push(Self::Error::new(
-                spec.args.span(),
-                "field domain exceeds register domain",
-            ));
+            let msg = format!(
+                "field domain exceeds register domain. {{ domain: {}..{} }}",
+                spec.offset,
+                spec.offset + spec.schema.width
+            );
+
+            errors.push(Self::Error::new(spec.args.span(), msg));
         }
 
         errors.coalesce()?;
