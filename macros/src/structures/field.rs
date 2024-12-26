@@ -340,23 +340,32 @@ impl ToTokens for Field {
             Access::ReadWrite(_) => "- Access: read/write",
         };
 
-        let stateful_doc = if self.is_stateful() {
-            "- Type: stateful"
-        } else {
-            "- Type: stateless"
-        };
-
         let domain_doc = format!(
             "- Domain: {}..{}",
             self.offset(),
             self.offset() + self.schema().width()
         );
 
+        let stateful_doc = if self.is_stateful() {
+            "- Type: stateful"
+        } else {
+            "- Type: stateless"
+        };
+
+        let states_doc = if let Self::Stateful(field) = self {
+            let msg = format!("\t- States: {}", field.schema.states.len());
+
+            Some(quote! { #[doc = #msg] })
+        } else {
+            None
+        };
+
         tokens.extend(quote_spanned! { span =>
             #[doc = "A register field with the following properties:"]
             #[doc = #access_doc]
-            #[doc = #stateful_doc]
             #[doc = #domain_doc]
+            #[doc = #stateful_doc]
+            #states_doc
             pub mod #ident {
                 #body
             }
