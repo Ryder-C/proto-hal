@@ -284,14 +284,23 @@ impl ToTokens for Register {
                 #field_bodies
             )*
 
+            /// The offset of this register within the block.
             pub const OFFSET: u32 = #offset as _;
 
+            /// A register. This type gates access to
+            /// the fields it encapsulates.
+            ///
+            /// Field members can be directly moved out of this struct
+            /// for lossy modification, or modified in place with
+            /// accessor methods.
             pub struct Register<#(#stateful_field_tys,)*> {
+                // Stateful fields.
                 #(
                     pub #stateful_field_idents: #stateful_field_tys,
                 )*
 
                 // Q: what is this for?
+                // Stateless fields.
                 #(
                     #stateless_field_idents: (),
                 )*
@@ -376,6 +385,8 @@ impl ToTokens for Register {
                     )*
                 >;
 
+                /// This type facilitates the static construction
+                /// of a valid register state.
                 pub struct StateBuilder<#(#stateful_field_tys,)*> {
                     #(
                         pub(crate) #stateful_field_idents: core::marker::PhantomData<#stateful_field_tys>,
@@ -388,7 +399,8 @@ impl ToTokens for Register {
                         #stateful_field_tys: #stateful_field_idents::State,
                     )*
                 {
-                    pub(crate) unsafe fn conjure() -> Self {
+                    /// For internal use.
+                    unsafe fn conjure() -> Self {
                         Self {
                             #(
                                 #stateful_field_idents: core::marker::PhantomData,
@@ -396,6 +408,8 @@ impl ToTokens for Register {
                         }
                     }
 
+                    /// Complete the state transition and incorporarate
+                    /// it into the register.
                     pub fn finish(self) -> Register<#(#stateful_field_tys,)*>
                     where
                         Self: ::proto_hal::macro_utils::AsRegister,
@@ -426,6 +440,7 @@ impl ToTokens for Register {
                         #stateful_field_tys: #stateful_field_idents::State,
                     )*
                 {
+                    /// Perform a state transition inferred from context.
                     pub fn transition<#(#new_stateful_field_tys,)*>(self) -> Register<#(#new_stateful_field_tys,)*>
                     where
                         #(
@@ -436,6 +451,8 @@ impl ToTokens for Register {
                         unsafe { StateBuilder::conjure() }.finish()
                     }
 
+                    /// Create a state builder for this register to perform
+                    /// a state transition.
                     pub fn build_state(self) -> StateBuilder<#(#stateful_field_tys,)*> {
                         // SAFETY: `self` is destroyed
                         unsafe { StateBuilder::conjure() }
@@ -528,6 +545,7 @@ impl ToTokens for Register {
                                 #stateful_field_tys: #stateful_field_idents::State,
                             )*
                         {
+                            /// Change the state of this field.
                             pub fn #ident(self) -> #field_state_builder_ty<#(#stateful_field_tys,)*> {
                                 unsafe { core::mem::transmute(()) }
                             }
@@ -553,13 +571,15 @@ impl ToTokens for Register {
                                 unsafe { StateBuilder::conjure() }
                             }
 
-                            // pub fn dynamic(self, state: #ident::States) -> StateBuilder<#(#prev_field_tys,)* #ident::States, #(#next_field_tys,)*> {
+                            // pub fn dynamic(self, state: #ident::States) -> StateBuilder<#(#prev_field_tys,)* #ident::Any, #(#next_field_tys,)*> {
                             //     todo!()
                             // }
                         }
                     });
 
                     for (ty, accessor) in state_tys.iter().zip(state_accessor_idents) {
+                        let doc = format!("Set the state of the field to [`{ty}`]({ident}::{ty}).");
+
                         body.extend(quote_spanned! { span =>
                             impl<#(#stateful_field_tys,)*> #field_state_builder_ty<#(#stateful_field_tys,)*>
                             where
@@ -567,6 +587,7 @@ impl ToTokens for Register {
                                     #stateful_field_tys: #stateful_field_idents::State,
                                 )*
                             {
+                                #[doc = #doc]
                                 pub fn #accessor(self) -> StateBuilder<#(#prev_field_tys,)* #ident::#ty, #(#next_field_tys,)*>
                                 where
                                     #ident::#ty: #ident::State,

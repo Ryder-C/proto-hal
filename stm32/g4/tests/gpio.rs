@@ -26,7 +26,7 @@ mod tests {
             .attach(gpioaen.into())
             .moder(|state| state.mode5().output());
 
-        gpioa.odr.write(|w| w.od5(true));
+        let gpioa = gpioa.odr(|state| state.od5().high());
 
         cortex_m::asm::delay(1);
 

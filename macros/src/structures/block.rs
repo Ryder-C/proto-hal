@@ -252,8 +252,14 @@ impl ToTokens for Block {
                 #register_bodies
             )*
 
+            /// The address of this block.
             const BASE_ADDR: u32 = #base_addr;
 
+            /// A register block. This type gates
+            /// access to the registers it encapsulates.
+            ///
+            /// Register members can be directly moved out of this struct
+            /// or modified in place with accessor methods.
             pub struct Block<
                 #(
                     #stateful_register_tys,
@@ -263,15 +269,19 @@ impl ToTokens for Block {
                     #entitlement_tys,
                 )*
             > {
+                // Stateful registers.
                 #(
                     pub #stateful_register_idents: #stateful_register_tys,
                 )*
 
+                // Stateless registers.
                 #(
                     pub #stateless_register_idents: #stateless_register_idents::Register,
                 )*
 
                 #(
+                    /// This entitlement is required to
+                    /// use this block in any way.
                     pub #entitlement_idents: #entitlement_tys,
                 )*
             }
@@ -287,6 +297,15 @@ impl ToTokens for Block {
             >;
 
             impl Reset {
+                /// Conjure an instance of this block in reset state.
+                ///
+                /// # Safety
+                ///
+                /// If the underlying hardware is *not* in the
+                /// reset state, the aassumed invariances of
+                /// this block are broken and may lead to UB.
+                ///
+                /// Do not create multiple instances of this block.
                 pub unsafe fn conjure() -> Self {
                     ::core::mem::transmute(())
                 }
@@ -319,6 +338,7 @@ impl ToTokens for Block {
                 where
                     #ty: ::proto_hal::macro_utils::AsBuilder,
                 {
+                    /// Access this register for in place modification.
                     pub fn #ident<R, B>(self, f: impl FnOnce(#ty::Builder) -> B) -> Block<#(#prev_register_tys,)* R, #(#next_register_tys,)* #(#entitlements,)*>
                     where
                         B: ::proto_hal::macro_utils::AsRegister<Register = R>,
@@ -350,6 +370,7 @@ impl ToTokens for Block {
         if !self.entitlements.is_empty() {
             body.extend(quote_spanned! { span =>
                 impl<#(#stateful_register_tys,)*> Block<#(#stateful_register_tys,)* #(#reset_entitlement_tys,)*> {
+                    /// Attach to required entitlements, enabling usage of this block.
                     pub fn attach(self, #(#entitlement_idents: #entitlements,)*) -> Block<#(#stateful_register_tys,)* #(#entitlements,)*> {
                         Block {
                             #(

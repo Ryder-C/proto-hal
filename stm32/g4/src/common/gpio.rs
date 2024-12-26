@@ -99,15 +99,25 @@ pub mod gpioa {
         mod pupd15 {}
     }
 
+    #[schema(width = 1)]
+    mod level {
+        #[state(bits = 0)]
+        struct Low;
+        #[state(bits = 1)]
+        struct High;
+    }
+
     #[register]
     mod idr {
-        #[field_array(offset = 0, range = ..16, width = 1, read)]
+        // since this is read only and is not registered under any effects,
+        // this should be dynamic.
+        #[field_array(offset = 0, range = ..16, schema = level, read, reset = Low)]
         mod idX {}
     }
 
     #[register]
     mod odr {
-        #[field_array(offset = 0, range = ..16, width = 1, read, write)]
+        #[field_array(offset = 0, range = ..16, schema = level, read, write, reset = Low)]
         mod odX {}
     }
 
