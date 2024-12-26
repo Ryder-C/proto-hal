@@ -34,14 +34,14 @@ pub struct State {
 }
 
 impl State {
-    pub fn parse(ident: Ident, bits: u32, state_args: Spanned<StateArgs>) -> syn::Result<Self> {
+    pub fn parse(ident: Ident, bits: u32, args: Spanned<StateArgs>) -> syn::Result<Self> {
         let mut errors = SynErrorCombinator::new();
 
-        let bits = state_args.bits.unwrap_or(bits);
+        let bits = args.bits.unwrap_or(bits);
         let mut entitlements = HashSet::new();
         let mut entitlement_fields = HashSet::new();
 
-        for entitlement in state_args.entitlements.elems.iter().cloned() {
+        for entitlement in args.entitlements.elems.iter().cloned() {
             entitlement_fields.insert(
                 entitlement
                     .segments
@@ -63,7 +63,7 @@ impl State {
         errors.coalesce()?;
 
         Ok(Self {
-            args: state_args,
+            args,
             ident,
             bits,
             entitlements,

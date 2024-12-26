@@ -45,56 +45,14 @@ mod cordic {
         #[field(width = 4, write, reset = P20, auto_increment)]
         /// custom docs
         mod precision {
-            #[state(bits = 1)]
-            struct P4;
-            #[state]
-            struct P8;
-            #[state]
-            struct P12;
-            #[state]
-            struct P16;
-            #[state]
-            struct P20;
-            #[state]
-            struct P24;
-            #[state]
-            struct P28;
-            #[state]
-            struct P32;
-            #[state]
-            struct P36;
-            #[state]
-            struct P40;
-            #[state]
-            struct P44;
-            #[state]
-            struct P48;
-            #[state]
-            struct P52;
-            #[state]
-            struct P56;
-            #[state]
-            struct P60;
+            #[state_array(bits = 1, range = 4..=60, step = 4)]
+            struct PX;
         }
 
         #[field(width = 3, write, reset = N0, auto_increment)]
         mod scale {
-            #[state]
-            struct N0;
-            #[state]
-            struct N1;
-            #[state]
-            struct N2;
-            #[state]
-            struct N3;
-            #[state]
-            struct N4;
-            #[state]
-            struct N5;
-            #[state]
-            struct N6;
-            #[state]
-            struct N7;
+            #[state_array(range = ..8)]
+            struct NX;
         }
 
         #[schema(width = 1)]

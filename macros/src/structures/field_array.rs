@@ -7,7 +7,10 @@ use tiva::Validate;
 
 use crate::{
     access::Access,
-    utils::{get_access_from_split, get_schema_from_set, Offset, Spanned, SynErrorCombinator},
+    utils::{
+        get_access_from_split, get_schema_from_set, parse_expr_range, Offset, Spanned,
+        SynErrorCombinator,
+    },
 };
 
 use super::{
@@ -32,7 +35,7 @@ impl Args for FieldArrayArgs {
 pub struct FieldArray {
     pub args: Spanned<FieldArrayArgs>,
     pub ident: Ident,
-    pub range: Range<u8>,
+    pub range: Range<u32>,
     pub offset: Offset,
     pub schema: Schema,
     pub access: Access,
@@ -80,55 +83,7 @@ impl FieldArray {
             args.span(),
         )?;
 
-        // get range from range expr (so stupid)
-        let expr = *(args
-            .range
-            .start
-            .clone()
-            .unwrap_or(Box::new(Expr::Lit(ExprLit {
-                attrs: Vec::new(),
-                lit: Lit::Int(LitInt::new("0", Span::call_site())),
-            }))));
-        let Expr::Lit(lit) = expr else {
-            Err(syn::Error::new(
-                args.range.start.span(),
-                "range bounds must be literals",
-            ))?
-        };
-
-        let Lit::Int(lit) = lit.lit else {
-            Err(syn::Error::new(
-                args.range.start.span(),
-                "range bound literals must be integers",
-            ))?
-        };
-
-        let start = lit.base10_parse::<u8>()?;
-
-        let expr = *(args.range.end.clone().ok_or(syn::Error::new(
-            args.range.span(),
-            "end bound must be specified",
-        ))?);
-        let Expr::Lit(lit) = expr else {
-            Err(syn::Error::new(
-                args.range.end.span(),
-                "range bounds must be literals",
-            ))?
-        };
-
-        let Lit::Int(lit) = lit.lit else {
-            Err(syn::Error::new(
-                args.range.end.span(),
-                "range bound literals must be integers",
-            ))?
-        };
-
-        let end = lit.base10_parse::<u8>()?;
-
-        let range = match args.range.limits {
-            RangeLimits::Closed(_) => start..end + 1,
-            RangeLimits::HalfOpen(_) => start..end,
-        };
+        let range = parse_expr_range(&args.range)?;
 
         let offset = args.field.offset.unwrap_or(offset);
         let reset = args.field.reset.as_deref().cloned();
@@ -152,24 +107,19 @@ impl FieldArray {
 
     pub fn to_fields(&self) -> syn::Result<Vec<Field>> {
         let mut errors = SynErrorCombinator::new();
-
         let mut fields = Vec::new();
-
-        if !self.ident.to_string().contains("X") {
-            Err(syn::Error::new(
-                self.ident.span(),
-                "field array module ident must contain 'X's to indicate replacement patterns",
-            ))?
-        }
-
         let mut offset = self.offset;
+
+        let replace_pos = self.ident.to_string().rfind("X").ok_or(syn::Error::new(
+            self.ident.span(),
+            "field array module ident must contain an 'X' to indicate replacement location",
+        ))?;
 
         // generate fields
         for i in self.range.clone() {
-            let ident = Ident::new(
-                &self.ident.to_string().replace("X", &i.to_string()),
-                self.ident.span(),
-            );
+            let mut s = self.ident.to_string();
+            s.replace_range(replace_pos..replace_pos + 1, &i.to_string());
+            let ident = Ident::new(&s, self.ident.span());
 
             let args = self.args.field.clone().with_span(self.args.span());
 

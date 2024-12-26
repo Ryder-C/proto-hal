@@ -1,11 +1,14 @@
 use std::{
     collections::{HashMap, HashSet},
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, Range},
 };
 
 use darling::FromMeta;
 use proc_macro2::Span;
-use syn::{Expr, ExprArray, Ident, Item, ItemMod, ItemStruct, Meta, Path};
+use syn::{
+    spanned::Spanned as _, Expr, ExprArray, ExprLit, ExprRange, Ident, Item, ItemMod, ItemStruct,
+    Lit, LitInt, Meta, Path, RangeLimits,
+};
 
 use crate::{
     access::{Access, AccessArgs, Read, ReadWrite, Write},
@@ -205,4 +208,52 @@ impl SynErrorCombinator {
             Ok(())
         }
     }
+}
+
+pub fn parse_expr_range(range: &ExprRange) -> syn::Result<Range<u32>> {
+    // get range from range expr (so stupid)
+    let expr = *(range.start.clone().unwrap_or(Box::new(Expr::Lit(ExprLit {
+        attrs: Vec::new(),
+        lit: Lit::Int(LitInt::new("0", Span::call_site())),
+    }))));
+    let Expr::Lit(lit) = expr else {
+        Err(syn::Error::new(
+            range.start.span(),
+            "range bounds must be literals",
+        ))?
+    };
+
+    let Lit::Int(lit) = lit.lit else {
+        Err(syn::Error::new(
+            range.start.span(),
+            "range bound literals must be integers",
+        ))?
+    };
+
+    let start = lit.base10_parse::<u32>()?;
+
+    let expr = *(range
+        .end
+        .clone()
+        .ok_or(syn::Error::new(range.span(), "end bound must be specified"))?);
+    let Expr::Lit(lit) = expr else {
+        Err(syn::Error::new(
+            range.end.span(),
+            "range bounds must be literals",
+        ))?
+    };
+
+    let Lit::Int(lit) = lit.lit else {
+        Err(syn::Error::new(
+            range.end.span(),
+            "range bound literals must be integers",
+        ))?
+    };
+
+    let end = lit.base10_parse::<u32>()?;
+
+    Ok(match range.limits {
+        RangeLimits::Closed(_) => start..end + 1,
+        RangeLimits::HalfOpen(_) => start..end,
+    })
 }

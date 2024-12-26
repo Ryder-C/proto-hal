@@ -5,6 +5,7 @@ use syn::{Ident, Item};
 
 use super::{
     state::{State, StateArgs},
+    state_array::{StateArray, StateArrayArgs},
     Args,
 };
 use crate::utils::{require_struct, Spanned, SynErrorCombinator, Width};
@@ -104,6 +105,8 @@ impl SchemaSpec {
         args: Spanned<SchemaArgs>,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
+        let mut errors = SynErrorCombinator::new();
+
         let width = args.width;
         let mut states = Vec::new();
         let mut entitlement_fields = HashSet::new();
@@ -113,9 +116,48 @@ impl SchemaSpec {
         for item in items {
             let s = require_struct(item)?;
 
-            if let Some(state_args) = StateArgs::get(s.attrs.iter())? {
+            let get_args = || {
+                Ok::<_, syn::Error>((
+                    StateArgs::get(s.attrs.iter())?,
+                    StateArrayArgs::get(s.attrs.iter())?,
+                ))
+            };
+
+            errors.try_maybe_then(get_args(), |arg_collection| {
+                let entitlements = match arg_collection {
+                    (Some(state_args), None) => {
+                        let state = State::parse(s.ident.clone(), state_bits, state_args.clone())?;
+
+                        state_bits = state.bits + 1;
+                        states.push(state);
+
+                        Ok(state_args.entitlements.elems.clone())
+                    }
+                    (None, Some(state_array_args)) => {
+                        let state_array = StateArray::parse(
+                            s.ident.clone(),
+                            state_bits,
+                            state_array_args.clone(),
+                        )?;
+
+                        state_bits = state_array.bits + state_array.count();
+                        states.extend(state_array.to_states()?);
+
+                        Ok(state_array_args.state.entitlements.elems.clone())
+                    }
+                    (None, None) => Err(syn::Error::new_spanned(s, "extraneous item")),
+                    (Some(state_args), Some(state_array_args)) => {
+                        let msg = "only one struct annotation is permitted";
+
+                        let mut e = syn::Error::new(state_args.span(), msg);
+                        e.combine(syn::Error::new(state_array_args.span(), msg));
+
+                        Err(e)
+                    }
+                }?;
+
                 // collect fields of state entitlements (specified in state args)
-                for entitlement in &state_args.entitlements.elems {
+                for entitlement in &entitlements {
                     // TODO: this can't be correct
                     entitlement_fields.insert(
                         entitlement
@@ -128,12 +170,8 @@ impl SchemaSpec {
                     );
                 }
 
-                let state = State::parse(s.ident.clone(), state_bits, state_args)?;
-
-                state_bits = state.bits + 1;
-
-                states.push(state);
-            }
+                Ok(())
+            });
         }
 
         Ok(if states.is_empty() {
