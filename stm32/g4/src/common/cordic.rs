@@ -42,16 +42,16 @@ mod cordic {
             struct Sqrt;
         }
 
-        #[field(width = 4, write, reset = P20, auto_increment)]
+        #[field(width = 4, write, reset = P20)]
         /// custom docs
         mod precision {
             #[state_array(bits = 1, range = 4..=60, step = 4)]
             struct PX;
         }
 
-        #[field(width = 3, write, reset = N0, auto_increment)]
+        #[field(width = 3, write, reset = N0)]
         mod scale {
-            #[state_array(range = ..8)]
+            #[state_array(bits = 0, range = ..8)]
             struct NX;
         }
 
