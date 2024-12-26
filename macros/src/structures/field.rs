@@ -1,6 +1,6 @@
 use std::{collections::HashMap, ops::Deref};
 
-use darling::FromMeta;
+use darling::{util::SpannedValue, FromMeta};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{Expr, Ident, Item};
 use tiva::{Validate, Validator};
@@ -21,10 +21,10 @@ use super::{
 pub struct FieldArgs {
     pub offset: Option<Offset>,
     pub width: Option<Width>,
-    pub read: Option<AccessArgs>,
-    pub write: Option<AccessArgs>,
+    pub read: Option<SpannedValue<AccessArgs>>,
+    pub write: Option<SpannedValue<AccessArgs>>,
     pub reset: Option<Expr>,
-    pub schema: Option<Ident>,
+    pub schema: Option<SpannedValue<Ident>>,
 
     #[darling(default)]
     pub auto_increment: bool,
@@ -104,6 +104,13 @@ impl Field {
             Self::Stateless(field) => Schema::Stateless(field.schema.clone()),
         }
     }
+
+    pub fn access(&self) -> &Access {
+        match self {
+            Self::Stateful(field) => &field.access,
+            Self::Stateless(field) => &field.access,
+        }
+    }
 }
 
 impl Deref for StatefulField {
@@ -157,7 +164,8 @@ impl FieldSpec {
         };
 
         let offset = args.offset.unwrap_or(offset);
-        let access = get_access_from_split(&args.read, &args.write, args.span())?;
+        let access =
+            get_access_from_split(args.read.as_deref(), args.write.as_deref(), args.span())?;
 
         Ok(match schema {
             Schema::Stateful(schema) => {
@@ -323,7 +331,15 @@ impl ToTokens for Field {
             }
         }
 
+        let access_doc = match self.access() {
+            Access::Read(_) => "This field is readable.",
+            Access::Write(_) => "This field is writable.",
+            Access::ReadWrite(_) => "This field is readable and writable.",
+        };
+
         tokens.extend(quote_spanned! { span =>
+            #[doc = "A register field."]
+            #[doc = #access_doc]
             pub mod #ident {
                 #body
             }

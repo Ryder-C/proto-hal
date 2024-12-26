@@ -1,12 +1,15 @@
 use std::{collections::HashMap, ops::Deref};
 
-use darling::FromMeta;
+use darling::{util::SpannedValue, FromMeta};
 use proc_macro2::Span;
 use quote::{format_ident, quote_spanned, ToTokens};
 use syn::{parse_quote, Ident, Index, Item, Path};
 use tiva::Validator;
 
-use crate::utils::{extract_items_from, require_module, Offset, Spanned, SynErrorCombinator};
+use crate::{
+    access::AccessArgs,
+    utils::{extract_items_from, require_module, Offset, Spanned, SynErrorCombinator},
+};
 
 use super::{
     field::{Field, FieldArgs, FieldSpec},
@@ -18,14 +21,53 @@ use super::{
 #[derive(Debug, Clone, Default, FromMeta)]
 #[darling(default)]
 pub struct RegisterArgs {
-    pub offset: Option<u8>,
+    pub offset: Option<Offset>,
 
     #[darling(default)]
     pub auto_increment: bool,
+
+    // field args to inherit
+    pub read: Option<SpannedValue<AccessArgs>>,
+    pub write: Option<SpannedValue<AccessArgs>>,
+    pub schema: Option<SpannedValue<Ident>>,
 }
 
 impl Args for RegisterArgs {
     const NAME: &str = "register";
+}
+
+impl RegisterArgs {
+    pub fn check_conflict(&self, field_args: &mut FieldArgs) -> syn::Result<()> {
+        let mut errors = SynErrorCombinator::new();
+
+        let msg = "property is inherited from register";
+
+        if let Some(inherited_read) = &self.read {
+            if let Some(read) = &field_args.read {
+                errors.push(syn::Error::new(read.span(), msg));
+            } else {
+                field_args.read.replace(inherited_read.clone());
+            }
+        }
+
+        if let Some(inherited_write) = &self.write {
+            if let Some(write) = &field_args.write {
+                errors.push(syn::Error::new(write.span(), msg));
+            } else {
+                field_args.write.replace(inherited_write.clone());
+            }
+        }
+
+        if let Some(inherited_schema) = &self.schema {
+            if let Some(schema) = &field_args.schema {
+                errors.push(syn::Error::new(schema.span(), msg));
+            } else {
+                field_args.schema.replace(inherited_schema.clone());
+            }
+        }
+
+        errors.coalesce()
+    }
 }
 
 #[derive(Debug)]
@@ -71,84 +113,83 @@ impl RegisterSpec {
         for item in items {
             let module = require_module(item)?;
 
-            // TODO: this isn't the most flexible solution
-            // but it does work for now.
-            // args should be dispatched procedurally.
-            match (
-                SchemaArgs::get(module.attrs.iter())?,
-                FieldArgs::get(module.attrs.iter())?,
-                FieldArrayArgs::get(module.attrs.iter())?,
-            ) {
-                (Some(schema_args), None, None) => {
-                    errors.try_maybe_then(
-                        SchemaSpec::parse(
+            let get_args = || {
+                Ok((
+                    SchemaArgs::get(module.attrs.iter())?,
+                    FieldArgs::get(module.attrs.iter())?,
+                    FieldArrayArgs::get(module.attrs.iter())?,
+                ))
+            };
+
+            errors.try_maybe_then(get_args(), |arg_collection| {
+                // TODO: this isn't the most flexible solution
+                // but it does work for now.
+                // args should be dispatched procedurally.
+                match arg_collection {
+                    (Some(schema_args), None, None) => {
+                        let schema = Schema::validate(SchemaSpec::parse(
                             module.ident.clone(),
                             schema_args,
                             extract_items_from(module)?.iter(),
-                        ),
-                        |spec| {
-                            let schema = Schema::validate(spec)?;
-                            schemas.insert(schema.ident().clone(), schema);
+                        )?)?;
 
-                            Ok(())
-                        },
-                    );
-                }
-                (None, Some(field_args), None) => {
-                    errors.try_maybe_then(
-                        FieldSpec::parse(
+                        schemas.insert(schema.ident().clone(), schema);
+
+                        Ok(())
+                    }
+                    (None, Some(mut field_args), None) => {
+                        args.check_conflict(&mut field_args)?;
+
+                        let field = Field::validate(FieldSpec::parse(
                             module.ident.clone(),
                             field_args.offset.unwrap_or(field_offset),
                             schemas,
                             field_args,
                             extract_items_from(module)?.iter(),
-                        ),
-                        |spec| {
-                            let field = Field::validate(spec)?;
+                        )?)?;
 
-                            field_offset = field.offset() + field.schema().width();
-                            register.fields.push(field);
+                        field_offset = field.offset() + field.schema().width();
+                        register.fields.push(field);
 
-                            Ok(())
-                        },
-                    );
-                }
-                (None, None, Some(field_array_args)) => {
-                    errors.try_maybe_then(
-                        FieldArray::parse(
+                        Ok(())
+                    }
+                    (None, None, Some(mut field_array_args)) => {
+                        args.check_conflict(&mut field_array_args.field)?;
+
+                        let field_array = FieldArray::parse(
                             module.ident.clone(),
                             field_array_args.field.offset.unwrap_or(field_offset),
                             schemas,
                             field_array_args,
                             extract_items_from(module)?.iter(),
-                        ),
-                        |field_array| {
-                            register.fields.extend(field_array.to_fields()?);
-                            field_offset = field_array.offset
-                                + field_array.schema.width() * field_array.count();
+                        )?;
+                        register.fields.extend(field_array.to_fields()?);
+                        field_offset =
+                            field_array.offset + field_array.schema.width() * field_array.count();
 
-                            Ok(())
-                        },
-                    );
-                }
-                (None, None, None) => {
-                    errors.push(syn::Error::new_spanned(module, "extraneous item"));
-                }
-                (schema_args, field_args, field_array_args) => {
-                    let msg = "only one module annotation is permitted";
+                        Ok(())
+                    }
+                    (None, None, None) => Err(syn::Error::new_spanned(module, "extraneous item"))?,
+                    (schema_args, field_args, field_array_args) => {
+                        let mut errors = SynErrorCombinator::new();
 
-                    for span in [
-                        schema_args.and_then(|args| Some(args.span())),
-                        field_args.and_then(|args| Some(args.span())),
-                        field_array_args.and_then(|args| Some(args.span())),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    {
-                        errors.push(syn::Error::new(span, msg));
+                        let msg = "only one module annotation is permitted";
+
+                        for span in [
+                            schema_args.and_then(|args| Some(args.span())),
+                            field_args.and_then(|args| Some(args.span())),
+                            field_array_args.and_then(|args| Some(args.span())),
+                        ]
+                        .into_iter()
+                        .flatten()
+                        {
+                            errors.push(syn::Error::new(span, msg));
+                        }
+
+                        errors.coalesce()
                     }
                 }
-            }
+            });
         }
 
         errors.coalesce()?;

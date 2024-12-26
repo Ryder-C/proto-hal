@@ -74,7 +74,11 @@ impl FieldArray {
             .validate()?
         };
 
-        let access = get_access_from_split(&args.field.read, &args.field.write, args.span())?;
+        let access = get_access_from_split(
+            args.field.read.as_deref(),
+            args.field.write.as_deref(),
+            args.span(),
+        )?;
 
         // get range from range expr (so stupid)
         let expr = *(args

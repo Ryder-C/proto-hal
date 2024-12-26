@@ -74,7 +74,7 @@ pub mod gpioa {
         mod ospeed15 {}
     }
 
-    #[register(auto_increment)]
+    #[register(schema = pupd, read, write, auto_increment)]
     mod pupdr {
         #[schema(width = 2, auto_increment)]
         mod pupd {
@@ -86,16 +86,16 @@ pub mod gpioa {
             struct PullDown;
         }
 
-        #[field_array(range = ..13, schema = pupd, read, write, reset = None)]
+        #[field_array(range = ..13, reset = None)]
         mod pupdX {}
 
-        #[field(schema = pupd, read, write, reset = PullUp)]
+        #[field(reset = PullUp)]
         mod pupd13 {}
 
-        #[field(schema = pupd, read, write, reset = PullDown)]
+        #[field(reset = PullDown)]
         mod pupd14 {}
 
-        #[field(schema = pupd, read, write, reset = PullUp)]
+        #[field(reset = PullUp)]
         mod pupd15 {}
     }
 

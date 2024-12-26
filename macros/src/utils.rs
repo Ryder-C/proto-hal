@@ -46,8 +46,8 @@ pub fn get_schema_from_set(ident: &Ident, set: &HashMap<Ident, Schema>) -> syn::
 }
 
 pub fn get_access_from_split(
-    read: &Option<AccessArgs>,
-    write: &Option<AccessArgs>,
+    read: Option<&AccessArgs>,
+    write: Option<&AccessArgs>,
     err_span: Span,
 ) -> syn::Result<Access> {
     let mut access_entitlements = HashSet::new();
