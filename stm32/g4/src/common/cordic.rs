@@ -7,9 +7,9 @@ use proto_hal::macros::block;
     erase_mod,
 )]
 mod cordic {
-    #[register(auto_increment)]
+    #[register(read, auto_increment)]
     mod csr {
-        #[field(width = 4, read, write, reset = Cos, auto_increment)]
+        #[field(width = 4, write, reset = Cos, auto_increment)]
         mod func {
             #[state(entitlements = [scale::N0])]
             struct Cos;
@@ -42,7 +42,7 @@ mod cordic {
             struct Sqrt;
         }
 
-        #[field(width = 4, read, write, reset = P20, auto_increment)]
+        #[field(width = 4, write, reset = P20, auto_increment)]
         /// custom docs
         mod precision {
             #[state(bits = 1)]
@@ -77,7 +77,7 @@ mod cordic {
             struct P60;
         }
 
-        #[field(width = 3, read, write, reset = N0, auto_increment)]
+        #[field(width = 3, write, reset = N0, auto_increment)]
         mod scale {
             #[state]
             struct N0;
@@ -105,16 +105,16 @@ mod cordic {
             struct Enabled;
         }
 
-        #[field(offset = 16, schema = enable, read, write, reset = Disabled)]
+        #[field(offset = 16, schema = enable, write, reset = Disabled)]
         mod ien {}
 
-        #[field(schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, write, reset = Disabled)]
         mod dmaren {}
 
-        #[field(schema = enable, read, write, reset = Disabled)]
+        #[field(schema = enable, write, reset = Disabled)]
         mod dmawen {}
 
-        #[field(width = 1, read, write, reset = OneRead)]
+        #[field(width = 1, write, reset = OneRead)]
         mod nres {
             #[state(bits = 0)]
             struct OneRead;
@@ -122,7 +122,7 @@ mod cordic {
             struct TwoReads;
         }
 
-        #[field(width = 1, read, write, reset = OneWrite)]
+        #[field(width = 1, write, reset = OneWrite)]
         mod nargs {
             #[state(bits = 0)]
             struct OneWrite;
@@ -130,23 +130,21 @@ mod cordic {
             struct TwoWrites;
         }
 
-        #[field(width = 1, read, write, reset = Q31)]
-        mod ressize {
+        #[schema(width = 1)]
+        mod data {
             #[state(bits = 0)]
             struct Q31;
             #[state(bits = 1)]
             struct Q15;
         }
 
-        #[field(width = 1, read, write, reset = Q31)]
-        mod argsize {
-            #[state(bits = 0)]
-            struct Q31;
-            #[state(bits = 1)]
-            struct Q15;
-        }
+        #[field(schema = data, write, reset = Q31)]
+        mod ressize {}
 
-        #[field(offset = 31, width = 1, read, reset = NoData)]
+        #[field(schema = data, write, reset = Q31)]
+        mod argsize {}
+
+        #[field(offset = 31, width = 1, reset = NoData)]
         mod rrdy {
             #[state(bits = 0)]
             struct NoData;

@@ -6,7 +6,7 @@ use proto_hal::macros::block;
     auto_increment,
 )]
 pub mod gpioa {
-    #[register(auto_increment)]
+    #[register(schema = mode, read, write, auto_increment)]
     mod moder {
         #[schema(width = 2, auto_increment)]
         mod mode {
@@ -20,20 +20,20 @@ pub mod gpioa {
             struct Analog;
         }
 
-        #[field_array(range = ..13, schema = mode, read, write, reset = Analog)]
+        #[field_array(range = ..13, reset = Analog)]
         mod modeX {}
 
-        #[field(schema = mode, read, write, reset = Alternate)]
+        #[field(reset = Alternate)]
         mod mode13 {}
 
-        #[field(schema = mode, read, write, reset = Alternate)]
+        #[field(reset = Alternate)]
         mod mode14 {}
 
-        #[field(schema = mode, read, write, reset = Alternate)]
+        #[field(reset = Alternate)]
         mod mode15 {}
     }
 
-    #[register(auto_increment)]
+    #[register(schema = otype, read, write, auto_increment)]
     mod otyper {
         #[schema(width = 1)]
         mod otype {
@@ -43,11 +43,11 @@ pub mod gpioa {
             struct OpenDrain;
         }
 
-        #[field_array(range = ..16, schema = otype, read, write, reset = PushPull)]
+        #[field_array(range = ..16, reset = PushPull)]
         mod otX {}
     }
 
-    #[register(auto_increment)]
+    #[register(schema = ospeed, read, write, auto_increment)]
     mod ospeedr {
         #[schema(width = 2, auto_increment)]
         mod ospeed {
@@ -61,16 +61,16 @@ pub mod gpioa {
             struct VeryHigh;
         }
 
-        #[field_array(range = ..13, schema = ospeed, read, write, reset = Low)]
+        #[field_array(range = ..13, reset = Low)]
         mod ospeedX {}
 
-        #[field(schema = ospeed, read, write, reset = VeryHigh)]
+        #[field(reset = VeryHigh)]
         mod ospeed13 {}
 
-        #[field(schema = ospeed, read, write, reset = Low)]
+        #[field(reset = Low)]
         mod ospeed14 {}
 
-        #[field(schema = ospeed, read, write, reset = Low)]
+        #[field(reset = Low)]
         mod ospeed15 {}
     }
 
@@ -123,12 +123,12 @@ pub mod gpioa {
 
     // this could probably be
     // stateful
-    #[register(auto_increment)]
+    #[register(write, auto_increment)]
     mod bsrr {
-        #[field_array(range = ..16, width = 1, write, reset = 0)]
+        #[field_array(range = ..16, width = 1, reset = 0)]
         mod bsX {}
 
-        #[field_array(range = ..16, width = 1, write, reset = 0)]
+        #[field_array(range = ..16, width = 1, reset = 0)]
         mod brX {}
     }
 
@@ -168,21 +168,21 @@ pub mod gpioa {
         struct AF15;
     }
 
-    #[register(offset = 0x20)]
+    #[register(offset = 0x20, schema = afr, read, write)]
     mod afrl {
-        #[field_array(offset = 0, range = ..8, schema = afr, read, write, reset = AF0)]
+        #[field_array(offset = 0, range = ..8, reset = AF0)]
         mod afselX {}
     }
 
-    #[register]
+    #[register(schema = afr, read, write)]
     mod afrh {
-        #[field_array(offset = 0, range = 8..16, schema = afr, read, write, reset = AF0)]
+        #[field_array(offset = 0, range = 8..16, reset = AF0)]
         mod afselX {}
     }
 
-    #[register]
+    #[register(write)]
     mod brr {
-        #[field_array(offset = 0, range = ..16, width = 1, write, reset = 0)]
+        #[field_array(offset = 0, range = ..16, width = 1, reset = 0)]
         mod brX {}
     }
 }
