@@ -316,7 +316,7 @@ impl ToTokens for Field {
                         )*
                     }
 
-                    pub trait State {
+                    pub trait State: ::proto_hal::stasis::Freeze {
                         const RAW: States;
 
                         unsafe fn conjure() -> Self;

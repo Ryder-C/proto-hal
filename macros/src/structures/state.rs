@@ -85,6 +85,8 @@ impl ToTokens for State {
                 _sealed: (),
             }
 
+            impl ::proto_hal::stasis::Freeze for #ident {}
+
             impl State for #ident {
                 const RAW: States = States::#ident;
 

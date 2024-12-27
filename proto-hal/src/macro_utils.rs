@@ -89,3 +89,7 @@ pub trait AsBuilder: Into<Self::Builder> {
 pub trait AsRegister: Into<Self::Register> {
     type Register;
 }
+
+// Type-state indicating the state cannot
+// be statically determined currently.
+pub struct Unresolved;
