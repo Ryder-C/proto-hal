@@ -122,4 +122,11 @@ mod cordic {
         #[field(offset = 0)]
         mod res {}
     }
+
+    // #[interrupt(
+    //     position = 100,
+    //     entitlements = [csr::ien::Enabled],
+    //     effects = [resolve(csr::rrdy::DataReady)]
+    // )]
+    // mod interrupt {}
 }

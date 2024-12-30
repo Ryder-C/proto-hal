@@ -86,7 +86,7 @@ impl BlockSpec {
             }
         }
 
-        let mut register_offset = 0u8;
+        let mut register_offset = 0u32;
 
         for item in items {
             let module = require_module(item)?;

@@ -1,14 +1,13 @@
 use std::{collections::HashMap, ops::Range};
 
 use darling::FromMeta;
-use proc_macro2::Span;
-use syn::{spanned::Spanned as _, Expr, ExprLit, ExprRange, Ident, Item, Lit, LitInt, RangeLimits};
+use syn::{Expr, ExprRange, Ident, Item};
 use tiva::Validate;
 
 use crate::{
     access::Access,
     utils::{
-        get_access_from_split, get_schema_from_set, parse_expr_range, Offset, Spanned,
+        get_access_from_split, get_schema_from_set, parse_expr_range, FieldOffset, Spanned,
         SynErrorCombinator,
     },
 };
@@ -36,7 +35,7 @@ pub struct FieldArray {
     pub args: Spanned<FieldArrayArgs>,
     pub ident: Ident,
     pub range: Range<u32>,
-    pub offset: Offset,
+    pub offset: FieldOffset,
     pub schema: Schema,
     pub access: Access,
     pub reset: Option<Expr>,
@@ -45,7 +44,7 @@ pub struct FieldArray {
 impl FieldArray {
     pub fn parse<'a>(
         ident: Ident,
-        offset: Offset,
+        offset: FieldOffset,
         schemas: &HashMap<Ident, Schema>,
         args: Spanned<FieldArrayArgs>,
         mut items: impl Iterator<Item = &'a Item>,
@@ -101,7 +100,7 @@ impl FieldArray {
 }
 
 impl FieldArray {
-    pub fn count(&self) -> u8 {
+    pub fn count(&self) -> usize {
         self.range.clone().count() as _
     }
 

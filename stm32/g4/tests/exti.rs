@@ -10,9 +10,9 @@ mod tests {
 
     #[test]
     fn gpio_trigger() {
-        let rcc: rcc::Reset = unsafe { core::mem::transmute(()) };
-        let syscfg: syscfg::Reset = unsafe { core::mem::transmute(()) };
-        let exti: exti::Reset = unsafe { core::mem::transmute(()) };
+        let rcc = unsafe { rcc::Reset::conjure() };
+        let syscfg = unsafe { syscfg::Reset::conjure() };
+        let exti = unsafe { exti::Reset::conjure() };
 
         let syscfgen = rcc
             .apb2enr

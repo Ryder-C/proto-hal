@@ -11,8 +11,8 @@ mod tests {
 
     #[test]
     fn output_input() {
-        let rcc: rcc::Reset = unsafe { core::mem::transmute(()) };
-        let gpioa: gpioa::Reset = unsafe { core::mem::transmute(()) };
+        let rcc = unsafe { rcc::Reset::conjure() };
+        let gpioa = unsafe { gpioa::Reset::conjure() };
 
         let gpioaen = rcc
             .ahb2enr

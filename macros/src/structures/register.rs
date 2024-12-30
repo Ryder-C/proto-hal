@@ -8,7 +8,10 @@ use tiva::Validator;
 
 use crate::{
     access::AccessArgs,
-    utils::{extract_items_from, require_module, Offset, Spanned, SynErrorCombinator, Width},
+    utils::{
+        extract_items_from, require_module, FieldOffset, RegisterOffset, Spanned,
+        SynErrorCombinator, Width,
+    },
 };
 
 use super::{
@@ -21,7 +24,7 @@ use super::{
 #[derive(Debug, Clone, Default, FromMeta)]
 #[darling(default)]
 pub struct RegisterArgs {
-    pub offset: Option<Offset>,
+    pub offset: Option<RegisterOffset>,
 
     #[darling(default)]
     pub auto_increment: bool,
@@ -92,7 +95,7 @@ impl RegisterArgs {
 pub struct RegisterSpec {
     pub args: Spanned<RegisterArgs>,
     pub ident: Ident,
-    pub offset: Offset,
+    pub offset: RegisterOffset,
     pub fields: Vec<Field>,
 }
 
@@ -113,7 +116,7 @@ impl RegisterSpec {
     pub fn parse<'a>(
         ident: Ident,
         schemas: &mut HashMap<Ident, Schema>,
-        offset: Offset,
+        offset: RegisterOffset,
         args: Spanned<RegisterArgs>,
         items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
@@ -126,7 +129,7 @@ impl RegisterSpec {
             fields: Vec::new(),
         };
 
-        let mut field_offset = 0u8;
+        let mut field_offset = 0 as FieldOffset;
 
         for item in items {
             let module = require_module(item)?;
@@ -182,8 +185,8 @@ impl RegisterSpec {
                             extract_items_from(module)?.iter(),
                         )?;
 
-                        field_offset =
-                            field_array.offset + field_array.schema.width() * field_array.count();
+                        field_offset = field_array.offset
+                            + field_array.schema.width() * field_array.count() as FieldOffset;
                         register.fields.extend(field_array.to_fields()?);
 
                         Ok(())
@@ -345,7 +348,7 @@ impl ToTokens for Register {
             )*
 
             /// The offset of this register within the block.
-            pub const OFFSET: u32 = #offset as _;
+            pub const OFFSET: u32 = #offset;
 
             /// A register. This type gates access to
             /// the fields it encapsulates.

@@ -12,8 +12,8 @@ mod tests {
 
     #[test]
     fn sqrt() {
-        let rcc: rcc::Reset = unsafe { core::mem::transmute(()) };
-        let cordic: cordic::Reset = unsafe { core::mem::transmute(()) };
+        let rcc = unsafe { rcc::Reset::conjure() };
+        let cordic = unsafe { cordic::Reset::conjure() };
 
         let cordicen = rcc
             .ahb1enr

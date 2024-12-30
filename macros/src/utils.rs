@@ -142,7 +142,8 @@ impl<T> DerefMut for Spanned<T> {
     }
 }
 
-pub type Offset = u8;
+pub type FieldOffset = u8;
+pub type RegisterOffset = u32;
 pub type Width = u8;
 
 #[derive(Debug)]

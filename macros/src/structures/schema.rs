@@ -15,7 +15,7 @@ use tiva::{Validate, Validator};
 pub struct SchemaArgs {
     #[darling(default)]
     pub auto_increment: bool,
-    pub width: u8,
+    pub width: Width,
 }
 
 impl Args for SchemaArgs {
