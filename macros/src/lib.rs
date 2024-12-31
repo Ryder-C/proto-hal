@@ -52,6 +52,8 @@ fn interrupts_inner(_args: TokenStream, item: TokenStream) -> Result<TokenStream
     })
 }
 
+/// Define the interrupt vector table
+/// in accordance to the `cortex-m-rt` spec.
 #[proc_macro_attribute]
 pub fn interrupts(args: TokenStream, item: TokenStream) -> TokenStream {
     match interrupts_inner(args, item) {
