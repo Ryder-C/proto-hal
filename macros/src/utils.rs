@@ -179,6 +179,14 @@ impl SynErrorCombinator {
     }
 
     // TODO: better name
+    pub fn maybe<F>(&mut self, mut f: F)
+    where
+        F: FnMut() -> Result<(), syn::Error>,
+    {
+        self.maybe_then(f(), |_| {})
+    }
+
+    // TODO: better name
     pub fn maybe_then<F, T, E>(&mut self, result: Result<T, E>, mut f: F)
     where
         E: Into<syn::Error>,
