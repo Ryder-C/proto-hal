@@ -106,7 +106,13 @@ impl ToTokens for InterruptsSpec {
             }
         };
 
-        let vector_idents = self.vectors.values().map(|vector| &vector.ident);
+        let vector_idents = self
+            .vectors
+            .values()
+            .map(|vector| &vector.ident)
+            .collect::<Vec<_>>();
+
+        let vector_ident_strings = vector_idents.iter().map(|ident| ident.to_string());
 
         let functions = quote! {
             extern "C" {
@@ -132,7 +138,7 @@ impl ToTokens for InterruptsSpec {
 
         let table = quote! {
             #[doc(hidden)]
-            #[link_section = ".vector_table.interrupts"]
+            #[cfg_attr(target_arch = "arm", link_section = ".vector_table.interrupts")]
             #[no_mangle]
             pub static __INTERRUPTS: [::proto_hal::interrupt::Vector; #table_length] = [
                 #(
@@ -141,10 +147,21 @@ impl ToTokens for InterruptsSpec {
             ];
         };
 
+        let build_export = quote! {
+            pub static INTERRUPT_IDENTS: &[&str] = &[
+                #(
+                    #vector_ident_strings,
+                )*
+            ];
+        };
+
         tokens.extend(quote! {
+            pub use ::cortex_m_rt::interrupt;
             #enum_
             #functions
             #table
+
+            #build_export
         });
     }
 }

@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use cortex_m_rt::{entry, interrupt};
+use cortex_m_rt::entry;
 use fixed::types::I1F31;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -9,7 +9,7 @@ use defmt::info;
 use g4::{
     common::{cordic, rcc},
     core::nvic,
-    interrupts::interrupt,
+    interrupt,
 };
 
 #[interrupt]

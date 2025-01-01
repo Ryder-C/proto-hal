@@ -233,6 +233,17 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 name = "g4"
 version = "0.1.0"
 dependencies = [
+ "cortex-m-rt",
+ "g4-interrupts",
+ "proto-hal",
+ "proto-hal-build",
+]
+
+[[package]]
+name = "g4-interrupts"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
  "proto-hal",
 ]
 
@@ -345,6 +356,10 @@ dependencies = [
  "arbitrary-int",
  "macros",
 ]
+
+[[package]]
+name = "proto-hal-build"
+version = "0.1.0"
 
 [[package]]
 name = "quote"

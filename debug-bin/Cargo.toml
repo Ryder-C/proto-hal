@@ -8,13 +8,13 @@ cortex-m = { version = "0.7.7", features = [
     "inline-asm",
     "critical-section-single-core",
 ] }
-cortex-m-rt = { version = "0.7.3", features = ["device"] }
+cortex-m-rt = "0.7.3"
 critical-section = "1.1.2"
 defmt = { version = "0.3.6" }
 defmt-rtt = { version = "0.4.0" }
 panic-halt = "0.2.0"
 panic-probe = { version = "0.3.1", features = ["print-defmt"] }
-g4 = { path = "../stm32/g4" }
+g4 = { path = "/Users/adinack/Projects/stm32-spa/g4" }
 fixed = "1.28.0"
 proto-hal = { path = "../proto-hal" }
 

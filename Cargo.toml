@@ -1,5 +1,5 @@
 [workspace]
-members = ["proto-hal", "macros"]
+members = ["proto-hal", "macros", "proto-hal-build"]
 exclude = ["debug-bin", "stm32/g4"]
 resolver = "2"
 
