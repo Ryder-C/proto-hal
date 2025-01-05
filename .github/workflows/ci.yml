@@ -1,4 +1,4 @@
-name: CI
+name: ci
 
 on:
   push:
@@ -10,12 +10,12 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  ci:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
       - name: Install Deps
         run: sudo apt -y install libudev-dev
-      - name: CI
+      - name: ci
         run: ./ci.sh
