@@ -17,8 +17,3 @@ for TARGET in "${TARGETS[@]}"; do
         cargo clippy -p proto-hal -- --deny warnings
     done
 done
-
-# temporary
-cd stm32/g4
-cargo build --all-features
-cargo build --tests

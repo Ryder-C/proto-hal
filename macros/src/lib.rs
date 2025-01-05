@@ -4,9 +4,10 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use structures::{
     block::{Block, BlockArgs, BlockSpec},
+    interrupts::InterruptsSpec,
     Args,
 };
-use syn::{parse2, ItemMod};
+use syn::{parse2, ItemEnum, ItemMod};
 use tiva::Validate;
 
 mod access;
@@ -35,6 +36,27 @@ fn block_inner(args: TokenStream, item: TokenStream) -> Result<TokenStream2, syn
 #[proc_macro_attribute]
 pub fn block(args: TokenStream, item: TokenStream) -> TokenStream {
     match block_inner(args, item) {
+        Ok(tokens) => tokens,
+        Err(e) => e.to_compile_error(),
+    }
+    .into()
+}
+
+fn interrupts_inner(_args: TokenStream, item: TokenStream) -> Result<TokenStream2, syn::Error> {
+    let e = parse2::<ItemEnum>(item.into())?;
+
+    let interrupts = InterruptsSpec::parse(&e)?;
+
+    Ok(quote! {
+        #interrupts
+    })
+}
+
+/// Define the interrupt vector table
+/// in accordance to the `cortex-m-rt` spec.
+#[proc_macro_attribute]
+pub fn interrupts(args: TokenStream, item: TokenStream) -> TokenStream {
+    match interrupts_inner(args, item) {
         Ok(tokens) => tokens,
         Err(e) => e.to_compile_error(),
     }

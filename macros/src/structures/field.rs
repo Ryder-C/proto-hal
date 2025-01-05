@@ -8,7 +8,7 @@ use tiva::{Validate, Validator};
 use crate::{
     access::{Access, AccessArgs},
     utils::{
-        get_access_from_split, get_schema_from_set, Offset, Spanned, SynErrorCombinator, Width,
+        get_access_from_split, get_schema_from_set, FieldOffset, Spanned, SynErrorCombinator, Width,
     },
 };
 
@@ -19,7 +19,7 @@ use super::{
 
 #[derive(Debug, Clone, Default, FromMeta)]
 pub struct FieldArgs {
-    pub offset: Option<Offset>,
+    pub offset: Option<FieldOffset>,
     pub width: Option<SpannedValue<Width>>,
     pub schema: Option<SpannedValue<Ident>>,
     pub read: Option<SpannedValue<AccessArgs>>,
@@ -38,7 +38,7 @@ impl Args for FieldArgs {
 pub struct StatefulFieldSpec {
     pub args: Spanned<FieldArgs>,
     pub ident: Ident,
-    pub offset: Offset,
+    pub offset: FieldOffset,
     pub schema: StatefulSchema,
     pub access: Access,
     pub reset: Expr,
@@ -53,7 +53,7 @@ pub struct StatefulField {
 pub struct StatelessFieldSpec {
     pub args: Spanned<FieldArgs>,
     pub ident: Ident,
-    pub offset: Offset,
+    pub offset: FieldOffset,
     pub schema: StatelessSchema,
     pub access: Access,
     pub reset: Option<Expr>,
@@ -91,7 +91,7 @@ impl Field {
         }
     }
 
-    pub fn offset(&self) -> &Offset {
+    pub fn offset(&self) -> &FieldOffset {
         match self {
             Self::Stateful(field) => &field.offset,
             Self::Stateless(field) => &field.offset,
@@ -132,7 +132,7 @@ impl Deref for StatelessField {
 impl FieldSpec {
     pub fn parse<'a>(
         ident: Ident,
-        offset: Offset,
+        offset: FieldOffset,
         schemas: &HashMap<Ident, Schema>,
         args: Spanned<FieldArgs>,
         mut items: impl Iterator<Item = &'a Item>,
