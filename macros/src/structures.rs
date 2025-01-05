@@ -7,6 +7,7 @@ use crate::utils::Spanned;
 pub mod block;
 pub mod field;
 pub mod field_array;
+pub mod interrupts;
 pub mod register;
 pub mod schema;
 pub mod state;

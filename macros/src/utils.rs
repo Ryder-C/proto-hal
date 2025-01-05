@@ -142,7 +142,8 @@ impl<T> DerefMut for Spanned<T> {
     }
 }
 
-pub type Offset = u8;
+pub type FieldOffset = u8;
+pub type RegisterOffset = u32;
 pub type Width = u8;
 
 #[derive(Debug)]
@@ -175,6 +176,14 @@ impl SynErrorCombinator {
                 self.errors.push(e.into());
             }
         }
+    }
+
+    // TODO: better name
+    pub fn maybe<F>(&mut self, mut f: F)
+    where
+        F: FnMut() -> Result<(), syn::Error>,
+    {
+        self.maybe_then(f(), |_| {})
     }
 
     // TODO: better name
