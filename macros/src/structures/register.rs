@@ -540,6 +540,7 @@ impl ToTokens for Register {
                     type Register = Register<#(#stateful_field_tys,)*>;
                 }
 
+                #[allow(clippy::from_over_into)]
                 impl<#(#stateful_field_tys,)*> Into<StateBuilder<#(#stateful_field_tys,)*>> for Register<#(#stateful_field_tys,)*>
                 where
                     #(
@@ -551,6 +552,7 @@ impl ToTokens for Register {
                     }
                 }
 
+                #[allow(clippy::from_over_into)]
                 impl<#(#stateful_field_tys,)*> Into<Register<#(#stateful_field_tys,)*>> for StateBuilder<#(#stateful_field_tys,)*>
                 where
                     #(

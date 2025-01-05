@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use quote::{quote, ToTokens};
-use syn::{parse2, spanned::Spanned, Attribute, Ident, Index, ItemEnum, Visibility};
+use syn::{
+    parse2, spanned::Spanned, Attribute, Ident, Index, ItemEnum, Meta, MetaList, Visibility,
+};
 
 use crate::utils::SynErrorCombinator;
 
@@ -9,6 +11,12 @@ struct Vector {
     attrs: Vec<Attribute>,
     ident: Ident,
     position: Index,
+}
+
+impl Vector {
+    fn cfgs(&self) -> impl Iterator<Item = &Attribute> {
+        self.attrs.iter().filter(|attr| attr.path().is_ident("cfg"))
+    }
 }
 
 impl ToTokens for Vector {
@@ -112,12 +120,24 @@ impl ToTokens for InterruptsSpec {
             .map(|vector| &vector.ident)
             .collect::<Vec<_>>();
 
+        let vector_funcs = self.vectors.values().map(|vector| {
+            let ident = &vector.ident;
+            let cfgs = vector.cfgs();
+
+            quote! {
+                #(
+                    #cfgs
+                )*
+                fn #ident();
+            }
+        });
+
         let vector_ident_strings = vector_idents.iter().map(|ident| ident.to_string());
 
         let functions = quote! {
             extern "C" {
                 #(
-                    fn #vector_idents();
+                    #vector_funcs
                 )*
             }
         };
@@ -126,12 +146,37 @@ impl ToTokens for InterruptsSpec {
         let table_entries = (0..table_length as u32).into_iter().map(|position| {
             if let Some(vector) = self.vectors.get(&position) {
                 let ident = &vector.ident;
-                quote! {
-                    ::proto_hal::interrupt::Vector::handler(#ident)
+                let cfgs = vector.cfgs();
+
+                let anti_cfgs = vector
+                    .cfgs()
+                    .map(|cfg| {
+                        let meta: Meta = cfg.parse_args().unwrap(); // valid #[cfg(...)] attrs have corect args
+
+                        quote! {
+                            #meta
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut result = quote! {
+                    #(
+                        #cfgs
+                    )*
+                    ::proto_hal::interrupt::Vector::handler(#ident),
+                };
+
+                if !anti_cfgs.is_empty() {
+                    result.extend(quote! {
+                        #[cfg(not(any(#(#anti_cfgs),*)))]
+                        ::proto_hal::interrupt::Vector::reserved(),
+                    });
                 }
+
+                result
             } else {
                 quote! {
-                    ::proto_hal::interrupt::Vector::reserved()
+                    ::proto_hal::interrupt::Vector::reserved(),
                 }
             }
         });
@@ -142,7 +187,7 @@ impl ToTokens for InterruptsSpec {
             #[no_mangle]
             pub static __INTERRUPTS: [::proto_hal::interrupt::Vector; #table_length] = [
                 #(
-                    #table_entries,
+                    #table_entries
                 )*
             ];
         };
