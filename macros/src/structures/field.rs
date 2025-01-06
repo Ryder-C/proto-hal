@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ops::Deref};
 
 use darling::{util::SpannedValue, FromMeta};
-use quote::{quote, quote_spanned, ToTokens};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{Expr, Ident, Item};
 use tiva::{Validate, Validator};
 
@@ -293,9 +293,77 @@ impl ToTokens for Field {
 
                 let reset_state = &spec.reset;
 
-                let state_idents = spec.schema.states.iter().map(|state| state.ident.clone());
+                let state_idents = spec
+                    .schema
+                    .states
+                    .iter()
+                    .map(|state| state.ident.clone())
+                    .collect::<Vec<_>>();
                 let state_bits = spec.schema.states.iter().map(|state| state.bits);
                 let state_bodies = spec.schema.states.iter().map(|state| quote! { #state });
+
+                // TODO: what effects may occur from this?
+                // TODO: should we require all other fields to be readable
+                // and writable>
+
+                let conversion_methods = if self.access().is_write() {
+                    let into_func_idents = state_idents.iter().map(|ident| {
+                        format_ident!(
+                            "into_{}",
+                            inflector::cases::snakecase::to_snake_case(&ident.to_string())
+                        )
+                    });
+
+                    let warning_msg = "# Warning
+This method incurs a runtime cost and is lossy,
+as an entire register read is needed to mutate a single field.
+Consider using register accessors when performing state transitions.";
+
+                    let into_func_docs = state_idents.iter().map(|ident| {
+                        format!("Convert this state into [`{}`].\n{}", ident, warning_msg)
+                    });
+
+                    Some(quote! {
+                        /// Convert this state into a new state.
+                        #[doc = #warning_msg]
+                        fn into_state<S>(self) -> S
+                        where
+                            S: State,
+                        {
+                            // SAFETY: assumes the proc macro implementation is sound
+                            // and that the peripheral description is accurate
+                            let mut reg_value = unsafe { core::ptr::read_volatile((super::super::BASE_ADDR + super::OFFSET) as *const u32) };
+
+                            // i.e.
+                            // 0000 0000 0000 0000 0111 1111 1100 0000
+                            const MASK: u32 = (0xffff_ffff >> (32 - (WIDTH as u32))) << (OFFSET as u32);
+
+                            reg_value &= !MASK;
+                            reg_value |= (S::RAW as u32) << (OFFSET as u32);
+
+                            // SAFETY: assumes the proc macro implementation is sound
+                            // and that the peripheral description is accurate
+                            unsafe {
+                                core::ptr::write_volatile((super::super::BASE_ADDR + super::OFFSET) as *mut u32, reg_value);
+                            }
+
+                            // SAFETY:
+                            // 1. previous state is moved and destroyed
+                            // 2. state has been written to field
+                            unsafe { S::conjure() }
+                        }
+
+                        #(
+                            #[doc = #into_func_docs]
+                            fn #into_func_idents(self) -> #state_idents
+                            {
+                                self.into_state()
+                            }
+                        )*
+                    })
+                } else {
+                    None
+                };
 
                 body.extend(quote_spanned! { span =>
                     #(
@@ -320,6 +388,8 @@ impl ToTokens for Field {
                         const RAW: States;
 
                         unsafe fn conjure() -> Self;
+
+                        #conversion_methods
                     }
                 });
             }

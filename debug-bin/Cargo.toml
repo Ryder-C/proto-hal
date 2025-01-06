@@ -14,7 +14,13 @@ defmt = { version = "0.3.6" }
 defmt-rtt = { version = "0.4.0" }
 panic-halt = "0.2.0"
 panic-probe = { version = "0.3.1", features = ["print-defmt"] }
-g4 = { path = "/Users/adinack/Projects/stm32-spa/g4" }
+g4 = { git = "https://github.com/adinack/stm32-spa", features = [
+    "g431",
+    "cordic",
+] }
+cortex-m-spa = { git = "https://github.com/adinack/cortex-m-spa", features = [
+    "m4",
+] }
 fixed = "1.28.0"
 proto-hal = { path = "../proto-hal" }
 

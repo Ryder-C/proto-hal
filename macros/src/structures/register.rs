@@ -488,7 +488,9 @@ impl ToTokens for Register {
                             core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, reg_value);
                         }
 
-                        // SAFETY: `self` is destroyed
+                        // SAFETY:
+                        // 1. `self` is destroyed
+                        // 2. state has been written
                         Register {
                             #(
                                 #stateful_field_idents: unsafe { #stateful_field_tys::conjure() },

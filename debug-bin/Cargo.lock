@@ -100,6 +100,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cortex-m-spa"
+version = "0.1.0"
+source = "git+https://github.com/adinack/cortex-m-spa#ceee0d3ad828293d1edf4c2a1ca05a381081f636"
+dependencies = [
+ "proto-hal 0.1.0 (git+https://github.com/adinack/proto-hal)",
+]
+
+[[package]]
 name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -149,6 +157,7 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
+ "cortex-m-spa",
  "critical-section",
  "defmt",
  "defmt-rtt",
@@ -156,7 +165,7 @@ dependencies = [
  "g4",
  "panic-halt",
  "panic-probe",
- "proto-hal",
+ "proto-hal 0.1.0",
 ]
 
 [[package]]
@@ -232,19 +241,13 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "g4"
 version = "0.1.0"
+source = "git+https://github.com/adinack/stm32-spa#0ef71db889f49634dc98888c0db6176bac513d6f"
 dependencies = [
  "cortex-m-rt",
- "g4-interrupts",
- "proto-hal",
+ "interrupts",
+ "proto-hal 0.1.0 (git+https://github.com/adinack/proto-hal)",
  "proto-hal-build",
-]
-
-[[package]]
-name = "g4-interrupts"
-version = "0.1.0"
-dependencies = [
- "cortex-m-rt",
- "proto-hal",
+ "thiserror",
 ]
 
 [[package]]
@@ -264,6 +267,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
+name = "interrupts"
+version = "0.1.0"
+source = "git+https://github.com/adinack/stm32-spa#0ef71db889f49634dc98888c0db6176bac513d6f"
+dependencies = [
+ "cortex-m-rt",
+ "proto-hal 0.1.0 (git+https://github.com/adinack/proto-hal)",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -272,6 +284,19 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "macros"
 version = "0.1.0"
+dependencies = [
+ "Inflector",
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "tiva",
+]
+
+[[package]]
+name = "macros"
+version = "0.1.0"
+source = "git+https://github.com/adinack/proto-hal#4821cd782ef997ffa8a2e483d9cc3b4a7d2b648d"
 dependencies = [
  "Inflector",
  "darling",
@@ -354,12 +379,22 @@ name = "proto-hal"
 version = "0.1.0"
 dependencies = [
  "arbitrary-int",
- "macros",
+ "macros 0.1.0",
+]
+
+[[package]]
+name = "proto-hal"
+version = "0.1.0"
+source = "git+https://github.com/adinack/proto-hal#4821cd782ef997ffa8a2e483d9cc3b4a7d2b648d"
+dependencies = [
+ "arbitrary-int",
+ "macros 0.1.0 (git+https://github.com/adinack/proto-hal)",
 ]
 
 [[package]]
 name = "proto-hal-build"
 version = "0.1.0"
+source = "git+https://github.com/adinack/proto-hal#4821cd782ef997ffa8a2e483d9cc3b4a7d2b648d"
 
 [[package]]
 name = "quote"

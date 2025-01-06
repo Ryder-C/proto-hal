@@ -5,10 +5,10 @@ use cortex_m_rt::entry;
 use fixed::types::I1F31;
 use {defmt_rtt as _, panic_probe as _};
 
+use cortex_m_spa::nvic;
 use defmt::info;
 use g4::{
     common::{cordic, rcc},
-    core::nvic,
     interrupt,
 };
 
