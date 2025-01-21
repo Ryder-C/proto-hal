@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use darling::FromMeta;
 use syn::{Expr, ExprRange, Ident, Item};
-use tiva::Validate;
+use tiva::Validator;
 
 use crate::{
     access::Access,
@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    field::{Field, FieldArgs, StatefulFieldSpec, StatelessFieldSpec},
+    field::{Field, FieldArgs, FieldSpec},
     schema::{Schema, SchemaArgs, SchemaSpec},
     Args,
 };
@@ -32,13 +32,8 @@ impl Args for FieldArrayArgs {
 
 #[derive(Debug)]
 pub struct FieldArray {
-    pub args: Spanned<FieldArrayArgs>,
-    pub ident: Ident,
+    pub inherited: Field,
     pub range: Range<u32>,
-    pub offset: FieldOffset,
-    pub schema: Schema,
-    pub access: Access,
-    pub reset: Option<Expr>,
 }
 
 impl FieldArray {
@@ -47,54 +42,23 @@ impl FieldArray {
         offset: FieldOffset,
         schemas: &HashMap<Ident, Schema>,
         args: Spanned<FieldArrayArgs>,
-        mut items: impl Iterator<Item = &'a Item>,
+        items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
-        let schema = if let Some(schema) = &args.field.schema {
-            // Q: wish this wasn't here as it is a validation step... kind of?
-            if items.next().is_some() {
-                Err(syn::Error::new(
-                    args.span(),
-                    "fields with imported schemas must be empty",
-                ))?
-            }
-
-            get_schema_from_set(schema, schemas)?
-        } else {
-            // the schema will be derived from the module contents
-            SchemaSpec::parse(
-                ident.clone(),
-                SchemaArgs {
-                    auto_increment: args.field.auto_increment,
-                    width: *args
-                        .field
-                        .width
-                        .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
-                }
-                .with_span(args.span()),
-                items,
-            )?
-            .validate()?
-        };
-
-        let access = get_access_from_split(
-            args.field.read.as_deref(),
-            args.field.write.as_deref(),
-            args.span(),
-        )?;
+        // this does not actuall represent a field,
+        // but merely the structure of a field
+        let pseudo_field = Field::validate(FieldSpec::parse(
+            ident,
+            offset,
+            schemas,
+            args.field.clone().with_span(args.span()),
+            items,
+        )?)?;
 
         let range = parse_expr_range(&args.range)?;
 
-        let offset = args.field.offset.unwrap_or(offset);
-        let reset = args.field.reset.as_deref().cloned();
-
         Ok(Self {
-            args,
-            ident,
+            inherited: pseudo_field,
             range,
-            offset,
-            schema,
-            access,
-            reset,
         })
     }
 }
@@ -107,53 +71,35 @@ impl FieldArray {
     pub fn to_fields(&self) -> syn::Result<Vec<Field>> {
         let mut errors = SynErrorCombinator::new();
         let mut fields = Vec::new();
-        let mut offset = self.offset;
 
-        let replace_pos = self.ident.to_string().rfind("X").ok_or(syn::Error::new(
-            self.ident.span(),
-            "field array module ident must contain an 'X' to indicate replacement location",
-        ))?;
+        let inherited = &self.inherited;
+
+        let mut offset = inherited.offset;
+
+        let replace_pos = inherited
+            .ident
+            .to_string()
+            .rfind("X")
+            .ok_or(syn::Error::new(
+                inherited.ident.span(),
+                "field array module ident must contain an 'X' to indicate replacement location",
+            ))?;
 
         // generate fields
         for i in self.range.clone() {
-            let mut s = self.ident.to_string();
+            let mut s = inherited.ident.to_string();
             s.replace_range(replace_pos..replace_pos + 1, &i.to_string());
-            let ident = Ident::new(&s, self.ident.span());
+            let ident = Ident::new(&s, inherited.ident.span());
 
-            let args = self.args.field.clone().with_span(self.args.span());
+            let args = inherited.args.clone();
+            let schema = inherited.schema.clone();
+            let access = inherited.access.clone();
 
-            let get_field = || {
-                Ok::<_, syn::Error>(match self.schema.clone() {
-                    Schema::Stateful(schema) => Field::Stateful(
-                        StatefulFieldSpec {
-                            args,
-                            ident,
-                            offset,
-                            schema,
-                            access: self.access.clone(),
-                            reset: self.reset.clone().ok_or(syn::Error::new(
-                                self.args.span(),
-                                "stateful fields must have reset specified",
-                            ))?,
-                        }
-                        .validate()?,
-                    ),
-                    Schema::Stateless(schema) => Field::Stateless(
-                        StatelessFieldSpec {
-                            args,
-                            ident,
-                            offset,
-                            schema,
-                            access: self.access.clone(),
-                            reset: self.reset.clone(),
-                        }
-                        .validate()?,
-                    ),
-                })
-            };
+            let get_field =
+                || Field::validate(FieldSpec::new(args, ident, offset, schema, access)?);
 
             errors.maybe_then(get_field(), |field| {
-                offset += field.schema().width();
+                offset += field.schema.width;
 
                 fields.push(field);
             });

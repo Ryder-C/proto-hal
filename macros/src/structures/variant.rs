@@ -11,7 +11,7 @@ use super::Args;
 
 #[derive(Debug, Clone, Default, FromMeta)]
 #[darling(default)]
-pub struct StateArgs {
+pub struct VariantArgs {
     #[darling(default)]
     pub bits: Option<u32>,
     pub entitlements: PathArray,
@@ -20,21 +20,21 @@ pub struct StateArgs {
     pub span: Option<Span>,
 }
 
-impl Args for StateArgs {
-    const NAME: &str = "state";
+impl Args for VariantArgs {
+    const NAME: &str = "variant";
 }
 
 #[derive(Debug, Clone)]
-pub struct State {
-    pub args: Spanned<StateArgs>,
+pub struct Variant {
+    pub args: Spanned<VariantArgs>,
     pub ident: Ident,
     pub bits: u32,
     pub entitlements: HashSet<Path>,
     pub entitlement_fields: HashSet<Ident>,
 }
 
-impl State {
-    pub fn parse(ident: Ident, bits: u32, args: Spanned<StateArgs>) -> syn::Result<Self> {
+impl Variant {
+    pub fn parse(ident: Ident, bits: u32, args: Spanned<VariantArgs>) -> syn::Result<Self> {
         let mut errors = SynErrorCombinator::new();
 
         let bits = args.bits.unwrap_or(bits);
@@ -74,7 +74,7 @@ impl State {
 
 // no validation necessary...
 
-impl ToTokens for State {
+impl ToTokens for Variant {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let ident = &self.ident;
 

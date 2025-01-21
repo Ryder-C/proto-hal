@@ -108,7 +108,7 @@ impl BlockSpec {
                         |spec| {
                             let schema = Schema::validate(spec)?;
 
-                            block.schemas.insert(schema.ident().clone(), schema);
+                            block.schemas.insert(schema.ident.clone(), schema);
 
                             Ok(())
                         },
@@ -203,7 +203,7 @@ impl ToTokens for Block {
         let (stateful_registers, stateless_registers) = self
             .registers
             .iter()
-            .partition::<Vec<_>, _>(|register| register.is_stateful());
+            .partition::<Vec<_>, _>(|register| register.is_resolvable());
 
         let stateful_register_idents = stateful_registers
             .iter()

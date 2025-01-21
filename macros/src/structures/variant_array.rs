@@ -9,7 +9,7 @@ use syn::{ExprRange, Ident, Path};
 use crate::utils::{parse_expr_range, Spanned, SynErrorCombinator};
 
 use super::{
-    state::{State, StateArgs},
+    variant::{Variant, VariantArgs},
     Args,
 };
 
@@ -31,22 +31,22 @@ impl Deref for Step {
 }
 
 #[derive(Debug, Clone, FromMeta)]
-pub struct StateArrayArgs {
+pub struct VariantArrayArgs {
     pub range: ExprRange,
     #[darling(default)]
     pub step: Step,
 
     #[darling(flatten)]
-    pub state: StateArgs,
+    pub state: VariantArgs,
 }
 
-impl Args for StateArrayArgs {
-    const NAME: &str = "state_array";
+impl Args for VariantArrayArgs {
+    const NAME: &str = "variant_array";
 }
 
 #[derive(Debug)]
-pub struct StateArray {
-    pub args: Spanned<StateArrayArgs>,
+pub struct VariantArray {
+    pub args: Spanned<VariantArrayArgs>,
     pub ident: Ident,
     pub range: Range<u32>,
     pub step: Step,
@@ -55,8 +55,8 @@ pub struct StateArray {
     pub entitlement_fields: HashSet<Ident>,
 }
 
-impl StateArray {
-    pub fn parse(ident: Ident, bits: u32, args: Spanned<StateArrayArgs>) -> syn::Result<Self> {
+impl VariantArray {
+    pub fn parse(ident: Ident, bits: u32, args: Spanned<VariantArrayArgs>) -> syn::Result<Self> {
         let mut errors = SynErrorCombinator::new();
 
         let bits = args.state.bits.unwrap_or(bits);
@@ -100,12 +100,12 @@ impl StateArray {
     }
 }
 
-impl StateArray {
+impl VariantArray {
     pub fn count(&self) -> u32 {
         self.range.clone().count() as _
     }
 
-    pub fn to_states(&self) -> syn::Result<Vec<State>> {
+    pub fn to_states(&self) -> syn::Result<Vec<Variant>> {
         let mut states = Vec::new();
         let mut bits = self.bits;
 
@@ -122,7 +122,7 @@ impl StateArray {
 
             let args = self.args.state.clone().with_span(self.args.span());
 
-            let state = State {
+            let state = Variant {
                 args,
                 ident,
                 bits,

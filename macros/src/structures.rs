@@ -10,8 +10,8 @@ pub mod field_array;
 pub mod interrupts;
 pub mod register;
 pub mod schema;
-pub mod state;
-pub mod state_array;
+pub mod variant;
+pub mod variant_array;
 
 pub trait Args: FromMeta + Sized {
     const NAME: &str;
