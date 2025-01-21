@@ -286,6 +286,13 @@ impl Field {
             .map(|variant| variant.bits)
             .collect::<Vec<_>>();
 
+        let is_variant_idents = variants.iter().map(|variant| {
+            format_ident!(
+                "is_{}",
+                inflector::cases::snakecase::to_snake_case(&variant.ident.to_string())
+            )
+        });
+
         Some(quote_spanned! { span =>
             #[repr(u32)]
             pub enum Variant {
@@ -303,6 +310,12 @@ impl Field {
                         _ => ::core::hint::unreachable_unchecked(),
                     }
                 }
+
+                #(
+                    pub fn #is_variant_idents(&self) -> bool {
+                        matches!(self, Self::#variant_idents)
+                    }
+                )*
             }
         })
     }
