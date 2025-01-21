@@ -179,6 +179,13 @@ impl FieldSpec {
                 ))?,
             }
         } else {
+            if args.reset.is_some() {
+                Err(syn::Error::new(
+                    args.span(),
+                    "reset is extraneous for unresolvable fields",
+                ))?
+            }
+
             Resolvability::Unresolvable
         })
     }
