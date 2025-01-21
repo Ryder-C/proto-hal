@@ -28,6 +28,16 @@ pub enum Numericity {
     Enumerated { variants: Vec<Variant> },
 }
 
+impl Numericity {
+    pub fn is_numeric(&self) -> bool {
+        matches!(self, Self::Numeric)
+    }
+
+    pub fn is_enumerated(&self) -> bool {
+        matches!(self, Self::Enumerated { variants: _ })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SchemaSpec {
     pub args: Spanned<SchemaArgs>,

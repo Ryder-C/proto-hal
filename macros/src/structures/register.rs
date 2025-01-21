@@ -290,6 +290,8 @@ enum Filter {
     Unresolvable,
     Writable,
     Readable,
+    Numeric,
+    Enumerated,
 }
 
 impl Filter {
@@ -299,6 +301,8 @@ impl Filter {
             Self::Unresolvable => !field.is_resolvable(),
             Self::Writable => field.access.is_write(),
             Self::Readable => field.access.is_read(),
+            Self::Numeric => field.schema.numericity.is_numeric(),
+            Self::Enumerated => field.schema.numericity.is_enumerated(),
         }
     }
 }
@@ -346,6 +350,18 @@ where
         self
     }
 
+    fn numeric(mut self) -> Self {
+        self.filters.push(Filter::Numeric);
+
+        self
+    }
+
+    fn enumerated(mut self) -> Self {
+        self.filters.push(Filter::Enumerated);
+
+        self
+    }
+
     fn idents(self) -> impl Iterator<Item = &'a Ident> + use<'a, I> {
         self.map(|field| &field.ident)
     }
@@ -367,19 +383,34 @@ where
     type Item = &'a Field;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().and_then(|field| {
-            if self.filters.iter().all(|filter| filter.retains(field)) {
-                Some(field)
+        loop {
+            if let Some(field) = self.iter.next() {
+                if self.filters.iter().all(|filter| filter.retains(field)) {
+                    break Some(field);
+                } else {
+                    continue;
+                }
             } else {
-                None
+                break None;
             }
-        })
+        }
     }
 }
 
 impl Register {
     fn fields(&self) -> FieldIter<'_, impl Iterator<Item = &'_ Field>> {
         FieldIter::new(self.fields.iter())
+    }
+
+    fn generate_field_bodies(&self) -> TokenStream2 {
+        let span = self.args.span();
+        let field_bodies = self.fields().map(|field| quote_spanned! { span => #field });
+
+        quote_spanned! { span =>
+            #(
+                #field_bodies
+            )*
+        }
     }
 
     fn generate_offset_const(&self) -> TokenStream2 {
@@ -427,286 +458,298 @@ impl Register {
     }
 
     fn maybe_generate_reset_alias(&self) -> Option<TokenStream2> {
-        if self.is_resolvable() {
-            let span = self.args.span();
+        if !self.is_resolvable() {
+            return None;
+        };
 
-            let resolvable_field_idents = self.fields().resolvable().idents();
+        let span = self.args.span();
 
-            Some(quote_spanned! { span =>
-                pub type Reset = Register<
-                    #(
-                        #resolvable_field_idents::Reset,
-                    )*
-                >;
-            })
-        } else {
-            None
-        }
+        let resolvable_field_idents = self.fields().resolvable().idents();
+
+        Some(quote_spanned! { span =>
+            pub type Reset = Register<
+                #(
+                    #resolvable_field_idents::Reset,
+                )*
+            >;
+        })
     }
 
     fn maybe_generate_state_builder(&self) -> Option<TokenStream2> {
-        if self.is_resolvable() {
-            let span = self.args.span();
+        if !self.is_resolvable() {
+            return None;
+        };
 
-            let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
-            let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
-            let writable_resolvable_field_idents = self.fields().writable().resolvable().idents();
-            let writable_resolvable_field_tys = self.fields().writable().resolvable().tys();
+        let span = self.args.span();
 
-            Some(quote_spanned! { span =>
-                /// This type facilitates the static construction
-                /// of a valid register state.
-                pub struct StateBuilder<#(#resolvable_field_tys,)*> {
-                    #(
-                        pub(crate) #resolvable_field_idents: core::marker::PhantomData<#resolvable_field_tys>,
-                    )*
+        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
+        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
+        let writable_resolvable_field_idents = self.fields().writable().resolvable().idents();
+        let writable_resolvable_field_tys = self.fields().writable().resolvable().tys();
+        let unresolvable_field_idents = self
+            .fields()
+            .unresolvable()
+            .idents()
+            .map(|ident| format_ident!("_{ident}"));
+
+        Some(quote_spanned! { span =>
+            /// This type facilitates the static construction
+            /// of a valid register state.
+            pub struct StateBuilder<#(#resolvable_field_tys,)*> {
+                #(
+                    pub(crate) #resolvable_field_idents: core::marker::PhantomData<#resolvable_field_tys>,
+                )*
+            }
+
+            impl<#(#resolvable_field_tys,)*> StateBuilder<#(#resolvable_field_tys,)*>
+            where
+                #(
+                    #resolvable_field_tys: #resolvable_field_idents::State,
+                )*
+            {
+                /// For internal use.
+                unsafe fn conjure() -> Self {
+                    Self {
+                        #(
+                            #resolvable_field_idents: core::marker::PhantomData,
+                        )*
+                    }
                 }
 
-                impl<#(#resolvable_field_tys,)*> StateBuilder<#(#resolvable_field_tys,)*>
+                /// Complete the state transition and incorporarate
+                /// it into the register.
+                pub fn finish(self) -> Register<#(#resolvable_field_tys,)*>
                 where
-                    #(
-                        #resolvable_field_tys: #resolvable_field_idents::State,
-                    )*
+                    Self: ::proto_hal::macro_utils::AsRegister,
                 {
-                    /// For internal use.
-                    unsafe fn conjure() -> Self {
-                        Self {
-                            #(
-                                #resolvable_field_idents: core::marker::PhantomData,
-                            )*
-                        }
+                    #[allow(unused_parens)]
+                    let reg_value = #(
+                        ((#writable_resolvable_field_tys::RAW as u32) << #writable_resolvable_field_idents::OFFSET)
+                    )|*;
+
+                    // SAFETY: assumes the proc macro implementation is sound
+                    // and that the peripheral description is accurate
+                    unsafe {
+                        core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, reg_value);
                     }
 
-                    /// Complete the state transition and incorporarate
-                    /// it into the register.
-                    pub fn finish(self) -> Register<#(#resolvable_field_tys,)*>
-                    where
-                        Self: ::proto_hal::macro_utils::AsRegister,
-                    {
-                        #[allow(unused_parens)]
-                        let reg_value = #(
-                            ((#writable_resolvable_field_tys::RAW as u32) << #writable_resolvable_field_idents::OFFSET)
-                        )|*;
+                    // SAFETY:
+                    // 1. `self` is destroyed
+                    // 2. state has been written
+                    Register {
+                        #(
+                            #resolvable_field_idents: unsafe { #resolvable_field_tys::conjure() },
+                        )*
 
-                        // SAFETY: assumes the proc macro implementation is sound
-                        // and that the peripheral description is accurate
-                        unsafe {
-                            core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, reg_value);
-                        }
-
-                        // SAFETY:
-                        // 1. `self` is destroyed
-                        // 2. state has been written
-                        Register {
-                            #(
-                                #resolvable_field_idents: unsafe { #resolvable_field_tys::conjure() },
-                            )*
-                        }
+                        #(
+                            #unresolvable_field_idents: (), // placeholder
+                        )*
                     }
                 }
-            })
-        } else {
-            None
-        }
+            }
+        })
     }
 
     fn maybe_generate_register_impl(&self) -> Option<TokenStream2> {
-        if self.is_resolvable() {
-            let span = self.args.span();
+        if !self.is_resolvable() {
+            return None;
+        };
 
-            let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
-            let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
-            let new_resolvable_field_tys = self
-                .fields()
-                .resolvable()
-                .tys()
-                .map(|ty| format_ident!("New{ty}"))
-                .collect::<Vec<_>>();
-            let new_entitlement_bounds = self
-                .fields()
-                .resolvable()
-                .map(|field| {
-                    if field.schema.entitlement_fields.is_empty() {
-                        return None;
-                    }
+        let span = self.args.span();
 
-                    let entitled_field_tys = field
-                        .schema
-                        .entitlement_fields
-                        .iter()
-                        .map(|ident| {
-                            format_ident!(
-                                "New{}",
-                                &inflector::cases::pascalcase::to_pascal_case(&ident.to_string(),),
-                            )
-                        })
-                        .collect::<Vec<_>>();
+        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
+        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
+        let new_resolvable_field_tys = self
+            .fields()
+            .resolvable()
+            .tys()
+            .map(|ty| format_ident!("New{ty}"))
+            .collect::<Vec<_>>();
+        let new_entitlement_bounds = self
+            .fields()
+            .resolvable()
+            .map(|field| {
+                if field.schema.entitlement_fields.is_empty() {
+                    return None;
+                }
 
-                    Some(quote_spanned! { span =>
-                        + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
+                let entitled_field_tys = field
+                    .schema
+                    .entitlement_fields
+                    .iter()
+                    .map(|ident| {
+                        format_ident!(
+                            "New{}",
+                            &inflector::cases::pascalcase::to_pascal_case(&ident.to_string(),),
+                        )
                     })
-                })
-                .collect::<Vec<_>>();
+                    .collect::<Vec<_>>();
 
-            Some(quote_spanned! { span =>
-                impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
+                Some(quote_spanned! { span =>
+                    + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
+                })
+            })
+            .collect::<Vec<_>>();
+
+        Some(quote_spanned! { span =>
+            impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
+            where
+                #(
+                    #resolvable_field_tys: #resolvable_field_idents::State,
+                )*
+            {
+                /// Perform a state transition inferred from context.
+                pub fn transition<#(#new_resolvable_field_tys,)*>(self) -> Register<#(#new_resolvable_field_tys,)*>
                 where
                     #(
-                        #resolvable_field_tys: #resolvable_field_idents::State,
+                        #new_resolvable_field_tys: #resolvable_field_idents::State #new_entitlement_bounds,
                     )*
                 {
-                    /// Perform a state transition inferred from context.
-                    pub fn transition<#(#new_resolvable_field_tys,)*>(self) -> Register<#(#new_resolvable_field_tys,)*>
-                    where
-                        #(
-                            #new_resolvable_field_tys: #resolvable_field_idents::State #new_entitlement_bounds,
-                        )*
-                    {
-                        // SAFETY: `self` is destroyed
-                        unsafe { StateBuilder::conjure() }.finish()
-                    }
-
-                    /// Create a state builder for this register to perform
-                    /// a state transition.
-                    pub fn build_state(self) -> StateBuilder<#(#resolvable_field_tys,)*> {
-                        // SAFETY: `self` is destroyed
-                        unsafe { StateBuilder::conjure() }
-                    }
+                    // SAFETY: `self` is destroyed
+                    unsafe { StateBuilder::conjure() }.finish()
                 }
-            })
-        } else {
-            None
-        }
+
+                /// Create a state builder for this register to perform
+                /// a state transition.
+                pub fn build_state(self) -> StateBuilder<#(#resolvable_field_tys,)*> {
+                    // SAFETY: `self` is destroyed
+                    unsafe { StateBuilder::conjure() }
+                }
+            }
+        })
     }
 
     fn maybe_generate_conversion_trait_impls(&self) -> Option<TokenStream2> {
-        if self.is_resolvable() {
-            let span = self.args.span();
+        if !self.is_resolvable() {
+            return None;
+        };
 
-            let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
-            let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
+        let span = self.args.span();
 
-            let entitlement_bounds = self
-                .fields()
-                .resolvable()
-                .map(|field| {
-                    if field.schema.entitlement_fields.is_empty() {
-                        return None;
-                    }
+        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
+        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
 
-                    let entitled_field_tys = field
-                        .schema
-                        .entitlement_fields
-                        .iter()
-                        .map(|ident| {
-                            Ident::new(
-                                &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
-                                Span::call_site(),
-                            )
-                        })
-                        .collect::<Vec<_>>();
+        let entitlement_bounds = self
+            .fields()
+            .resolvable()
+            .map(|field| {
+                if field.schema.entitlement_fields.is_empty() {
+                    return None;
+                }
 
-                    Some(quote_spanned! { span =>
-                        + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
+                let entitled_field_tys = field
+                    .schema
+                    .entitlement_fields
+                    .iter()
+                    .map(|ident| {
+                        Ident::new(
+                            &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
+                            Span::call_site(),
+                        )
                     })
+                    .collect::<Vec<_>>();
+
+                Some(quote_spanned! { span =>
+                    + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
                 })
-                .collect::<Vec<_>>();
-
-            Some(quote_spanned! { span =>
-                impl<#(#resolvable_field_tys,)*> ::proto_hal::macro_utils::AsBuilder for Register<#(#resolvable_field_tys,)*>
-                where
-                    #(
-                        #resolvable_field_tys: #resolvable_field_idents::State,
-                    )*
-                {
-                    type Builder = StateBuilder<#(#resolvable_field_tys,)*>;
-                }
-
-                impl<#(#resolvable_field_tys,)*> ::proto_hal::macro_utils::AsRegister for StateBuilder<#(#resolvable_field_tys,)*>
-                where
-                    #(
-                        #resolvable_field_tys: #resolvable_field_idents::State #entitlement_bounds,
-                    )*
-                {
-                    type Register = Register<#(#resolvable_field_tys,)*>;
-                }
-
-                #[allow(clippy::from_over_into)]
-                impl<#(#resolvable_field_tys,)*> Into<StateBuilder<#(#resolvable_field_tys,)*>> for Register<#(#resolvable_field_tys,)*>
-                where
-                    #(
-                        #resolvable_field_tys: #resolvable_field_idents::State,
-                    )*
-                {
-                    fn into(self) -> StateBuilder<#(#resolvable_field_tys,)*> {
-                        self.build_state()
-                    }
-                }
-
-                #[allow(clippy::from_over_into)]
-                impl<#(#resolvable_field_tys,)*> Into<Register<#(#resolvable_field_tys,)*>> for StateBuilder<#(#resolvable_field_tys,)*>
-                where
-                    #(
-                        #resolvable_field_tys: #resolvable_field_idents::State,
-                    )*
-                    Self: ::proto_hal::macro_utils::AsRegister,
-                {
-                    fn into(self) -> Register<#(#resolvable_field_tys,)*> {
-                        self.finish()
-                    }
-                }
             })
-        } else {
-            None
-        }
+            .collect::<Vec<_>>();
+
+        Some(quote_spanned! { span =>
+            impl<#(#resolvable_field_tys,)*> ::proto_hal::macro_utils::AsBuilder for Register<#(#resolvable_field_tys,)*>
+            where
+                #(
+                    #resolvable_field_tys: #resolvable_field_idents::State,
+                )*
+            {
+                type Builder = StateBuilder<#(#resolvable_field_tys,)*>;
+            }
+
+            impl<#(#resolvable_field_tys,)*> ::proto_hal::macro_utils::AsRegister for StateBuilder<#(#resolvable_field_tys,)*>
+            where
+                #(
+                    #resolvable_field_tys: #resolvable_field_idents::State #entitlement_bounds,
+                )*
+            {
+                type Register = Register<#(#resolvable_field_tys,)*>;
+            }
+
+            #[allow(clippy::from_over_into)]
+            impl<#(#resolvable_field_tys,)*> Into<StateBuilder<#(#resolvable_field_tys,)*>> for Register<#(#resolvable_field_tys,)*>
+            where
+                #(
+                    #resolvable_field_tys: #resolvable_field_idents::State,
+                )*
+            {
+                fn into(self) -> StateBuilder<#(#resolvable_field_tys,)*> {
+                    self.build_state()
+                }
+            }
+
+            #[allow(clippy::from_over_into)]
+            impl<#(#resolvable_field_tys,)*> Into<Register<#(#resolvable_field_tys,)*>> for StateBuilder<#(#resolvable_field_tys,)*>
+            where
+                #(
+                    #resolvable_field_tys: #resolvable_field_idents::State,
+                )*
+                Self: ::proto_hal::macro_utils::AsRegister,
+            {
+                fn into(self) -> Register<#(#resolvable_field_tys,)*> {
+                    self.finish()
+                }
+            }
+        })
     }
 
     fn maybe_generate_builder_methods(&self) -> Option<TokenStream2> {
-        if self.is_resolvable() {
-            let mut body = TokenStream2::new();
+        if !self.is_resolvable() {
+            return None;
+        };
 
-            let span = self.args.span();
+        let mut body = TokenStream2::new();
 
-            let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
-            let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
+        let span = self.args.span();
 
-            for (i, field) in self.fields().resolvable().enumerate() {
-                let ident = &field.ident;
-                let field_state_builder_ty = format_ident!(
-                    "{}StateBuilder",
-                    &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
-                );
+        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
+        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
 
-                let prev_field_tys = resolvable_field_tys.get(..i).unwrap();
-                let next_field_tys = resolvable_field_tys.get(i + 1..).unwrap();
+        for (i, field) in self.fields().resolvable().enumerate() {
+            let ident = &field.ident;
+            let field_state_builder_ty = format_ident!(
+                "{}StateBuilder",
+                &inflector::cases::pascalcase::to_pascal_case(&ident.to_string()),
+            );
 
-                if let Numericity::Enumerated { variants } = &field.schema.numericity {
-                    let variant_tys = variants
-                        .iter()
-                        .map(|variant| variant.ident.clone())
-                        .collect::<Vec<_>>();
-                    let variant_accessor_idents = variant_tys
-                        .iter()
-                        .map(|ident| {
-                            Ident::new(
-                                &inflector::cases::snakecase::to_snake_case(&ident.to_string()),
-                                Span::call_site(),
-                            )
-                        })
-                        .collect::<Vec<_>>();
+            let prev_field_tys = resolvable_field_tys.get(..i).unwrap();
+            let next_field_tys = resolvable_field_tys.get(i + 1..).unwrap();
 
-                    for variant in variants {
-                        if variant.entitlement_fields.is_empty() {
-                            let state_ty = &variant.ident;
+            if let Numericity::Enumerated { variants } = &field.schema.numericity {
+                let variant_tys = variants
+                    .iter()
+                    .map(|variant| variant.ident.clone())
+                    .collect::<Vec<_>>();
+                let variant_accessor_idents = variant_tys
+                    .iter()
+                    .map(|ident| {
+                        Ident::new(
+                            &inflector::cases::snakecase::to_snake_case(&ident.to_string()),
+                            Span::call_site(),
+                        )
+                    })
+                    .collect::<Vec<_>>();
 
-                            body.extend(quote_spanned! { span =>
+                for variant in variants {
+                    if variant.entitlement_fields.is_empty() {
+                        let state_ty = &variant.ident;
+
+                        body.extend(quote_spanned! { span =>
                             unsafe impl<T> ::proto_hal::stasis::Entitled<T> for #ident::#state_ty {}
                         });
-                        }
                     }
+                }
 
-                    if field.access.is_write() {
-                        body.extend(quote_spanned! { span =>
+                if field.access.is_write() {
+                    body.extend(quote_spanned! { span =>
                             impl<#(#resolvable_field_tys,)*> StateBuilder<#(#resolvable_field_tys,)*>
                             where
                                 #(
@@ -739,17 +782,16 @@ impl Register {
                                     unsafe { StateBuilder::conjure() }
                                 }
 
-                                // pub fn dynamic(self, state: #ident::States) -> StateBuilder<#(#prev_field_tys,)* #ident::Any, #(#next_field_tys,)*> {
+                                // pub fn dynamic(self, state: #ident::Variant) -> StateBuilder<#(#prev_field_tys,)* #ident::Any, #(#next_field_tys,)*> {
                                 //     todo!()
                                 // }
                             }
                         });
 
-                        for (ty, accessor) in variant_tys.iter().zip(variant_accessor_idents) {
-                            let doc =
-                                format!("Set the state of the field to [`{ty}`]({ident}::{ty}).");
+                    for (ty, accessor) in variant_tys.iter().zip(variant_accessor_idents) {
+                        let doc = format!("Set the state of the field to [`{ty}`]({ident}::{ty}).");
 
-                            body.extend(quote_spanned! { span =>
+                        body.extend(quote_spanned! { span =>
                                 impl<#(#resolvable_field_tys,)*> #field_state_builder_ty<#(#resolvable_field_tys,)*>
                                 where
                                     #(
@@ -765,91 +807,116 @@ impl Register {
                                     }
                                 }
                             });
-                        }
                     }
                 }
             }
-
-            Some(body)
-        } else {
-            None
         }
+
+        Some(body)
     }
 
     fn maybe_generate_reader(&self) -> Option<TokenStream2> {
         let span = self.args.span();
 
-        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
-        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
         let readable_unresolvable_fields =
             self.fields().readable().unresolvable().collect::<Vec<_>>();
-        let readable_unresolvable_field_idents = self.fields().readable().unresolvable().idents();
 
-        if !readable_unresolvable_fields.is_empty() {
-            let value_tys = readable_unresolvable_fields
-                .iter()
-                .map(|field| {
-                    let ident = format_ident!(
-                        "u{}",
-                        Index {
-                            index: field.schema.width as _,
-                            span: Span::call_site(),
-                        }
-                    );
+        // don't generate a reader if there are no fields
+        // to be read
+        if readable_unresolvable_fields.is_empty() {
+            return None;
+        };
 
-                    match field.schema.width {
-                        1 => parse_quote! { bool },
-                        8 | 16 | 32 => {
-                            parse_quote! { #ident }
-                        }
-                        _ => {
-                            parse_quote! { ::proto_hal::macro_utils::arbitrary_int::#ident }
-                        }
+        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
+        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
+
+        let readable_unresolvable_numeric_fields =
+            self.fields().readable().unresolvable().numeric();
+        let readable_unresolvable_numeric_field_idents =
+            self.fields().readable().unresolvable().numeric().idents();
+        let readable_unresolvable_enumerated_field_idents = self
+            .fields()
+            .readable()
+            .unresolvable()
+            .enumerated()
+            .idents();
+
+        let value_tys = readable_unresolvable_numeric_fields
+            .map(|field| {
+                let ident = format_ident!(
+                    "u{}",
+                    Index {
+                        index: field.schema.width as _,
+                        span: Span::call_site(),
                     }
-                })
-                .collect::<Vec<Path>>();
+                );
 
-            Some(quote_spanned! { span =>
-                pub struct Reader {
-                    value: ::proto_hal::macro_utils::RegisterValue,
-                }
-
-                impl Reader {
-                    const fn new(value: u32) -> Self {
-                        Self {
-                            value: ::proto_hal::macro_utils::RegisterValue::new(value),
-                        }
+                match field.schema.width {
+                    1 => parse_quote! { bool },
+                    8 | 16 | 32 => {
+                        parse_quote! { #ident }
                     }
-
-                    #(
-                        pub fn #readable_unresolvable_field_idents(&self) -> #value_tys {
-                            self.value.#value_tys(#readable_unresolvable_field_idents::OFFSET)
-                        }
-                    )*
-                }
-
-                impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
-                where
-                    #(
-                        #resolvable_field_tys: #resolvable_field_idents::State,
-                    )*
-                {
-                    pub fn read<T>(&self, f: impl FnOnce(&Reader) -> T) -> T {
-                        let reader = Reader::new(
-                            // SAFETY: assumes the proc macro implementation is sound
-                            // and that the peripheral description is accurate
-                            unsafe {
-                                core::ptr::read_volatile((super::BASE_ADDR + OFFSET) as *const u32)
-                            }
-                        );
-
-                        f(&reader)
+                    _ => {
+                        parse_quote! { ::proto_hal::macro_utils::arbitrary_int::#ident }
                     }
                 }
             })
-        } else {
-            None
-        }
+            .collect::<Vec<Path>>();
+
+        Some(quote_spanned! { span =>
+            pub struct Reader {
+                value: ::proto_hal::macro_utils::RegisterValue,
+            }
+
+            impl Reader {
+                const fn new(value: u32) -> Self {
+                    Self {
+                        value: ::proto_hal::macro_utils::RegisterValue::new(value),
+                    }
+                }
+
+                #(
+                    pub fn #readable_unresolvable_enumerated_field_idents(&self) -> #readable_unresolvable_enumerated_field_idents::Variant {
+                        // SAFETY: assumes
+                        // 1. peripheral description is correct (offset/width)
+                        // 2. hardware is operating correctly
+                        unsafe {
+                            #readable_unresolvable_enumerated_field_idents::Variant::from_bits(
+                                self.value.region(
+                                    #readable_unresolvable_enumerated_field_idents::OFFSET,
+                                    #readable_unresolvable_enumerated_field_idents::WIDTH
+                                )
+                            )
+                        }
+                    }
+                )*
+
+                #(
+                    pub fn #readable_unresolvable_numeric_field_idents(&self) -> #value_tys {
+                        self.value.#value_tys(#readable_unresolvable_numeric_field_idents::OFFSET)
+                    }
+                )*
+            }
+
+            impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
+            where
+                #(
+                    #resolvable_field_tys: #resolvable_field_idents::State,
+                )*
+            {
+                pub fn read<T>(&self, f: impl FnOnce(&Reader) -> T) -> T {
+                    let reader = Reader::new(
+                        // SAFETY: assumes the proc macro implementation is sound
+                        // and that the peripheral description is accurate
+                        unsafe {
+                            core::ptr::read_volatile((super::BASE_ADDR + OFFSET) as *const u32)
+                        }
+                    );
+
+                    f(&reader)
+                }
+            }
+        })
     }
 
     fn maybe_generate_writer(&self) -> Option<TokenStream2> {
@@ -880,49 +947,49 @@ impl Register {
             })
             .collect::<Vec<Path>>();
 
-        if !writable_unresolvable_fields.is_empty() {
-            Some(quote_spanned! { span =>
-                pub struct Writer {
-                    value: u32,
-                }
+        if writable_unresolvable_fields.is_empty() {
+            return None;
+        };
 
-                impl Writer {
-                    const fn new() -> Self {
-                        Self {
-                            value: 0,
-                        }
-                    }
+        Some(quote_spanned! { span =>
+            pub struct Writer {
+                value: u32,
+            }
 
-                    #(
-                        pub fn #writable_unresolvable_field_idents(&mut self, value: #value_tys) -> &mut Self {
-                            self.value |= (value as u32) << #writable_unresolvable_field_idents::OFFSET;
-                            self
-                        }
-                    )*
-                }
-
-                impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
-                where
-                    #(
-                        #resolvable_field_tys: #resolvable_field_idents::State,
-                    )*
-                {
-                    pub fn write(&self, f: impl FnOnce(&mut Writer) -> &mut Writer) {
-                        let mut writer = Writer::new();
-
-                        f(&mut writer);
-
-                        // SAFETY: assumes the proc macro implementation is sound
-                        // and that the peripheral description is accurate
-                        unsafe {
-                            core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, writer.value);
-                        }
+            impl Writer {
+                const fn new() -> Self {
+                    Self {
+                        value: 0,
                     }
                 }
-            })
-        } else {
-            None
-        }
+
+                #(
+                    pub fn #writable_unresolvable_field_idents(&mut self, value: #value_tys) -> &mut Self {
+                        self.value |= (value as u32) << #writable_unresolvable_field_idents::OFFSET;
+                        self
+                    }
+                )*
+            }
+
+            impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
+            where
+                #(
+                    #resolvable_field_tys: #resolvable_field_idents::State,
+                )*
+            {
+                pub fn write(&self, f: impl FnOnce(&mut Writer) -> &mut Writer) {
+                    let mut writer = Writer::new();
+
+                    f(&mut writer);
+
+                    // SAFETY: assumes the proc macro implementation is sound
+                    // and that the peripheral description is accurate
+                    unsafe {
+                        core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, writer.value);
+                    }
+                }
+            }
+        })
     }
 }
 
@@ -932,6 +999,7 @@ impl ToTokens for Register {
         let ident = &self.ident;
         let mut body = TokenStream2::new();
 
+        body.extend(self.generate_field_bodies());
         body.extend(self.generate_offset_const());
         body.extend(self.generate_register_struct());
         body.extend(self.maybe_generate_reset_alias());
@@ -942,17 +1010,8 @@ impl ToTokens for Register {
         body.extend(self.maybe_generate_reader());
         body.extend(self.maybe_generate_writer());
 
-        let field_bodies = self
-            .fields
-            .iter()
-            .map(|field| quote_spanned! { span => #field });
-
         tokens.extend(quote_spanned! { span =>
             pub mod #ident {
-                #(
-                    #field_bodies
-                )*
-
                 #body
             }
         });

@@ -16,6 +16,10 @@ impl RegisterValue {
             _ => unreachable!(),
         }
     }
+
+    pub fn region(&self, offset: u8, width: u8) -> u32 {
+        (self.0 >> offset) & (u32::MAX >> (32 - width))
+    }
 }
 
 macro_rules! impl_uint_standard {

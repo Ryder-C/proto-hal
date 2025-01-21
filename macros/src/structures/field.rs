@@ -1,6 +1,7 @@
 use std::{collections::HashMap, ops::Deref};
 
 use darling::{util::SpannedValue, FromMeta};
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{Expr, Ident, Item};
 use tiva::{Validate, Validator};
@@ -104,6 +105,38 @@ impl FieldSpec {
         let access =
             get_access_from_split(args.read.as_deref(), args.write.as_deref(), args.span())?;
 
+        Ok(Self::new(args, ident, offset, schema, access)?)
+    }
+}
+
+impl FieldSpec {
+    pub fn new(
+        args: Spanned<FieldArgs>,
+        ident: Ident,
+        offset: FieldOffset,
+        schema: Schema,
+        access: Access,
+    ) -> Result<Self, syn::Error> {
+        let resolvability = Self::resolvability(&args, &access)?;
+
+        Ok(Self {
+            args,
+            ident,
+            offset,
+            schema,
+            access,
+            resolvability,
+        })
+    }
+
+    pub fn is_resolvable(&self) -> bool {
+        matches!(&self.resolvability, Resolvability::Resolvable { reset: _ })
+    }
+
+    fn resolvability(
+        args: &Spanned<FieldArgs>,
+        access: &Access,
+    ) -> Result<Resolvability, syn::Error> {
         /*
         Determining Resolvability:
 
@@ -138,38 +171,6 @@ impl FieldSpec {
         simply may be too dynamic to be tracked statically.
         */
 
-        Ok(Self::new(args, ident, offset, schema, access)?)
-    }
-}
-
-impl FieldSpec {
-    pub fn new(
-        args: Spanned<FieldArgs>,
-        ident: Ident,
-        offset: FieldOffset,
-        schema: Schema,
-        access: Access,
-    ) -> Result<Self, syn::Error> {
-        let resolvability = Self::resolvability(&args, &access)?;
-
-        Ok(Self {
-            args,
-            ident,
-            offset,
-            schema,
-            access,
-            resolvability,
-        })
-    }
-
-    pub fn is_resolvable(&self) -> bool {
-        matches!(&self.resolvability, Resolvability::Resolvable { reset: _ })
-    }
-
-    fn resolvability(
-        args: &Spanned<FieldArgs>,
-        access: &Access,
-    ) -> Result<Resolvability, syn::Error> {
         Ok(if matches!(access, Access::ReadWrite(_)) {
             Resolvability::Resolvable {
                 reset: args.reset.as_deref().cloned().ok_or(syn::Error::new(
@@ -212,123 +213,189 @@ impl Validator<FieldSpec> for Field {
     }
 }
 
-impl ToTokens for Field {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let ident = &self.ident;
-        let offset = &self.offset;
-        let width = &self.schema.width;
-
-        let span = self.schema.args.span();
-
-        let mut body = quote_spanned! { span =>
-            pub const OFFSET: u8 = #offset;
-            pub const WIDTH: u8 = #width;
+impl Field {
+    fn maybe_generate_state_bodies(&self) -> Option<TokenStream2> {
+        if !self.is_resolvable() {
+            return None;
+        };
+        let Numericity::Enumerated { variants } = &self.schema.numericity else {
+            return None;
         };
 
-        if let Resolvability::Resolvable { reset } = &self.resolvability {
-            match &self.schema.numericity {
-                Numericity::Enumerated { variants } => {
-                    let state_idents = variants
-                        .iter()
-                        .map(|state| state.ident.clone())
-                        .collect::<Vec<_>>();
-                    let state_bits = variants.iter().map(|state| state.bits);
-                    let state_bodies = variants.iter().map(|state| quote! { #state });
+        let span = self.args.span();
 
-                    // TODO: what effects may occur from this?
-                    // TODO: should we require all other fields to be readable
-                    // and writable>
+        // NOTE: the variant renders to a state implementation
+        let state_bodies = variants.iter().map(|variant| quote! { #variant });
 
-                    let conversion_methods = if self.access.is_write() {
-                        let into_func_idents = state_idents.iter().map(|ident| {
-                            format_ident!(
-                                "into_{}",
-                                inflector::cases::snakecase::to_snake_case(&ident.to_string())
-                            )
-                        });
+        Some(quote_spanned! { span =>
+            #(
+                #state_bodies
+            )*
+        })
+    }
 
-                        let warning_msg = "# Warning
+    fn generate_offset_const(&self) -> TokenStream2 {
+        let span = self.args.span();
+
+        let offset = self.offset;
+
+        quote_spanned! { span =>
+            pub const OFFSET: u8 = #offset;
+        }
+    }
+
+    fn generate_width_const(&self) -> TokenStream2 {
+        let span = self.args.span();
+
+        let width = self.schema.width;
+
+        quote_spanned! { span =>
+            pub const WIDTH: u8 = #width;
+        }
+    }
+
+    fn maybe_generate_resets(&self) -> Option<TokenStream2> {
+        let span = self.args.span();
+
+        let Resolvability::Resolvable { reset } = &self.resolvability else {
+            return None;
+        };
+
+        match &self.schema.numericity {
+            Numericity::Enumerated { variants: _ } => Some(quote_spanned! { span =>
+                pub type Reset = #reset;
+                pub const RESET: u32 = Reset::RAW as u32;
+            }),
+            Numericity::Numeric => todo!(),
+        }
+    }
+
+    fn maybe_generate_variant_enum(&self) -> Option<TokenStream2> {
+        let span = self.args.span();
+
+        let Numericity::Enumerated { variants } = &self.schema.numericity else {
+            return None;
+        };
+
+        let variant_idents = variants
+            .iter()
+            .map(|variant| variant.ident.clone())
+            .collect::<Vec<_>>();
+        let variant_bits = variants
+            .iter()
+            .map(|variant| variant.bits)
+            .collect::<Vec<_>>();
+
+        Some(quote_spanned! { span =>
+            #[repr(u32)]
+            pub enum Variant {
+                #(
+                    #variant_idents = #variant_bits,
+                )*
+            }
+
+            impl Variant {
+                pub unsafe fn from_bits(bits: u32) -> Self {
+                    match bits {
+                        #(
+                            #variant_bits => Self::#variant_idents,
+                        )*
+                        _ => ::core::hint::unreachable_unchecked(),
+                    }
+                }
+            }
+        })
+    }
+
+    fn maybe_generate_state_trait(&self) -> Option<TokenStream2> {
+        let span = self.args.span();
+
+        if !self.is_resolvable() {
+            return None;
+        };
+
+        match &self.schema.numericity {
+            Numericity::Enumerated { variants } => {
+                let variant_idents = variants
+                    .iter()
+                    .map(|variant| variant.ident.clone())
+                    .collect::<Vec<_>>();
+
+                let conversion_methods = if self.access.is_write() {
+                    let into_func_idents = variant_idents.iter().map(|ident| {
+                        format_ident!(
+                            "into_{}",
+                            inflector::cases::snakecase::to_snake_case(&ident.to_string())
+                        )
+                    });
+
+                    let warning_msg = "# Warning
 This method incurs a runtime cost and is lossy,
 as an entire register read is needed to mutate a single field.
 Consider using register accessors when performing state transitions.";
 
-                        let into_func_docs = state_idents.iter().map(|ident| {
-                            format!("Convert this state into [`{}`].\n{}", ident, warning_msg)
-                        });
+                    let into_func_docs = variant_idents.iter().map(|ident| {
+                        format!("Convert this state into [`{}`].\n{}", ident, warning_msg)
+                    });
 
-                        Some(quote! {
-                            /// Convert this state into a new state.
-                            #[doc = #warning_msg]
-                            fn into_state<S>(self) -> S
-                            where
-                                S: State,
-                            {
-                                // SAFETY: assumes the proc macro implementation is sound
-                                // and that the peripheral description is accurate
-                                let mut reg_value = unsafe { core::ptr::read_volatile((super::super::BASE_ADDR + super::OFFSET) as *const u32) };
+                    Some(quote! {
+                        /// Convert this state into a new state.
+                        #[doc = #warning_msg]
+                        fn into_state<S>(self) -> S
+                        where
+                            S: State,
+                        {
+                            // SAFETY: assumes the proc macro implementation is sound
+                            // and that the peripheral description is accurate
+                            let mut reg_value = unsafe { core::ptr::read_volatile((super::super::BASE_ADDR + super::OFFSET) as *const u32) };
 
-                                // i.e.
-                                // 0000 0000 0000 0000 0111 1111 1100 0000
-                                const MASK: u32 = (0xffff_ffff >> (32 - (WIDTH as u32))) << (OFFSET as u32);
+                            // i.e.
+                            // 0000 0000 0000 0000 0111 1111 1100 0000
+                            const MASK: u32 = (0xffff_ffff >> (32 - (WIDTH as u32))) << (OFFSET as u32);
 
-                                reg_value &= !MASK;
-                                reg_value |= (S::RAW as u32) << (OFFSET as u32);
+                            reg_value &= !MASK;
+                            reg_value |= (S::RAW as u32) << (OFFSET as u32);
 
-                                // SAFETY: assumes the proc macro implementation is sound
-                                // and that the peripheral description is accurate
-                                unsafe {
-                                    core::ptr::write_volatile((super::super::BASE_ADDR + super::OFFSET) as *mut u32, reg_value);
-                                }
-
-                                // SAFETY:
-                                // 1. previous state is moved and destroyed
-                                // 2. state has been written to field
-                                unsafe { S::conjure() }
+                            // SAFETY: assumes the proc macro implementation is sound
+                            // and that the peripheral description is accurate
+                            unsafe {
+                                core::ptr::write_volatile((super::super::BASE_ADDR + super::OFFSET) as *mut u32, reg_value);
                             }
 
-                            #(
-                                #[doc = #into_func_docs]
-                                fn #into_func_idents(self) -> #state_idents
-                                {
-                                    self.into_state()
-                                }
-                            )*
-                        })
-                    } else {
-                        None
-                    };
+                            // SAFETY:
+                            // 1. previous state is moved and destroyed
+                            // 2. state has been written to field
+                            unsafe { S::conjure() }
+                        }
 
-                    body.extend(quote_spanned! { span =>
                         #(
-                            #state_bodies
+                            #[doc = #into_func_docs]
+                            fn #into_func_idents(self) -> #variant_idents
+                            {
+                                self.into_state()
+                            }
                         )*
+                    })
+                } else {
+                    None
+                };
 
-                        // pub struct Any {
-                        //     state: States,
-                        // }
+                Some(quote_spanned! { span =>
+                    pub trait State: ::proto_hal::stasis::Freeze {
+                        const RAW: Variant;
 
-                        pub type Reset = #reset;
-                        pub const RESET: u32 = Reset::RAW as u32;
+                        unsafe fn conjure() -> Self;
 
-                        #[repr(u32)]
-                        pub enum States {
-                            #(
-                                #state_idents = #state_bits,
-                            )*
-                        }
-
-                        pub trait State: ::proto_hal::stasis::Freeze {
-                            const RAW: States;
-
-                            unsafe fn conjure() -> Self;
-
-                            #conversion_methods
-                        }
-                    });
-                }
-                Numericity::Numeric => todo!("numeric impl"),
+                        #conversion_methods
+                    }
+                })
             }
+            Numericity::Numeric => todo!(),
         }
+    }
+
+    fn generate_module_docs(&self) -> TokenStream2 {
+        let span = self.args.span();
 
         let access_doc = match &self.access {
             Access::Read(_) => "- Access: read",
@@ -356,12 +423,33 @@ Consider using register accessors when performing state transitions.";
             None
         };
 
-        tokens.extend(quote_spanned! { span =>
+        quote_spanned! { span =>
             #[doc = "A register field with the following properties:"]
             #[doc = #access_doc]
             #[doc = #domain_doc]
             #[doc = #resolvability_doc]
             #variants_doc
+        }
+    }
+}
+
+impl ToTokens for Field {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let span = self.args.span();
+        let ident = &self.ident;
+        let mut body = TokenStream2::new();
+
+        body.extend(self.maybe_generate_state_bodies());
+        body.extend(self.generate_offset_const());
+        body.extend(self.generate_width_const());
+        body.extend(self.maybe_generate_resets());
+        body.extend(self.maybe_generate_variant_enum());
+        body.extend(self.maybe_generate_state_trait());
+
+        let docs = self.generate_module_docs();
+
+        tokens.extend(quote_spanned! { span =>
+            #docs
             pub mod #ident {
                 #body
             }
