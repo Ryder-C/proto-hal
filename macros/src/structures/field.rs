@@ -8,7 +8,7 @@ use tiva::Validator;
 
 use crate::{
     access::{Access, AccessArgs},
-    utils::{get_schema_from_set, FieldOffset, Spanned, SynErrorCombinator, Width},
+    utils::{FieldOffset, Spanned, SynErrorCombinator, Width},
 };
 
 use super::{
