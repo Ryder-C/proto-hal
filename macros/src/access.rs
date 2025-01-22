@@ -1,14 +1,11 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Deref,
-};
+use std::collections::HashSet;
 
 use darling::{util::SpannedValue, FromMeta};
 use syn::{Ident, Meta, Path};
 
 use crate::{
     structures::schema::Schema,
-    utils::{get_schema_from_set, PathArray, Spanned, SynErrorCombinator},
+    utils::PathArray,
 };
 
 #[derive(Debug, Clone, Default, FromMeta)]

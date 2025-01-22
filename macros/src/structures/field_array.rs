@@ -1,17 +1,14 @@
 use std::{collections::HashMap, ops::Range};
 
 use darling::FromMeta;
-use syn::{Expr, ExprRange, Ident, Item};
+use syn::{ExprRange, Ident, Item};
 use tiva::Validator;
 
-use crate::{
-    access::Access,
-    utils::{get_schema_from_set, parse_expr_range, FieldOffset, Spanned, SynErrorCombinator},
-};
+use crate::utils::{parse_expr_range, FieldOffset, Spanned, SynErrorCombinator};
 
 use super::{
     field::{Field, FieldArgs, FieldSpec},
-    schema::{Schema, SchemaArgs, SchemaSpec},
+    schema::Schema,
     Args,
 };
 

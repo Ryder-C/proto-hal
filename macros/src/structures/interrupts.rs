@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use quote::{quote, ToTokens};
 use syn::{
-    parse2, spanned::Spanned, Attribute, Ident, Index, ItemEnum, Meta, MetaList, Visibility,
+    parse2, spanned::Spanned, Attribute, Ident, Index, ItemEnum, Meta, Visibility,
 };
 
 use crate::utils::SynErrorCombinator;
@@ -143,7 +143,7 @@ impl ToTokens for InterruptsSpec {
         };
 
         let table_length = (self.vectors.keys().max().unwrap() + 1) as usize;
-        let table_entries = (0..table_length as u32).into_iter().map(|position| {
+        let table_entries = (0..table_length as u32).map(|position| {
             if let Some(vector) = self.vectors.get(&position) {
                 let ident = &vector.ident;
                 let cfgs = vector.cfgs();

@@ -153,7 +153,7 @@ impl FieldSpec {
             "fields must be readable or writable",
         ))?;
 
-        Ok(Self::new(args, ident, offset, access)?)
+        Self::new(args, ident, offset, access)
     }
 }
 

@@ -51,7 +51,7 @@ impl RegisterArgs {
             if let Some(width) = &field_args.width {
                 errors.push(syn::Error::new(width.span(), msg));
             } else {
-                field_args.width.replace(inherited_width.clone());
+                field_args.width.replace(*inherited_width);
             }
         }
 
@@ -198,9 +198,9 @@ impl RegisterSpec {
                         let msg = "only one module annotation is permitted";
 
                         for span in [
-                            schema_args.and_then(|args| Some(args.span())),
-                            field_args.and_then(|args| Some(args.span())),
-                            field_array_args.and_then(|args| Some(args.span())),
+                            schema_args.map(|args| args.span()),
+                            field_args.map(|args| args.span()),
+                            field_array_args.map(|args| args.span()),
                         ]
                         .into_iter()
                         .flatten()

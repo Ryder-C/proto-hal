@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ops::{Deref, DerefMut, Range},
 };
 
@@ -10,10 +10,7 @@ use syn::{
     Lit, LitInt, Meta, Path, RangeLimits,
 };
 
-use crate::{
-    access::{Access, AccessArgs, Read, Write},
-    structures::schema::Schema,
-};
+use crate::structures::schema::Schema;
 
 pub fn require_module(item: &Item) -> syn::Result<&ItemMod> {
     if let Item::Mod(module) = item {

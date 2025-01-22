@@ -140,8 +140,8 @@ impl BlockSpec {
                     let msg = "only one module annotation is permitted";
 
                     for span in [
-                        schema_args.and_then(|args| Some(args.span())),
-                        register_args.and_then(|args| Some(args.span())),
+                        schema_args.map(|args| args.span()),
+                        register_args.map(|args| args.span()),
                     ]
                     .into_iter()
                     .flatten()
