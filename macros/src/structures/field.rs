@@ -4,7 +4,7 @@ use darling::{util::SpannedValue, FromMeta};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{Expr, Ident, Item};
-use tiva::{Validate, Validator};
+use tiva::Validator;
 
 use crate::{
     access::{Access, AccessArgs},
@@ -13,6 +13,7 @@ use crate::{
 
 use super::{
     schema::{Numericity, Schema, SchemaArgs, SchemaSpec},
+    variant::Variant,
     Args,
 };
 
@@ -23,7 +24,7 @@ pub struct FieldArgs {
     pub schema: Option<Ident>,
     pub read: Option<SpannedValue<AccessArgs>>,
     pub write: Option<SpannedValue<AccessArgs>>,
-    pub reset: Option<SpannedValue<Expr>>,
+    pub reset: Option<Expr>,
 
     #[darling(default)]
     pub auto_increment: bool,
@@ -96,7 +97,20 @@ impl FieldSpec {
         mut args: Spanned<FieldArgs>,
         mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
-        let schema = if let Some(schema) = &args.schema {
+        args.check_conflict_and_inherit()?; // WARN: very important and easy to miss
+
+        let (read_schema, write_schema) = if let Some((read_schema_ident, write_schema_ident)) =
+            match (
+                args.read.as_ref().and_then(|read| read.schema.as_ref()),
+                args.write.as_ref().and_then(|write| write.schema.as_ref()),
+            ) {
+                (Some(read), Some(write)) => Some((read, write)),
+                (None, None) => None,
+                (_, _) => Err(syn::Error::new(
+                    args.span(),
+                    "split schema must be specified",
+                ))?,
+            } {
             // Q: wish this wasn't here as it is a validation step... kind of?
             if items.next().is_some() {
                 Err(syn::Error::new(
@@ -105,10 +119,13 @@ impl FieldSpec {
                 ))?
             }
 
-            get_schema_from_set(schema, schemas)?
+            (
+                get_schema_from_set(read_schema_ident, schemas)?,
+                get_schema_from_set(write_schema_ident, schemas)?,
+            )
         } else {
             // the schema will be derived from the module contents
-            SchemaSpec::parse(
+            let schema = Schema::validate(SchemaSpec::parse(
                 ident.clone(),
                 SchemaArgs {
                     auto_increment: args.auto_increment,
@@ -118,17 +135,23 @@ impl FieldSpec {
                 }
                 .with_span(args.span()),
                 items,
-            )?
-            .validate()?
+            )?)?;
+
+            (schema.clone(), schema)
         };
 
         let offset = args.offset.unwrap_or(offset);
 
-        args.check_conflict_and_inherit(); // WARN: very important and easy to miss
-
-        let access = Access::new(schemas, args.read.as_ref(), args.write.as_ref())?.ok_or(
-            syn::Error::new(args.span(), "fields must be readable or writable"),
-        )?;
+        let access = Access::new(
+            args.read.as_ref(),
+            args.write.as_ref(),
+            read_schema,
+            write_schema,
+        )?
+        .ok_or(syn::Error::new(
+            args.span(),
+            "fields must be readable or writable",
+        ))?;
 
         Ok(Self::new(args, ident, offset, access)?)
     }
@@ -141,8 +164,8 @@ impl FieldSpec {
         offset: FieldOffset,
         access: Access,
     ) -> Result<Self, syn::Error> {
-        let width = Self::width(&access);
-        let resolvability = Self::resolvability(&args, &access)?;
+        let width = Self::compute_width(&access);
+        let resolvability = Self::compute_resolvability(&args, &access)?;
 
         Ok(Self {
             args,
@@ -159,7 +182,11 @@ impl FieldSpec {
         matches!(&self.resolvability, Resolvability::Resolvable { reset: _ })
     }
 
-    fn width(access: &Access) -> Width {
+    pub fn width(&self) -> Width {
+        self.width
+    }
+
+    fn compute_width(access: &Access) -> Width {
         match access {
             Access::Read(read) => read.schema.width,
             Access::Write(write) => write.schema.width,
@@ -173,7 +200,7 @@ impl FieldSpec {
         }
     }
 
-    fn resolvability(
+    fn compute_resolvability(
         args: &Spanned<FieldArgs>,
         access: &Access,
     ) -> Result<Resolvability, syn::Error> {
@@ -213,7 +240,7 @@ impl FieldSpec {
 
         Ok(if access.is_read() && access.is_write() {
             Resolvability::Resolvable {
-                reset: args.reset.as_deref().cloned().ok_or(syn::Error::new(
+                reset: args.reset.clone().ok_or(syn::Error::new(
                     args.span(),
                     "resolvable fields must have a reset specified",
                 ))?,
@@ -265,7 +292,17 @@ impl Field {
         if !self.is_resolvable() {
             return None;
         };
-        let Numericity::Enumerated { variants } = &self.schema.numericity else {
+
+        // NOTE: if a field is resolvable and has split schemas,
+        // the schema that represents the resolvable aspect of the
+        // field must be from read access, as the value the field
+        // holds must represent the state to be resolved
+        let schema = match &self.access {
+            Access::Read(read) | Access::ReadWrite { read, write: _ } => &read.schema,
+            _ => return None,
+        };
+
+        let Numericity::Enumerated { variants } = &schema.numericity else {
             return None;
         };
 
@@ -294,7 +331,7 @@ impl Field {
     fn generate_width_const(&self) -> TokenStream2 {
         let span = self.args.span();
 
-        let width = self.schema.width;
+        let width = self.width;
 
         quote_spanned! { span =>
             pub const WIDTH: u8 = #width;
@@ -308,7 +345,12 @@ impl Field {
             return None;
         };
 
-        match &self.schema.numericity {
+        let schema = match &self.access {
+            Access::Read(read) | Access::ReadWrite { read, write: _ } => &read.schema,
+            _ => return None,
+        };
+
+        match &schema.numericity {
             Numericity::Enumerated { variants: _ } => Some(quote_spanned! { span =>
                 pub type Reset = #reset;
                 pub const RESET: u32 = Reset::RAW as u32;
@@ -320,51 +362,109 @@ impl Field {
     fn maybe_generate_variant_enum(&self) -> Option<TokenStream2> {
         let span = self.args.span();
 
-        let Numericity::Enumerated { variants } = &self.schema.numericity else {
-            return None;
-        };
+        let variant_enum = |ident, variants: &Vec<Variant>| {
+            let variant_idents = variants
+                .iter()
+                .map(|variant| variant.ident.clone())
+                .collect::<Vec<_>>();
+            let variant_bits = variants
+                .iter()
+                .map(|variant| variant.bits)
+                .collect::<Vec<_>>();
 
-        let variant_idents = variants
-            .iter()
-            .map(|variant| variant.ident.clone())
-            .collect::<Vec<_>>();
-        let variant_bits = variants
-            .iter()
-            .map(|variant| variant.bits)
-            .collect::<Vec<_>>();
+            let is_variant_idents = variants.iter().map(|variant| {
+                format_ident!(
+                    "is_{}",
+                    inflector::cases::snakecase::to_snake_case(&variant.ident.to_string())
+                )
+            });
 
-        let is_variant_idents = variants.iter().map(|variant| {
-            format_ident!(
-                "is_{}",
-                inflector::cases::snakecase::to_snake_case(&variant.ident.to_string())
-            )
-        });
-
-        Some(quote_spanned! { span =>
-            #[repr(u32)]
-            pub enum Variant {
-                #(
-                    #variant_idents = #variant_bits,
-                )*
-            }
-
-            impl Variant {
-                pub unsafe fn from_bits(bits: u32) -> Self {
-                    match bits {
-                        #(
-                            #variant_bits => Self::#variant_idents,
-                        )*
-                        _ => ::core::hint::unreachable_unchecked(),
-                    }
+            quote_spanned! { span =>
+                #[repr(u32)]
+                pub enum Variant {
+                    #(
+                        #variant_idents = #variant_bits,
+                    )*
                 }
 
-                #(
-                    pub fn #is_variant_idents(&self) -> bool {
-                        matches!(self, Self::#variant_idents)
+                impl Variant {
+                    pub unsafe fn from_bits(bits: u32) -> Self {
+                        match bits {
+                            #(
+                                #variant_bits => Self::#variant_idents,
+                            )*
+                            _ => ::core::hint::unreachable_unchecked(),
+                        }
                     }
-                )*
+
+                    #(
+                        pub fn #is_variant_idents(&self) -> bool {
+                            matches!(self, Self::#variant_idents)
+                        }
+                    )*
+                }
             }
-        })
+        };
+
+        // TODO: there must be a better way to do this
+        match &self.access {
+            Access::Read(read) => {
+                let Numericity::Enumerated { variants } = &read.schema.numericity else {
+                    return None;
+                };
+
+                let variant_enum = variant_enum(Ident::new("Variant", span), variants);
+
+                Some(quote_spanned! { span =>
+                    pub type ReadVariant = Variant;
+                    pub type WriteVariant = Variant;
+                    #variant_enum;
+                })
+            }
+            Access::Write(write) => {
+                let Numericity::Enumerated { variants } = &write.schema.numericity else {
+                    return None;
+                };
+
+                let variant_enum = variant_enum(Ident::new("Variant", span), variants);
+
+                Some(quote_spanned! { span =>
+                    pub type ReadVariant = Variant;
+                    pub type WriteVariant = Variant;
+                    #variant_enum;
+                })
+            }
+            Access::ReadWrite { read, write } => {
+                let read_variant_enum = if let Numericity::Enumerated {
+                    variants: read_variants,
+                } = &read.schema.numericity
+                {
+                    Some(variant_enum(Ident::new("ReadVariant", span), read_variants))
+                } else {
+                    return None;
+                };
+                let write_variant_enum = if let Numericity::Enumerated {
+                    variants: write_variants,
+                } = &write.schema.numericity
+                {
+                    Some(variant_enum(
+                        Ident::new("WriteVariant", span),
+                        write_variants,
+                    ))
+                } else {
+                    return None;
+                };
+
+                if let (None, None) = (&read_variant_enum, &write_variant_enum) {
+                    return None;
+                }
+
+                Some(quote_spanned! { span =>
+                    #read_variant_enum
+                    #write_variant_enum
+                })
+            }
+        }
     }
 
     fn maybe_generate_state_trait(&self) -> Option<TokenStream2> {
@@ -374,7 +474,12 @@ impl Field {
             return None;
         };
 
-        match &self.schema.numericity {
+        let schema = match &self.access {
+            Access::Read(read) | Access::ReadWrite { read, write: _ } => &read.schema,
+            _ => return None,
+        };
+
+        match &schema.numericity {
             Numericity::Enumerated { variants } => {
                 let variant_idents = variants
                     .iter()
@@ -463,11 +568,7 @@ Consider using register accessors when performing state transitions.";
             Access::ReadWrite { read: _, write: _ } => "- Access: read/write",
         };
 
-        let domain_doc = format!(
-            "- Domain: {}..{}",
-            self.offset,
-            self.offset + self.schema.width
-        );
+        let domain_doc = format!("- Domain: {}..{}", self.offset, self.offset + self.width);
 
         let resolvability_doc = if self.is_resolvable() {
             "- Type: resolvable"
@@ -475,20 +576,21 @@ Consider using register accessors when performing state transitions.";
             "- Type: unresolvable"
         };
 
-        let variants_doc = if let Numericity::Enumerated { variants } = &self.schema.numericity {
-            let msg = format!("\t- Variants: {}", variants.len());
+        // TODO: figure this out
+        // let variants_doc = if let Numericity::Enumerated { variants } = &self.schema.numericity {
+        //     let msg = format!("\t- Variants: {}", variants.len());
 
-            Some(quote! { #[doc = #msg] })
-        } else {
-            None
-        };
+        //     Some(quote! { #[doc = #msg] })
+        // } else {
+        //     None
+        // };
 
         quote_spanned! { span =>
             #[doc = "A register field with the following properties:"]
             #[doc = #access_doc]
             #[doc = #domain_doc]
             #[doc = #resolvability_doc]
-            #variants_doc
+            // #variants_doc
         }
     }
 }

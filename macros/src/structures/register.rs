@@ -3,11 +3,11 @@ use std::{collections::HashMap, ops::Deref};
 use darling::{util::SpannedValue, FromMeta};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote_spanned, ToTokens};
-use syn::{parse_quote, Expr, Ident, Index, Item, Path};
+use syn::{parse_quote, spanned::Spanned as _, Expr, Ident, Index, Item, Path};
 use tiva::Validator;
 
 use crate::{
-    access::AccessArgs,
+    access::{Access, AccessArgs},
     utils::{
         extract_items_from, require_module, FieldOffset, RegisterOffset, Spanned,
         SynErrorCombinator, Width,
@@ -31,10 +31,10 @@ pub struct RegisterArgs {
 
     // field args to inherit
     pub width: Option<SpannedValue<Width>>,
-    pub schema: Option<SpannedValue<Ident>>,
+    pub schema: Option<Ident>,
     pub read: Option<SpannedValue<AccessArgs>>,
     pub write: Option<SpannedValue<AccessArgs>>,
-    pub reset: Option<SpannedValue<Expr>>,
+    pub reset: Option<Expr>,
 }
 
 impl Args for RegisterArgs {
@@ -169,7 +169,7 @@ impl RegisterSpec {
                             extract_items_from(module)?.iter(),
                         )?)?;
 
-                        field_offset = field.offset + field.schema.width;
+                        field_offset = field.offset + field.width();
                         register.fields.push(field);
 
                         Ok(())
@@ -186,8 +186,7 @@ impl RegisterSpec {
                         )?;
 
                         field_offset = field_array.inherited.offset
-                            + field_array.inherited.schema.width
-                                * field_array.count() as FieldOffset;
+                            + field_array.inherited.width() * field_array.count() as FieldOffset;
                         register.fields.extend(field_array.to_fields()?);
 
                         Ok(())
@@ -243,15 +242,15 @@ impl Validator<RegisterSpec> for Register {
         for slice in spec.fields.windows(2) {
             let lhs = slice.first().unwrap();
             let rhs = slice.last().unwrap();
-            if lhs.offset + lhs.schema.width > rhs.offset {
+            if lhs.offset + lhs.width() > rhs.offset {
                 let msg = format!(
                     "{} {{ domain: {}..{} }}, {} {{ domain: {}..{} }}",
                     lhs.ident,
                     lhs.offset,
-                    lhs.offset + lhs.schema.width,
+                    lhs.offset + lhs.width(),
                     rhs.ident,
                     rhs.offset,
-                    rhs.offset + rhs.schema.width,
+                    rhs.offset + rhs.width(),
                 );
 
                 let mut e = syn::Error::new(
@@ -285,13 +284,18 @@ impl Validator<RegisterSpec> for Register {
     }
 }
 
+pub enum AccessMarker {
+    Read,
+    Write,
+}
+
 enum Filter {
     Resolvable,
     Unresolvable,
     Writable,
     Readable,
-    Numeric,
-    Enumerated,
+    Numeric(AccessMarker),
+    Enumerated(AccessMarker),
 }
 
 impl Filter {
@@ -301,8 +305,47 @@ impl Filter {
             Self::Unresolvable => !field.is_resolvable(),
             Self::Writable => field.access.is_write(),
             Self::Readable => field.access.is_read(),
-            Self::Numeric => field.schema.numericity.is_numeric(),
-            Self::Enumerated => field.schema.numericity.is_enumerated(),
+            // TODO: quite a lot of repeat code here...
+            Self::Numeric(marker) => match marker {
+                AccessMarker::Read => {
+                    let schema = match &field.access {
+                        Access::Read(read) | Access::ReadWrite { read, write: _ } => &read.schema,
+                        _ => return false,
+                    };
+
+                    schema.numericity.is_numeric()
+                }
+                AccessMarker::Write => {
+                    let schema = match &field.access {
+                        Access::Write(write) | Access::ReadWrite { read: _, write } => {
+                            &write.schema
+                        }
+                        _ => return false,
+                    };
+
+                    schema.numericity.is_numeric()
+                }
+            },
+            Self::Enumerated(marker) => match marker {
+                AccessMarker::Read => {
+                    let schema = match &field.access {
+                        Access::Read(read) | Access::ReadWrite { read, write: _ } => &read.schema,
+                        _ => return false,
+                    };
+
+                    schema.numericity.is_enumerated()
+                }
+                AccessMarker::Write => {
+                    let schema = match &field.access {
+                        Access::Write(write) | Access::ReadWrite { read: _, write } => {
+                            &write.schema
+                        }
+                        _ => return false,
+                    };
+
+                    schema.numericity.is_enumerated()
+                }
+            },
         }
     }
 }
@@ -350,14 +393,14 @@ where
         self
     }
 
-    fn numeric(mut self) -> Self {
-        self.filters.push(Filter::Numeric);
+    fn numeric(mut self, access: AccessMarker) -> Self {
+        self.filters.push(Filter::Numeric(access));
 
         self
     }
 
-    fn enumerated(mut self) -> Self {
-        self.filters.push(Filter::Enumerated);
+    fn enumerated(mut self, access: AccessMarker) -> Self {
+        self.filters.push(Filter::Enumerated(access));
 
         self
     }
@@ -559,37 +602,37 @@ impl Register {
 
         let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
         let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
-        let new_resolvable_field_tys = self
-            .fields()
-            .resolvable()
-            .tys()
-            .map(|ty| format_ident!("New{ty}"))
-            .collect::<Vec<_>>();
-        let new_entitlement_bounds = self
-            .fields()
-            .resolvable()
-            .map(|field| {
-                if field.schema.entitlement_fields.is_empty() {
-                    return None;
-                }
+        // let new_resolvable_field_tys = self
+        //     .fields()
+        //     .resolvable()
+        //     .tys()
+        //     .map(|ty| format_ident!("New{ty}"))
+        //     .collect::<Vec<_>>();
+        // let new_entitlement_bounds = self
+        //     .fields()
+        //     .resolvable()
+        //     .map(|field| {
+        //         if field.schema.entitlement_fields.is_empty() {
+        //             return None;
+        //         }
 
-                let entitled_field_tys = field
-                    .schema
-                    .entitlement_fields
-                    .iter()
-                    .map(|ident| {
-                        format_ident!(
-                            "New{}",
-                            &inflector::cases::pascalcase::to_pascal_case(&ident.to_string(),),
-                        )
-                    })
-                    .collect::<Vec<_>>();
+        //         let entitled_field_tys = field
+        //             .schema
+        //             .entitlement_fields
+        //             .iter()
+        //             .map(|ident| {
+        //                 format_ident!(
+        //                     "New{}",
+        //                     &inflector::cases::pascalcase::to_pascal_case(&ident.to_string(),),
+        //                 )
+        //             })
+        //             .collect::<Vec<_>>();
 
-                Some(quote_spanned! { span =>
-                    + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
-                })
-            })
-            .collect::<Vec<_>>();
+        //         Some(quote_spanned! { span =>
+        //             + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
+        //         })
+        //     })
+        //     .collect::<Vec<_>>();
 
         Some(quote_spanned! { span =>
             impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
@@ -598,16 +641,17 @@ impl Register {
                     #resolvable_field_tys: #resolvable_field_idents::State,
                 )*
             {
-                /// Perform a state transition inferred from context.
-                pub fn transition<#(#new_resolvable_field_tys,)*>(self) -> Register<#(#new_resolvable_field_tys,)*>
-                where
-                    #(
-                        #new_resolvable_field_tys: #resolvable_field_idents::State #new_entitlement_bounds,
-                    )*
-                {
-                    // SAFETY: `self` is destroyed
-                    unsafe { StateBuilder::conjure() }.finish()
-                }
+                // TODO: this is broken for now
+                // /// Perform a state transition inferred from context.
+                // pub fn transition<#(#new_resolvable_field_tys,)*>(self) -> Register<#(#new_resolvable_field_tys,)*>
+                // where
+                //     #(
+                //         #new_resolvable_field_tys: #resolvable_field_idents::State #new_entitlement_bounds,
+                //     )*
+                // {
+                //     // SAFETY: `self` is destroyed
+                //     unsafe { StateBuilder::conjure() }.finish()
+                // }
 
                 /// Create a state builder for this register to perform
                 /// a state transition.
@@ -633,12 +677,16 @@ impl Register {
             .fields()
             .resolvable()
             .map(|field| {
-                if field.schema.entitlement_fields.is_empty() {
+                let schema = match &field.access {
+                    Access::Read(read) | Access::ReadWrite { read, write: _ } => &read.schema,
+                    _ => panic!("a resolvable field should not be write-only"),
+                };
+
+                if schema.entitlement_fields.is_empty() {
                     return None;
                 }
 
-                let entitled_field_tys = field
-                    .schema
+                let entitled_field_tys = schema
                     .entitlement_fields
                     .iter()
                     .map(|ident| {
@@ -723,7 +771,12 @@ impl Register {
             let prev_field_tys = resolvable_field_tys.get(..i).unwrap();
             let next_field_tys = resolvable_field_tys.get(i + 1..).unwrap();
 
-            if let Numericity::Enumerated { variants } = &field.schema.numericity {
+            let schema = match &field.access {
+                Access::Read(read) | Access::ReadWrite { read, write: _ } => &read.schema,
+                _ => panic!("a resolvable field should not be write-only"),
+            };
+
+            if let Numericity::Enumerated { variants } = &schema.numericity {
                 let variant_tys = variants
                     .iter()
                     .map(|variant| variant.ident.clone())
@@ -830,15 +883,22 @@ impl Register {
         let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
         let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
 
-        let readable_unresolvable_numeric_fields =
-            self.fields().readable().unresolvable().numeric();
-        let readable_unresolvable_numeric_field_idents =
-            self.fields().readable().unresolvable().numeric().idents();
+        let readable_unresolvable_numeric_fields = self
+            .fields()
+            .readable()
+            .unresolvable()
+            .numeric(AccessMarker::Read);
+        let readable_unresolvable_numeric_field_idents = self
+            .fields()
+            .readable()
+            .unresolvable()
+            .numeric(AccessMarker::Read)
+            .idents();
         let readable_unresolvable_enumerated_field_idents = self
             .fields()
             .readable()
             .unresolvable()
-            .enumerated()
+            .enumerated(AccessMarker::Read)
             .idents();
 
         let value_tys = readable_unresolvable_numeric_fields
@@ -846,12 +906,12 @@ impl Register {
                 let ident = format_ident!(
                     "u{}",
                     Index {
-                        index: field.schema.width as _,
+                        index: field.width() as _,
                         span: Span::call_site(),
                     }
                 );
 
-                match field.schema.width {
+                match field.width() {
                     1 => parse_quote! { bool },
                     8 | 16 | 32 => {
                         parse_quote! { #ident }
@@ -934,12 +994,12 @@ impl Register {
                 let ident = format_ident!(
                     "u{}",
                     Index {
-                        index: field.schema.width as _,
+                        index: field.width() as _,
                         span: Span::call_site(),
                     }
                 );
 
-                match field.schema.width {
+                match field.width() {
                     1 => parse_quote! { bool },
                     8 | 16 | 32 => parse_quote! { #ident },
                     _ => parse_quote! { ::proto_hal::macro_utils::arbitrary_int::#ident },

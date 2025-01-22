@@ -6,10 +6,7 @@ use tiva::Validator;
 
 use crate::{
     access::Access,
-    utils::{
-        get_access_from_split, get_schema_from_set, parse_expr_range, FieldOffset, Spanned,
-        SynErrorCombinator,
-    },
+    utils::{get_schema_from_set, parse_expr_range, FieldOffset, Spanned, SynErrorCombinator},
 };
 
 use super::{
@@ -92,14 +89,12 @@ impl FieldArray {
             let ident = Ident::new(&s, inherited.ident.span());
 
             let args = inherited.args.clone();
-            let schema = inherited.schema.clone();
             let access = inherited.access.clone();
 
-            let get_field =
-                || Field::validate(FieldSpec::new(args, ident, offset, schema, access)?);
+            let get_field = || Field::validate(FieldSpec::new(args, ident, offset, access)?);
 
             errors.maybe_then(get_field(), |field| {
-                offset += field.schema.width;
+                offset += field.width();
 
                 fields.push(field);
             });
