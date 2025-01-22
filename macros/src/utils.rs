@@ -11,7 +11,7 @@ use syn::{
 };
 
 use crate::{
-    access::{Access, AccessArgs, Read, ReadWrite, Write},
+    access::{Access, AccessArgs, Read, Write},
     structures::schema::Schema,
 };
 
@@ -46,44 +46,6 @@ pub fn get_schema_from_set(ident: &Ident, set: &HashMap<Ident, Schema>) -> syn::
     set.get(ident)
         .cloned()
         .ok_or(syn::Error::new_spanned(ident, "schema does not exist"))
-}
-
-pub fn get_access_from_split(
-    read: Option<&AccessArgs>,
-    write: Option<&AccessArgs>,
-    err_span: Span,
-) -> syn::Result<Access> {
-    let mut access_entitlements = HashSet::new();
-
-    for access_arg in [read, write].into_iter().flatten() {
-        for entitlement in access_arg.entitlements.elems.iter().cloned() {
-            if !access_entitlements.insert(entitlement.clone()) {
-                Err(syn::Error::new_spanned(
-                    entitlement,
-                    "entitlement exists already",
-                ))?
-            }
-        }
-    }
-
-    Ok(match (read, write) {
-        (Some(_), Some(_)) => Access::ReadWrite(ReadWrite {
-            entitlements: access_entitlements,
-            effects: (),
-        }),
-        (Some(_), None) => Access::Read(Read {
-            entitlements: access_entitlements,
-            effects: (),
-        }),
-        (None, Some(_)) => Access::Write(Write {
-            entitlements: access_entitlements,
-            effects: (),
-        }),
-        (None, None) => Err(syn::Error::new(
-            err_span,
-            "fields must be readable or writable",
-        ))?,
-    })
 }
 
 #[derive(Debug, Clone, Default)]

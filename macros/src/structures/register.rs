@@ -42,7 +42,7 @@ impl Args for RegisterArgs {
 }
 
 impl RegisterArgs {
-    pub fn check_conflict(&self, field_args: &mut FieldArgs) -> syn::Result<()> {
+    pub fn check_conflict_and_inherit(&self, field_args: &mut FieldArgs) -> syn::Result<()> {
         let mut errors = SynErrorCombinator::new();
 
         let msg = "property is inherited from register";
@@ -159,7 +159,7 @@ impl RegisterSpec {
                         Ok(())
                     }
                     (None, Some(mut field_args), None) => {
-                        args.check_conflict(&mut field_args)?;
+                        args.check_conflict_and_inherit(&mut field_args)?;
 
                         let field = Field::validate(FieldSpec::parse(
                             module.ident.clone(),
@@ -175,7 +175,7 @@ impl RegisterSpec {
                         Ok(())
                     }
                     (None, None, Some(mut field_array_args)) => {
-                        args.check_conflict(&mut field_array_args.field)?;
+                        args.check_conflict_and_inherit(&mut field_array_args.field)?;
 
                         let field_array = FieldArray::parse(
                             module.ident.clone(),

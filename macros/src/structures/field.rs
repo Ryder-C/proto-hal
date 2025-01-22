@@ -8,9 +8,7 @@ use tiva::{Validate, Validator};
 
 use crate::{
     access::{Access, AccessArgs},
-    utils::{
-        get_access_from_split, get_schema_from_set, FieldOffset, Spanned, SynErrorCombinator, Width,
-    },
+    utils::{get_schema_from_set, FieldOffset, Spanned, SynErrorCombinator, Width},
 };
 
 use super::{
@@ -22,7 +20,7 @@ use super::{
 pub struct FieldArgs {
     pub offset: Option<FieldOffset>,
     pub width: Option<SpannedValue<Width>>,
-    pub schema: Option<SpannedValue<Ident>>,
+    pub schema: Option<Ident>,
     pub read: Option<SpannedValue<AccessArgs>>,
     pub write: Option<SpannedValue<AccessArgs>>,
     pub reset: Option<SpannedValue<Expr>>,
@@ -33,6 +31,29 @@ pub struct FieldArgs {
 
 impl Args for FieldArgs {
     const NAME: &str = "field";
+}
+
+impl FieldArgs {
+    pub fn check_conflict_and_inherit(&mut self) -> syn::Result<()> {
+        let mut errors = SynErrorCombinator::new();
+
+        let msg = "property is inherited from register";
+
+        for args in [self.read.as_mut(), self.write.as_mut()]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(inherited_schema) = &self.schema {
+                if let Some(schema) = &args.schema {
+                    errors.push(syn::Error::new(schema.span(), msg));
+                } else {
+                    args.schema.replace(inherited_schema.clone());
+                }
+            }
+        }
+
+        errors.coalesce()
+    }
 }
 
 #[derive(Debug)]
@@ -46,11 +67,11 @@ pub struct FieldSpec {
     pub args: Spanned<FieldArgs>,
     pub ident: Ident,
     pub offset: FieldOffset,
-    pub schema: Schema,
     pub access: Access,
 
     // private because it is a computed
     // property
+    width: Width,
     resolvability: Resolvability,
 }
 
@@ -72,7 +93,7 @@ impl FieldSpec {
         ident: Ident,
         offset: FieldOffset,
         schemas: &HashMap<Ident, Schema>,
-        args: Spanned<FieldArgs>,
+        mut args: Spanned<FieldArgs>,
         mut items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         let schema = if let Some(schema) = &args.schema {
@@ -102,10 +123,14 @@ impl FieldSpec {
         };
 
         let offset = args.offset.unwrap_or(offset);
-        let access =
-            get_access_from_split(args.read.as_deref(), args.write.as_deref(), args.span())?;
 
-        Ok(Self::new(args, ident, offset, schema, access)?)
+        args.check_conflict_and_inherit(); // WARN: very important and easy to miss
+
+        let access = Access::new(schemas, args.read.as_ref(), args.write.as_ref())?.ok_or(
+            syn::Error::new(args.span(), "fields must be readable or writable"),
+        )?;
+
+        Ok(Self::new(args, ident, offset, access)?)
     }
 }
 
@@ -114,23 +139,38 @@ impl FieldSpec {
         args: Spanned<FieldArgs>,
         ident: Ident,
         offset: FieldOffset,
-        schema: Schema,
         access: Access,
     ) -> Result<Self, syn::Error> {
+        let width = Self::width(&access);
         let resolvability = Self::resolvability(&args, &access)?;
 
         Ok(Self {
             args,
             ident,
             offset,
-            schema,
             access,
+
+            width,
             resolvability,
         })
     }
 
     pub fn is_resolvable(&self) -> bool {
         matches!(&self.resolvability, Resolvability::Resolvable { reset: _ })
+    }
+
+    fn width(access: &Access) -> Width {
+        match access {
+            Access::Read(read) => read.schema.width,
+            Access::Write(write) => write.schema.width,
+            Access::ReadWrite { read, write } => {
+                // unnecessary, these by definition must be equal
+                // if this fails something is broken in `access`
+                assert_eq!(read.schema.width, write.schema.width);
+
+                read.schema.width
+            }
+        }
     }
 
     fn resolvability(
@@ -171,7 +211,7 @@ impl FieldSpec {
         simply may be too dynamic to be tracked statically.
         */
 
-        Ok(if matches!(access, Access::ReadWrite(_)) {
+        Ok(if access.is_read() && access.is_write() {
             Resolvability::Resolvable {
                 reset: args.reset.as_deref().cloned().ok_or(syn::Error::new(
                     args.span(),
@@ -204,11 +244,11 @@ impl Validator<FieldSpec> for Field {
             ));
         }
 
-        if spec.offset + spec.schema.width > 32 {
+        if spec.offset + spec.width > 32 {
             let msg = format!(
                 "field domain exceeds register domain. {{ domain: {}..{} }}",
                 spec.offset,
-                spec.offset + spec.schema.width
+                spec.offset + spec.width
             );
 
             errors.push(Self::Error::new(spec.args.span(), msg));
@@ -420,7 +460,7 @@ Consider using register accessors when performing state transitions.";
         let access_doc = match &self.access {
             Access::Read(_) => "- Access: read",
             Access::Write(_) => "- Access: write",
-            Access::ReadWrite(_) => "- Access: read/write",
+            Access::ReadWrite { read: _, write: _ } => "- Access: read/write",
         };
 
         let domain_doc = format!(
