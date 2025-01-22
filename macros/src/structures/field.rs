@@ -95,58 +95,29 @@ impl FieldSpec {
         offset: FieldOffset,
         schemas: &HashMap<Ident, Schema>,
         mut args: Spanned<FieldArgs>,
-        mut items: impl Iterator<Item = &'a Item>,
+        items: impl Iterator<Item = &'a Item>,
     ) -> syn::Result<Self> {
         args.check_conflict_and_inherit()?; // WARN: very important and easy to miss
 
-        let (read_schema, write_schema) = if let Some((read_schema_ident, write_schema_ident)) =
-            match (
-                args.read.as_ref().and_then(|read| read.schema.as_ref()),
-                args.write.as_ref().and_then(|write| write.schema.as_ref()),
-            ) {
-                (Some(read), Some(write)) => Some((read, write)),
-                (None, None) => None,
-                (_, _) => Err(syn::Error::new(
-                    args.span(),
-                    "split schema must be specified",
-                ))?,
-            } {
-            // Q: wish this wasn't here as it is a validation step... kind of?
-            if items.next().is_some() {
-                Err(syn::Error::new(
-                    args.span(),
-                    "fields with imported schemas must be empty",
-                ))?
+        let implicit_schema = Schema::validate(SchemaSpec::parse(
+            ident.clone(),
+            SchemaArgs {
+                auto_increment: args.auto_increment,
+                width: *args
+                    .width
+                    .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
             }
-
-            (
-                get_schema_from_set(read_schema_ident, schemas)?,
-                get_schema_from_set(write_schema_ident, schemas)?,
-            )
-        } else {
-            // the schema will be derived from the module contents
-            let schema = Schema::validate(SchemaSpec::parse(
-                ident.clone(),
-                SchemaArgs {
-                    auto_increment: args.auto_increment,
-                    width: *args
-                        .width
-                        .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
-                }
-                .with_span(args.span()),
-                items,
-            )?)?;
-
-            (schema.clone(), schema)
-        };
+            .with_span(args.span()),
+            items,
+        )?)?;
 
         let offset = args.offset.unwrap_or(offset);
 
         let access = Access::new(
             args.read.as_ref(),
             args.write.as_ref(),
-            read_schema,
-            write_schema,
+            implicit_schema,
+            schemas,
         )?
         .ok_or(syn::Error::new(
             args.span(),
@@ -381,13 +352,13 @@ impl Field {
 
             quote_spanned! { span =>
                 #[repr(u32)]
-                pub enum Variant {
+                pub enum #ident {
                     #(
                         #variant_idents = #variant_bits,
                     )*
                 }
 
-                impl Variant {
+                impl #ident {
                     pub unsafe fn from_bits(bits: u32) -> Self {
                         match bits {
                             #(
@@ -547,7 +518,7 @@ Consider using register accessors when performing state transitions.";
 
                 Some(quote_spanned! { span =>
                     pub trait State: ::proto_hal::stasis::Freeze {
-                        const RAW: Variant;
+                        const RAW: ReadVariant;
 
                         unsafe fn conjure() -> Self;
 

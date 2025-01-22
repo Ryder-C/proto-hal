@@ -936,12 +936,12 @@ impl Register {
                 }
 
                 #(
-                    pub fn #readable_unresolvable_enumerated_field_idents(&self) -> #readable_unresolvable_enumerated_field_idents::Variant {
+                    pub fn #readable_unresolvable_enumerated_field_idents(&self) -> #readable_unresolvable_enumerated_field_idents::ReadVariant {
                         // SAFETY: assumes
                         // 1. peripheral description is correct (offset/width)
                         // 2. hardware is operating correctly
                         unsafe {
-                            #readable_unresolvable_enumerated_field_idents::Variant::from_bits(
+                            #readable_unresolvable_enumerated_field_idents::ReadVariant::from_bits(
                                 self.value.region(
                                     #readable_unresolvable_enumerated_field_idents::OFFSET,
                                     #readable_unresolvable_enumerated_field_idents::WIDTH

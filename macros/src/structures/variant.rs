@@ -88,7 +88,7 @@ impl ToTokens for Variant {
             impl ::proto_hal::stasis::Freeze for #ident {}
 
             impl State for #ident {
-                const RAW: Variant = Variant::#ident;
+                const RAW: ReadVariant = ReadVariant::#ident;
 
                 unsafe fn conjure() -> Self {
                     Self {

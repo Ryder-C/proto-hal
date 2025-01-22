@@ -1,11 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use darling::{util::SpannedValue, FromMeta};
 use syn::{Ident, Meta, Path};
 
 use crate::{
     structures::schema::Schema,
-    utils::PathArray,
+    utils::{get_schema_from_set, PathArray},
 };
 
 #[derive(Debug, Clone, Default, FromMeta)]
@@ -41,8 +41,8 @@ impl Access {
     pub fn new(
         read_args: Option<&SpannedValue<AccessArgs>>,
         write_args: Option<&SpannedValue<AccessArgs>>,
-        read_schema: Schema,
-        write_schema: Schema,
+        implicit_schema: Schema,
+        schemas: &HashMap<Ident, Schema>,
     ) -> syn::Result<Option<Self>> {
         let get_access_entitlements = |args: &AccessArgs| {
             let mut access_entitlements = HashSet::new();
@@ -59,8 +59,26 @@ impl Access {
             Ok::<_, syn::Error>(access_entitlements)
         };
 
+        let get_schema = |args: &SpannedValue<AccessArgs>| {
+            if let Some(ident) = args.schema.as_ref() {
+                if !implicit_schema.is_empty() {
+                    Err(syn::Error::new(
+                        args.span(),
+                        "cannot import schema for field which has an implicit schema",
+                    ))?
+                }
+
+                get_schema_from_set(ident, schemas)
+            } else {
+                Ok(implicit_schema.clone())
+            }
+        };
+
         Ok(match (read_args, write_args) {
             (Some(read_args), Some(write_args)) => {
+                let read_schema = get_schema(read_args)?;
+                let write_schema = get_schema(write_args)?;
+
                 if read_schema.width != write_schema.width {
                     Err(syn::Error::new(
                         read_args.span().join(write_args.span()).unwrap(),
@@ -81,16 +99,24 @@ impl Access {
                     },
                 })
             }
-            (Some(args), None) => Some(Access::Read(Read {
-                schema: read_schema,
-                entitlements: get_access_entitlements(args)?,
-                effects: (),
-            })),
-            (None, Some(args)) => Some(Access::Write(Write {
-                schema: write_schema,
-                entitlements: get_access_entitlements(args)?,
-                effects: (),
-            })),
+            (Some(args), None) => {
+                let read_schema = get_schema(args)?;
+
+                Some(Access::Read(Read {
+                    schema: read_schema,
+                    entitlements: get_access_entitlements(args)?,
+                    effects: (),
+                }))
+            }
+            (None, Some(args)) => {
+                let write_schema = get_schema(args)?;
+
+                Some(Access::Write(Write {
+                    schema: write_schema,
+                    entitlements: get_access_entitlements(args)?,
+                    effects: (),
+                }))
+            }
             (None, None) => None,
         })
     }

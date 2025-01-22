@@ -45,7 +45,9 @@ pub struct SchemaSpec {
     pub width: Width,
     pub entitlement_fields: HashSet<Ident>,
 
+    // computed properties
     pub numericity: Numericity,
+    is_empty: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -74,8 +76,11 @@ impl SchemaSpec {
         let mut entitlement_fields = HashSet::new();
 
         let mut state_bits = 0u32;
+        let mut is_empty = true;
 
         for item in items {
+            is_empty = false;
+
             let s = require_struct(item)?;
 
             let get_args = || {
@@ -147,7 +152,12 @@ impl SchemaSpec {
             } else {
                 Numericity::Enumerated { variants }
             },
+            is_empty,
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.is_empty
     }
 }
 
