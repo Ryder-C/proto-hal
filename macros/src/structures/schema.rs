@@ -22,7 +22,7 @@ impl Args for SchemaArgs {
     const NAME: &str = "schema";
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Numericity {
     Numeric,
     Enumerated { variants: Vec<Variant> },
@@ -47,10 +47,9 @@ pub struct SchemaSpec {
 
     // computed properties
     pub numericity: Numericity,
-    is_empty: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Schema {
     spec: SchemaSpec,
 }
@@ -76,11 +75,8 @@ impl SchemaSpec {
         let mut entitlement_fields = HashSet::new();
 
         let mut state_bits = 0u32;
-        let mut is_empty = true;
 
         for item in items {
-            is_empty = false;
-
             let s = require_struct(item)?;
 
             let get_args = || {
@@ -152,12 +148,13 @@ impl SchemaSpec {
             } else {
                 Numericity::Enumerated { variants }
             },
-            is_empty,
         })
     }
+}
 
-    pub fn is_empty(&self) -> bool {
-        self.is_empty
+impl PartialEq for SchemaSpec {
+    fn eq(&self, other: &Self) -> bool {
+        self.numericity == other.numericity
     }
 }
 

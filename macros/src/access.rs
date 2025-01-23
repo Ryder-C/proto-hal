@@ -41,7 +41,7 @@ impl Access {
     pub fn new(
         read_args: Option<&SpannedValue<AccessArgs>>,
         write_args: Option<&SpannedValue<AccessArgs>>,
-        implicit_schema: Schema,
+        implicit_schema: Option<Schema>,
         schemas: &HashMap<Ident, Schema>,
     ) -> syn::Result<Option<Self>> {
         let get_access_entitlements = |args: &AccessArgs| {
@@ -60,8 +60,8 @@ impl Access {
         };
 
         let get_schema = |args: &SpannedValue<AccessArgs>| {
-            if let Some(ident) = args.schema.as_ref() {
-                if !implicit_schema.is_empty() {
+            if let Some(ident) = &args.schema {
+                if implicit_schema.is_some() {
                     Err(syn::Error::new(
                         args.span(),
                         "cannot import schema for field which has an implicit schema",
@@ -70,7 +70,10 @@ impl Access {
 
                 get_schema_from_set(ident, schemas)
             } else {
-                Ok(implicit_schema.clone())
+                implicit_schema.clone().ok_or(syn::Error::new(
+                    args.span(),
+                    "a schema must be imported or defined in the field body",
+                ))
             }
         };
 

@@ -982,14 +982,43 @@ impl Register {
     fn maybe_generate_writer(&self) -> Option<TokenStream2> {
         let span = self.args.span();
 
-        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
-        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
         let writable_unresolvable_fields =
             self.fields().writable().unresolvable().collect::<Vec<_>>();
-        let writable_unresolvable_field_idents = self.fields().writable().unresolvable().idents();
 
-        let value_tys = writable_unresolvable_fields
-            .iter()
+        // don't generate a reader if there are no fields
+        // to be read
+        if writable_unresolvable_fields.is_empty() {
+            return None;
+        };
+
+        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
+        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
+
+        let writable_unresolvable_numeric_fields = self
+            .fields()
+            .writable()
+            .unresolvable()
+            .numeric(AccessMarker::Write);
+        let writable_unresolvable_numeric_field_idents = self
+            .fields()
+            .writable()
+            .unresolvable()
+            .numeric(AccessMarker::Write)
+            .idents();
+        let writable_unresolvable_enumerated_fields = self
+            .fields()
+            .writable()
+            .unresolvable()
+            .enumerated(AccessMarker::Write)
+            .collect::<Vec<_>>();
+        let writable_unresolvable_enumerated_field_idents = self
+            .fields()
+            .writable()
+            .unresolvable()
+            .enumerated(AccessMarker::Write)
+            .idents();
+
+        let value_tys = writable_unresolvable_numeric_fields
             .map(|field| {
                 let ident = format_ident!(
                     "u{}",
@@ -1007,11 +1036,17 @@ impl Register {
             })
             .collect::<Vec<Path>>();
 
-        if writable_unresolvable_fields.is_empty() {
-            return None;
-        };
+        let refined_writer_idents = writable_unresolvable_enumerated_fields
+            .iter()
+            .map(|field| {
+                format_ident!(
+                    "{}Writer",
+                    inflector::cases::pascalcase::to_pascal_case(&field.ident.to_string())
+                )
+            })
+            .collect::<Vec<_>>();
 
-        Some(quote_spanned! { span =>
+        let mut body = quote_spanned! { span =>
             pub struct Writer {
                 value: u32,
             }
@@ -1024,8 +1059,14 @@ impl Register {
                 }
 
                 #(
-                    pub fn #writable_unresolvable_field_idents(&mut self, value: #value_tys) -> &mut Self {
-                        self.value |= (value as u32) << #writable_unresolvable_field_idents::OFFSET;
+                    pub fn #writable_unresolvable_enumerated_field_idents(&mut self) -> #refined_writer_idents {
+                        #refined_writer_idents { w: self }
+                    }
+                )*
+
+                #(
+                    pub fn #writable_unresolvable_numeric_field_idents(&mut self, value: #value_tys) -> &mut Self {
+                        self.value |= (value as u32) << #writable_unresolvable_numeric_field_idents::OFFSET;
                         self
                     }
                 )*
@@ -1049,7 +1090,50 @@ impl Register {
                     }
                 }
             }
-        })
+        };
+
+        for (field, refined_writer_ident) in writable_unresolvable_enumerated_fields
+            .iter()
+            .zip(refined_writer_idents)
+        {
+            let field_ident = &field.ident;
+
+            let schema = match &field.access {
+                Access::Write(write) | Access::ReadWrite { read: _, write } => &write.schema,
+                _ => unreachable!("fields are writable"),
+            };
+
+            let Numericity::Enumerated { variants } = &schema.numericity else {
+                unreachable!("field schemas are enumerated in write direction")
+            };
+
+            let accessors = variants.iter().map(|variant| {
+                Ident::new(
+                    &inflector::cases::snakecase::to_snake_case(&variant.ident.to_string()),
+                    field.args.span(),
+                )
+            });
+
+            let variant_idents = variants.iter().map(|variant| &variant.ident);
+
+            body.extend(quote_spanned! { span =>
+                pub struct #refined_writer_ident<'a> {
+                    w: &'a mut Writer
+                }
+
+                impl<'a> #refined_writer_ident<'a> {
+                    #(
+                        pub fn #accessors(self) -> &'a mut Writer {
+                            self.w.value |= (#field_ident::WriteVariant::#variant_idents as u32) << #field_ident::OFFSET;
+
+                            self.w
+                        }
+                    )*
+                }
+            });
+        }
+
+        Some(body)
     }
 }
 

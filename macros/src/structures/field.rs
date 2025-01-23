@@ -99,17 +99,32 @@ impl FieldSpec {
     ) -> syn::Result<Self> {
         args.check_conflict_and_inherit()?; // WARN: very important and easy to miss
 
-        let implicit_schema = Schema::validate(SchemaSpec::parse(
-            ident.clone(),
-            SchemaArgs {
-                auto_increment: args.auto_increment,
-                width: *args
-                    .width
-                    .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
-            }
-            .with_span(args.span()),
-            items,
-        )?)?;
+        let implicit_schema = if args
+            .read
+            .as_ref()
+            .and_then(|read| read.schema.as_ref())
+            .is_some()
+            || args
+                .write
+                .as_ref()
+                .and_then(|write| write.schema.as_ref())
+                .is_some()
+        {
+            None
+        } else {
+            // derive schema from field body
+            Some(Schema::validate(SchemaSpec::parse(
+                ident.clone(),
+                SchemaArgs {
+                    auto_increment: args.auto_increment,
+                    width: *args
+                        .width
+                        .ok_or(syn::Error::new(args.span(), "width must be specified"))?,
+                }
+                .with_span(args.span()),
+                items,
+            )?)?)
+        };
 
         let offset = args.offset.unwrap_or(offset);
 
@@ -209,21 +224,18 @@ impl FieldSpec {
         simply may be too dynamic to be tracked statically.
         */
 
-        Ok(if access.is_read() && access.is_write() {
-            Resolvability::Resolvable {
-                reset: args.reset.clone().ok_or(syn::Error::new(
-                    args.span(),
-                    "resolvable fields must have a reset specified",
-                ))?,
+        Ok(if let Access::ReadWrite { read, write } = access {
+            if read.schema == write.schema {
+                Resolvability::Resolvable {
+                    reset: args.reset.clone().ok_or(syn::Error::new(
+                        args.span(),
+                        "resolvable fields must have a reset specified",
+                    ))?,
+                }
+            } else {
+                Resolvability::Unresolvable
             }
         } else {
-            if args.reset.is_some() {
-                Err(syn::Error::new(
-                    args.span(),
-                    "reset is extraneous for unresolvable fields",
-                ))?
-            }
-
             Resolvability::Unresolvable
         })
     }
@@ -389,7 +401,7 @@ impl Field {
                 Some(quote_spanned! { span =>
                     pub type ReadVariant = Variant;
                     pub type WriteVariant = Variant;
-                    #variant_enum;
+                    #variant_enum
                 })
             }
             Access::Write(write) => {
@@ -402,38 +414,52 @@ impl Field {
                 Some(quote_spanned! { span =>
                     pub type ReadVariant = Variant;
                     pub type WriteVariant = Variant;
-                    #variant_enum;
+                    #variant_enum
                 })
             }
             Access::ReadWrite { read, write } => {
-                let read_variant_enum = if let Numericity::Enumerated {
-                    variants: read_variants,
-                } = &read.schema.numericity
-                {
-                    Some(variant_enum(Ident::new("ReadVariant", span), read_variants))
-                } else {
-                    return None;
-                };
-                let write_variant_enum = if let Numericity::Enumerated {
-                    variants: write_variants,
-                } = &write.schema.numericity
-                {
-                    Some(variant_enum(
-                        Ident::new("WriteVariant", span),
-                        write_variants,
-                    ))
-                } else {
-                    return None;
-                };
+                if read.schema == write.schema {
+                    let Numericity::Enumerated { variants } = &read.schema.numericity else {
+                        return None;
+                    };
 
-                if let (None, None) = (&read_variant_enum, &write_variant_enum) {
-                    return None;
+                    let variant_enum = variant_enum(Ident::new("Variant", span), variants);
+
+                    Some(quote_spanned! { span =>
+                        pub type ReadVariant = Variant;
+                        pub type WriteVariant = Variant;
+                        #variant_enum
+                    })
+                } else {
+                    let read_variant_enum = if let Numericity::Enumerated {
+                        variants: read_variants,
+                    } = &read.schema.numericity
+                    {
+                        Some(variant_enum(Ident::new("ReadVariant", span), read_variants))
+                    } else {
+                        return None;
+                    };
+                    let write_variant_enum = if let Numericity::Enumerated {
+                        variants: write_variants,
+                    } = &write.schema.numericity
+                    {
+                        Some(variant_enum(
+                            Ident::new("WriteVariant", span),
+                            write_variants,
+                        ))
+                    } else {
+                        return None;
+                    };
+
+                    if let (None, None) = (&read_variant_enum, &write_variant_enum) {
+                        return None;
+                    }
+
+                    Some(quote_spanned! { span =>
+                        #read_variant_enum
+                        #write_variant_enum
+                    })
                 }
-
-                Some(quote_spanned! { span =>
-                    #read_variant_enum
-                    #write_variant_enum
-                })
             }
         }
     }

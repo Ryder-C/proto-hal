@@ -72,6 +72,14 @@ impl Variant {
     }
 }
 
+impl PartialEq for Variant {
+    fn eq(&self, other: &Self) -> bool {
+        self.ident == other.ident
+            && self.bits == other.bits
+            && self.entitlements == other.entitlements
+    }
+}
+
 // no validation necessary...
 
 impl ToTokens for Variant {
