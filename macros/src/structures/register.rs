@@ -1122,11 +1122,15 @@ impl Register {
                 }
 
                 impl<'a> #refined_writer_ident<'a> {
+                    pub fn variant(self, variant: #field_ident::WriteVariant) -> &'a mut Writer {
+                        self.w.value |= (variant as u32) << #field_ident::OFFSET;
+
+                        self.w
+                    }
+
                     #(
                         pub fn #accessors(self) -> &'a mut Writer {
-                            self.w.value |= (#field_ident::WriteVariant::#variant_idents as u32) << #field_ident::OFFSET;
-
-                            self.w
+                            self.variant(#field_ident::WriteVariant::#variant_idents)
                         }
                     )*
                 }
