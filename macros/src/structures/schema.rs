@@ -138,6 +138,8 @@ impl SchemaSpec {
             });
         }
 
+        errors.coalesce()?;
+
         Ok(Self {
             args,
             ident,
