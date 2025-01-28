@@ -466,6 +466,473 @@ impl Register {
         }
     }
 
+    fn maybe_generate_refined_writers(&self) -> Option<TokenStream2> {
+        let span = self.args.span();
+
+        let writable_enumerated_fields = self
+            .fields()
+            .enumerated(AccessMarker::Write)
+            .collect::<Vec<_>>();
+
+        if writable_enumerated_fields.is_empty() {
+            return None;
+        }
+
+        let refined_writer_idents = writable_enumerated_fields
+            .iter()
+            .map(|field| {
+                format_ident!(
+                    "{}Writer",
+                    inflector::cases::pascalcase::to_pascal_case(&field.ident.to_string())
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let mut body = TokenStream2::new();
+
+        for (field, refined_writer_ident) in
+            writable_enumerated_fields.iter().zip(refined_writer_idents)
+        {
+            let field_ident = &field.ident;
+
+            let schema = match &field.access {
+                Access::Write(write) | Access::ReadWrite { read: _, write } => &write.schema,
+                _ => unreachable!("fields are writable"),
+            };
+
+            let Numericity::Enumerated { variants } = &schema.numericity else {
+                unreachable!("field schemas are enumerated in write direction")
+            };
+
+            let accessors = variants.iter().map(|variant| {
+                Ident::new(
+                    &inflector::cases::snakecase::to_snake_case(&variant.ident.to_string()),
+                    field.args.span(),
+                )
+            });
+
+            let variant_idents = variants.iter().map(|variant| &variant.ident);
+
+            body.extend(quote_spanned! { span =>
+                pub struct #refined_writer_ident<'a, W> {
+                    w: &'a mut W
+                }
+
+                impl<'a, W> #refined_writer_ident<'a, W>
+                where
+                    W: ::proto_hal::macro_utils::Writer,
+                {
+                    pub fn variant(self, variant: #field_ident::WriteVariant) -> &'a mut W {
+                        unsafe { ::proto_hal::macro_utils::Writer::write(self.w, |reg| *reg |= (variant as u32) << #field_ident::OFFSET) }
+                    }
+
+                    #(
+                        pub fn #accessors(self) -> &'a mut W {
+                            self.variant(#field_ident::WriteVariant::#variant_idents)
+                        }
+                    )*
+                }
+            });
+        }
+
+        Some(body)
+    }
+
+    fn maybe_generate_reader(&self) -> Option<TokenStream2> {
+        let span = self.args.span();
+
+        let readable_unresolvable_fields =
+            self.fields().readable().unresolvable().collect::<Vec<_>>();
+
+        // don't generate a reader if there are no fields
+        // to be read
+        if readable_unresolvable_fields.is_empty() {
+            return None;
+        };
+
+        let readable_unresolvable_numeric_fields = self
+            .fields()
+            .readable()
+            .unresolvable()
+            .numeric(AccessMarker::Read);
+        let readable_unresolvable_numeric_field_idents = self
+            .fields()
+            .readable()
+            .unresolvable()
+            .numeric(AccessMarker::Read)
+            .idents();
+        let readable_unresolvable_enumerated_field_idents = self
+            .fields()
+            .readable()
+            .unresolvable()
+            .enumerated(AccessMarker::Read)
+            .idents();
+
+        let value_tys = readable_unresolvable_numeric_fields
+            .map(|field| {
+                let ident = format_ident!(
+                    "u{}",
+                    Index {
+                        index: field.width() as _,
+                        span: Span::call_site(),
+                    }
+                );
+
+                match field.width() {
+                    1 => parse_quote! { bool },
+                    8 | 16 | 32 => {
+                        parse_quote! { #ident }
+                    }
+                    _ => {
+                        parse_quote! { ::proto_hal::macro_utils::arbitrary_int::#ident }
+                    }
+                }
+            })
+            .collect::<Vec<Path>>();
+
+        Some(quote_spanned! { span =>
+            pub struct Reader {
+                value: ::proto_hal::macro_utils::RegisterValue,
+            }
+
+            impl From<UnsafeReader> for Reader {
+                fn from(unsafe_reader: UnsafeReader) -> Self {
+                    Self { value: unsafe_reader.value }
+                }
+            }
+
+            impl Reader {
+                #(
+                    pub fn #readable_unresolvable_enumerated_field_idents(&self) -> #readable_unresolvable_enumerated_field_idents::ReadVariant {
+                        // SAFETY: assumes
+                        // 1. peripheral description is correct (offset/width)
+                        // 2. hardware is operating correctly
+                        unsafe {
+                            #readable_unresolvable_enumerated_field_idents::ReadVariant::from_bits(
+                                self.value.region(
+                                    #readable_unresolvable_enumerated_field_idents::OFFSET,
+                                    #readable_unresolvable_enumerated_field_idents::WIDTH
+                                )
+                            )
+                        }
+                    }
+                )*
+
+                #(
+                    pub fn #readable_unresolvable_numeric_field_idents(&self) -> #value_tys {
+                        self.value.#value_tys(#readable_unresolvable_numeric_field_idents::OFFSET)
+                    }
+                )*
+            }
+        })
+    }
+
+    fn maybe_generate_writer(&self) -> Option<TokenStream2> {
+        let span = self.args.span();
+
+        let writable_unresolvable_fields =
+            self.fields().writable().unresolvable().collect::<Vec<_>>();
+
+        // don't generate a reader if there are no fields
+        // to be written
+        if writable_unresolvable_fields.is_empty() {
+            return None;
+        };
+
+        let writable_unresolvable_numeric_fields = self
+            .fields()
+            .writable()
+            .unresolvable()
+            .numeric(AccessMarker::Write);
+        let writable_unresolvable_numeric_field_idents = self
+            .fields()
+            .writable()
+            .unresolvable()
+            .numeric(AccessMarker::Write)
+            .idents();
+        let writable_unresolvable_enumerated_fields = self
+            .fields()
+            .writable()
+            .unresolvable()
+            .enumerated(AccessMarker::Write)
+            .collect::<Vec<_>>();
+        let writable_unresolvable_enumerated_field_idents = self
+            .fields()
+            .writable()
+            .unresolvable()
+            .enumerated(AccessMarker::Write)
+            .idents();
+
+        let value_tys = writable_unresolvable_numeric_fields
+            .map(|field| {
+                let ident = format_ident!(
+                    "u{}",
+                    Index {
+                        index: field.width() as _,
+                        span: Span::call_site(),
+                    }
+                );
+
+                match field.width() {
+                    1 => parse_quote! { bool },
+                    8 | 16 | 32 => parse_quote! { #ident },
+                    _ => parse_quote! { ::proto_hal::macro_utils::arbitrary_int::#ident },
+                }
+            })
+            .collect::<Vec<Path>>();
+
+        let unresolvable_refined_writer_idents = writable_unresolvable_enumerated_fields
+            .iter()
+            .map(|field| {
+                format_ident!(
+                    "{}Writer",
+                    inflector::cases::pascalcase::to_pascal_case(&field.ident.to_string())
+                )
+            })
+            .collect::<Vec<_>>();
+
+        Some(quote_spanned! { span =>
+            pub struct Writer {
+                value: u32,
+            }
+
+            impl ::proto_hal::macro_utils::Writer for Writer {
+                unsafe fn write(&mut self, f: impl FnOnce(&mut u32)) -> &mut Self {
+                    f(&mut self.value);
+                    self
+                }
+            }
+
+            impl Writer {
+                const fn new() -> Self {
+                    Self {
+                        value: 0,
+                    }
+                }
+
+                #(
+                    pub fn #writable_unresolvable_enumerated_field_idents(&mut self) -> #unresolvable_refined_writer_idents<Self> {
+                        #unresolvable_refined_writer_idents { w: self }
+                    }
+                )*
+
+                #(
+                    pub fn #writable_unresolvable_numeric_field_idents(&mut self, value: #value_tys) -> &mut Self {
+                        unsafe {
+                            ::proto_hal::macro_utils::Writer::write(
+                                self,
+                                |reg| *reg |= (value as u32) << #writable_unresolvable_numeric_field_idents::OFFSET
+                            )
+                        }
+                    }
+                )*
+            }
+        })
+    }
+
+    fn maybe_generate_unsafe_reader(&self) -> Option<TokenStream2> {
+        let span = self.args.span();
+
+        // don't generate a reader if there are no fields
+        // to be read
+        if !self.fields().any(|field| field.access.is_read()) {
+            return None;
+        };
+
+        let readable_numeric_fields = self.fields().readable().numeric(AccessMarker::Read);
+        let readable_numeric_field_idents = self
+            .fields()
+            .readable()
+            .numeric(AccessMarker::Read)
+            .idents();
+        let readable_enumerated_field_idents = self
+            .fields()
+            .readable()
+            .enumerated(AccessMarker::Read)
+            .idents();
+
+        let value_tys = readable_numeric_fields
+            .map(|field| {
+                let ident = format_ident!(
+                    "u{}",
+                    Index {
+                        index: field.width() as _,
+                        span: Span::call_site(),
+                    }
+                );
+
+                match field.width() {
+                    1 => parse_quote! { bool },
+                    8 | 16 | 32 => {
+                        parse_quote! { #ident }
+                    }
+                    _ => {
+                        parse_quote! { ::proto_hal::macro_utils::arbitrary_int::#ident }
+                    }
+                }
+            })
+            .collect::<Vec<Path>>();
+
+        Some(quote_spanned! { span =>
+            pub struct UnsafeReader {
+                value: ::proto_hal::macro_utils::RegisterValue,
+            }
+
+            impl UnsafeReader {
+                const fn new(value: u32) -> Self {
+                    Self {
+                        value: ::proto_hal::macro_utils::RegisterValue::new(value),
+                    }
+                }
+
+                #(
+                    pub fn #readable_enumerated_field_idents(&self) -> #readable_enumerated_field_idents::ReadVariant {
+                        // SAFETY: assumes
+                        // 1. peripheral description is correct (offset/width)
+                        // 2. hardware is operating correctly
+                        unsafe {
+                            #readable_enumerated_field_idents::ReadVariant::from_bits(
+                                self.value.region(
+                                    #readable_enumerated_field_idents::OFFSET,
+                                    #readable_enumerated_field_idents::WIDTH
+                                )
+                            )
+                        }
+                    }
+                )*
+
+                #(
+                    pub fn #readable_numeric_field_idents(&self) -> #value_tys {
+                        self.value.#value_tys(#readable_numeric_field_idents::OFFSET)
+                    }
+                )*
+            }
+        })
+    }
+
+    fn maybe_generate_unsafe_writer(&self) -> Option<TokenStream2> {
+        let span = self.args.span();
+
+        // don't generate a reader if there are no fields
+        // to be written
+        if !self.fields().any(|field| field.access.is_write()) {
+            return None;
+        };
+
+        let writable_numeric_fields = self.fields().writable().numeric(AccessMarker::Write);
+        let writable_numeric_field_idents = self
+            .fields()
+            .writable()
+            .numeric(AccessMarker::Write)
+            .idents();
+        let writable_enumerated_fields = self
+            .fields()
+            .writable()
+            .enumerated(AccessMarker::Write)
+            .collect::<Vec<_>>();
+        let writable_enumerated_field_idents = self
+            .fields()
+            .writable()
+            .enumerated(AccessMarker::Write)
+            .idents();
+
+        let value_tys = writable_numeric_fields
+            .map(|field| {
+                let ident = format_ident!(
+                    "u{}",
+                    Index {
+                        index: field.width() as _,
+                        span: Span::call_site(),
+                    }
+                );
+
+                match field.width() {
+                    1 => parse_quote! { bool },
+                    8 | 16 | 32 => parse_quote! { #ident },
+                    _ => parse_quote! { ::proto_hal::macro_utils::arbitrary_int::#ident },
+                }
+            })
+            .collect::<Vec<Path>>();
+
+        let refined_writer_idents = writable_enumerated_fields
+            .iter()
+            .map(|field| {
+                format_ident!(
+                    "{}Writer",
+                    inflector::cases::pascalcase::to_pascal_case(&field.ident.to_string())
+                )
+            })
+            .collect::<Vec<_>>();
+
+        Some(quote_spanned! { span =>
+            pub struct UnsafeWriter {
+                value: u32,
+            }
+
+            impl ::proto_hal::macro_utils::Writer for UnsafeWriter {
+                unsafe fn write(&mut self, f: impl FnOnce(&mut u32)) -> &mut Self {
+                    f(&mut self.value);
+                    self
+                }
+            }
+
+            impl UnsafeWriter {
+                const fn new() -> Self {
+                    Self {
+                        value: 0,
+                    }
+                }
+
+                #(
+                    pub fn #writable_enumerated_field_idents(&mut self) -> #refined_writer_idents<Self> {
+                        #refined_writer_idents { w: self }
+                    }
+                )*
+
+                #(
+                    pub fn #writable_numeric_field_idents(&mut self, value: #value_tys) -> &mut Self {
+                        unsafe {
+                            ::proto_hal::macro_utils::Writer::write(
+                                self,
+                                |reg| *reg |= (value as u32) << #writable_numeric_field_idents::OFFSET
+                            )
+                        }
+                    }
+                )*
+            }
+        })
+    }
+
+    fn generate_unsafe_interface(&self) -> TokenStream2 {
+        let span = self.args.span();
+
+        let mut body = TokenStream2::new();
+
+        if self.fields().any(|field| field.access.is_read()) {
+            body.extend(quote_spanned! { span =>
+                pub unsafe fn read() -> UnsafeReader {
+                    UnsafeReader::new(
+                        ::core::ptr::read_volatile((super::BASE_ADDR + OFFSET) as *const u32)
+                    )
+                }
+            });
+        }
+
+        if self.fields().any(|field| field.access.is_write()) {
+            body.extend(quote_spanned! { span =>
+                pub unsafe fn write(f: impl FnOnce(&mut UnsafeWriter) -> &mut UnsafeWriter) {
+                    let mut writer = UnsafeWriter::new();
+
+                    f(&mut writer);
+
+                    ::core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, writer.value);
+                }
+            });
+        }
+
+        body
+    }
+
     fn generate_register_struct(&self) -> TokenStream2 {
         let span = self.args.span();
 
@@ -593,74 +1060,125 @@ impl Register {
         })
     }
 
-    fn maybe_generate_register_impl(&self) -> Option<TokenStream2> {
-        if !self.is_resolvable() {
-            return None;
-        };
-
+    fn generate_register_impls(&self) -> TokenStream2 {
         let span = self.args.span();
 
         let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
         let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
-        // let new_resolvable_field_tys = self
-        //     .fields()
-        //     .resolvable()
-        //     .tys()
-        //     .map(|ty| format_ident!("New{ty}"))
-        //     .collect::<Vec<_>>();
-        // let new_entitlement_bounds = self
-        //     .fields()
-        //     .resolvable()
-        //     .map(|field| {
-        //         if field.schema.entitlement_fields.is_empty() {
-        //             return None;
-        //         }
 
-        //         let entitled_field_tys = field
-        //             .schema
-        //             .entitlement_fields
-        //             .iter()
-        //             .map(|ident| {
-        //                 format_ident!(
-        //                     "New{}",
-        //                     &inflector::cases::pascalcase::to_pascal_case(&ident.to_string(),),
-        //                 )
-        //             })
-        //             .collect::<Vec<_>>();
+        let mut body = TokenStream2::new();
 
-        //         Some(quote_spanned! { span =>
-        //             + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
-        //         })
-        //     })
-        //     .collect::<Vec<_>>();
+        if self.is_resolvable() {
+            // let new_resolvable_field_tys = self
+            //     .fields()
+            //     .resolvable()
+            //     .tys()
+            //     .map(|ty| format_ident!("New{ty}"))
+            //     .collect::<Vec<_>>();
+            // let new_entitlement_bounds = self
+            //     .fields()
+            //     .resolvable()
+            //     .map(|field| {
+            //         if field.schema.entitlement_fields.is_empty() {
+            //             return None;
+            //         }
 
-        Some(quote_spanned! { span =>
-            impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
-            where
-                #(
-                    #resolvable_field_tys: #resolvable_field_idents::State,
-                )*
-            {
-                // TODO: this is broken for now
-                // /// Perform a state transition inferred from context.
-                // pub fn transition<#(#new_resolvable_field_tys,)*>(self) -> Register<#(#new_resolvable_field_tys,)*>
-                // where
-                //     #(
-                //         #new_resolvable_field_tys: #resolvable_field_idents::State #new_entitlement_bounds,
-                //     )*
-                // {
-                //     // SAFETY: `self` is destroyed
-                //     unsafe { StateBuilder::conjure() }.finish()
-                // }
+            //         let entitled_field_tys = field
+            //             .schema
+            //             .entitlement_fields
+            //             .iter()
+            //             .map(|ident| {
+            //                 format_ident!(
+            //                     "New{}",
+            //                     &inflector::cases::pascalcase::to_pascal_case(&ident.to_string(),),
+            //                 )
+            //             })
+            //             .collect::<Vec<_>>();
 
-                /// Create a state builder for this register to perform
-                /// a state transition.
-                pub fn build_state(self) -> StateBuilder<#(#resolvable_field_tys,)*> {
-                    // SAFETY: `self` is destroyed
-                    unsafe { StateBuilder::conjure() }
+            //         Some(quote_spanned! { span =>
+            //             + #(::proto_hal::stasis::Entitled<#entitled_field_tys>)+*
+            //         })
+            //     })
+            //     .collect::<Vec<_>>();
+
+            body.extend(quote_spanned! { span =>
+                impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
+                where
+                    #(
+                        #resolvable_field_tys: #resolvable_field_idents::State,
+                    )*
+                {
+                    // TODO: this is broken for now
+                    // /// Perform a state transition inferred from context.
+                    // pub fn transition<#(#new_resolvable_field_tys,)*>(self) -> Register<#(#new_resolvable_field_tys,)*>
+                    // where
+                    //     #(
+                    //         #new_resolvable_field_tys: #resolvable_field_idents::State #new_entitlement_bounds,
+                    //     )*
+                    // {
+                    //     // SAFETY: `self` is destroyed
+                    //     unsafe { StateBuilder::conjure() }.finish()
+                    // }
+
+                    /// Create a state builder for this register to perform
+                    /// a state transition.
+                    pub fn build_state(self) -> StateBuilder<#(#resolvable_field_tys,)*> {
+                        // SAFETY: `self` is destroyed
+                        unsafe { StateBuilder::conjure() }
+                    }
                 }
-            }
-        })
+            });
+        }
+
+        if self
+            .fields()
+            .unresolvable()
+            .any(|field| field.access.is_read())
+        {
+            body.extend(quote_spanned! { span =>
+                impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
+                where
+                    #(
+                        #resolvable_field_tys: #resolvable_field_idents::State,
+                    )*
+                {
+                    pub fn read(&self) -> Reader {
+                        // SAFETY: assumes the proc macro implementation is sound
+                        // and that the peripheral description is accurate
+                        unsafe { read() }.into()
+                    }
+                }
+            });
+        }
+
+        if self
+            .fields()
+            .unresolvable()
+            .any(|field| field.access.is_write())
+        {
+            body.extend(quote_spanned! { span =>
+                    impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
+                    where
+                        #(
+                            #resolvable_field_tys: #resolvable_field_idents::State,
+                        )*
+                    {
+                        pub fn write(&self, f: impl FnOnce(&mut Writer) -> &mut Writer) {
+                            let mut writer = Writer::new();
+
+                            f(&mut writer);
+
+                            // SAFETY: assumes the proc macro implementation is sound
+                            // and that the peripheral description is accurate
+                            unsafe {
+                                core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, writer.value);
+                            }
+                        }
+                    }
+                });
+        }
+
+        body
     }
 
     fn maybe_generate_conversion_trait_impls(&self) -> Option<TokenStream2> {
@@ -867,278 +1385,6 @@ impl Register {
 
         Some(body)
     }
-
-    fn maybe_generate_reader(&self) -> Option<TokenStream2> {
-        let span = self.args.span();
-
-        let readable_unresolvable_fields =
-            self.fields().readable().unresolvable().collect::<Vec<_>>();
-
-        // don't generate a reader if there are no fields
-        // to be read
-        if readable_unresolvable_fields.is_empty() {
-            return None;
-        };
-
-        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
-        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
-
-        let readable_unresolvable_numeric_fields = self
-            .fields()
-            .readable()
-            .unresolvable()
-            .numeric(AccessMarker::Read);
-        let readable_unresolvable_numeric_field_idents = self
-            .fields()
-            .readable()
-            .unresolvable()
-            .numeric(AccessMarker::Read)
-            .idents();
-        let readable_unresolvable_enumerated_field_idents = self
-            .fields()
-            .readable()
-            .unresolvable()
-            .enumerated(AccessMarker::Read)
-            .idents();
-
-        let value_tys = readable_unresolvable_numeric_fields
-            .map(|field| {
-                let ident = format_ident!(
-                    "u{}",
-                    Index {
-                        index: field.width() as _,
-                        span: Span::call_site(),
-                    }
-                );
-
-                match field.width() {
-                    1 => parse_quote! { bool },
-                    8 | 16 | 32 => {
-                        parse_quote! { #ident }
-                    }
-                    _ => {
-                        parse_quote! { ::proto_hal::macro_utils::arbitrary_int::#ident }
-                    }
-                }
-            })
-            .collect::<Vec<Path>>();
-
-        Some(quote_spanned! { span =>
-            pub struct Reader {
-                value: ::proto_hal::macro_utils::RegisterValue,
-            }
-
-            impl Reader {
-                const fn new(value: u32) -> Self {
-                    Self {
-                        value: ::proto_hal::macro_utils::RegisterValue::new(value),
-                    }
-                }
-
-                #(
-                    pub fn #readable_unresolvable_enumerated_field_idents(&self) -> #readable_unresolvable_enumerated_field_idents::ReadVariant {
-                        // SAFETY: assumes
-                        // 1. peripheral description is correct (offset/width)
-                        // 2. hardware is operating correctly
-                        unsafe {
-                            #readable_unresolvable_enumerated_field_idents::ReadVariant::from_bits(
-                                self.value.region(
-                                    #readable_unresolvable_enumerated_field_idents::OFFSET,
-                                    #readable_unresolvable_enumerated_field_idents::WIDTH
-                                )
-                            )
-                        }
-                    }
-                )*
-
-                #(
-                    pub fn #readable_unresolvable_numeric_field_idents(&self) -> #value_tys {
-                        self.value.#value_tys(#readable_unresolvable_numeric_field_idents::OFFSET)
-                    }
-                )*
-            }
-
-            impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
-            where
-                #(
-                    #resolvable_field_tys: #resolvable_field_idents::State,
-                )*
-            {
-                pub fn read<T>(&self, f: impl FnOnce(&Reader) -> T) -> T {
-                    let reader = Reader::new(
-                        // SAFETY: assumes the proc macro implementation is sound
-                        // and that the peripheral description is accurate
-                        unsafe {
-                            core::ptr::read_volatile((super::BASE_ADDR + OFFSET) as *const u32)
-                        }
-                    );
-
-                    f(&reader)
-                }
-            }
-        })
-    }
-
-    fn maybe_generate_writer(&self) -> Option<TokenStream2> {
-        let span = self.args.span();
-
-        let writable_unresolvable_fields =
-            self.fields().writable().unresolvable().collect::<Vec<_>>();
-
-        // don't generate a reader if there are no fields
-        // to be read
-        if writable_unresolvable_fields.is_empty() {
-            return None;
-        };
-
-        let resolvable_field_idents = self.fields().resolvable().idents().collect::<Vec<_>>();
-        let resolvable_field_tys = self.fields().resolvable().tys().collect::<Vec<_>>();
-
-        let writable_unresolvable_numeric_fields = self
-            .fields()
-            .writable()
-            .unresolvable()
-            .numeric(AccessMarker::Write);
-        let writable_unresolvable_numeric_field_idents = self
-            .fields()
-            .writable()
-            .unresolvable()
-            .numeric(AccessMarker::Write)
-            .idents();
-        let writable_unresolvable_enumerated_fields = self
-            .fields()
-            .writable()
-            .unresolvable()
-            .enumerated(AccessMarker::Write)
-            .collect::<Vec<_>>();
-        let writable_unresolvable_enumerated_field_idents = self
-            .fields()
-            .writable()
-            .unresolvable()
-            .enumerated(AccessMarker::Write)
-            .idents();
-
-        let value_tys = writable_unresolvable_numeric_fields
-            .map(|field| {
-                let ident = format_ident!(
-                    "u{}",
-                    Index {
-                        index: field.width() as _,
-                        span: Span::call_site(),
-                    }
-                );
-
-                match field.width() {
-                    1 => parse_quote! { bool },
-                    8 | 16 | 32 => parse_quote! { #ident },
-                    _ => parse_quote! { ::proto_hal::macro_utils::arbitrary_int::#ident },
-                }
-            })
-            .collect::<Vec<Path>>();
-
-        let refined_writer_idents = writable_unresolvable_enumerated_fields
-            .iter()
-            .map(|field| {
-                format_ident!(
-                    "{}Writer",
-                    inflector::cases::pascalcase::to_pascal_case(&field.ident.to_string())
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let mut body = quote_spanned! { span =>
-            pub struct Writer {
-                value: u32,
-            }
-
-            impl Writer {
-                const fn new() -> Self {
-                    Self {
-                        value: 0,
-                    }
-                }
-
-                #(
-                    pub fn #writable_unresolvable_enumerated_field_idents(&mut self) -> #refined_writer_idents {
-                        #refined_writer_idents { w: self }
-                    }
-                )*
-
-                #(
-                    pub fn #writable_unresolvable_numeric_field_idents(&mut self, value: #value_tys) -> &mut Self {
-                        self.value |= (value as u32) << #writable_unresolvable_numeric_field_idents::OFFSET;
-                        self
-                    }
-                )*
-            }
-
-            impl<#(#resolvable_field_tys,)*> Register<#(#resolvable_field_tys,)*>
-            where
-                #(
-                    #resolvable_field_tys: #resolvable_field_idents::State,
-                )*
-            {
-                pub fn write(&self, f: impl FnOnce(&mut Writer) -> &mut Writer) {
-                    let mut writer = Writer::new();
-
-                    f(&mut writer);
-
-                    // SAFETY: assumes the proc macro implementation is sound
-                    // and that the peripheral description is accurate
-                    unsafe {
-                        core::ptr::write_volatile((super::BASE_ADDR + OFFSET) as *mut u32, writer.value);
-                    }
-                }
-            }
-        };
-
-        for (field, refined_writer_ident) in writable_unresolvable_enumerated_fields
-            .iter()
-            .zip(refined_writer_idents)
-        {
-            let field_ident = &field.ident;
-
-            let schema = match &field.access {
-                Access::Write(write) | Access::ReadWrite { read: _, write } => &write.schema,
-                _ => unreachable!("fields are writable"),
-            };
-
-            let Numericity::Enumerated { variants } = &schema.numericity else {
-                unreachable!("field schemas are enumerated in write direction")
-            };
-
-            let accessors = variants.iter().map(|variant| {
-                Ident::new(
-                    &inflector::cases::snakecase::to_snake_case(&variant.ident.to_string()),
-                    field.args.span(),
-                )
-            });
-
-            let variant_idents = variants.iter().map(|variant| &variant.ident);
-
-            body.extend(quote_spanned! { span =>
-                pub struct #refined_writer_ident<'a> {
-                    w: &'a mut Writer
-                }
-
-                impl<'a> #refined_writer_ident<'a> {
-                    pub fn variant(self, variant: #field_ident::WriteVariant) -> &'a mut Writer {
-                        self.w.value |= (variant as u32) << #field_ident::OFFSET;
-
-                        self.w
-                    }
-
-                    #(
-                        pub fn #accessors(self) -> &'a mut Writer {
-                            self.variant(#field_ident::WriteVariant::#variant_idents)
-                        }
-                    )*
-                }
-            });
-        }
-
-        Some(body)
-    }
 }
 
 impl ToTokens for Register {
@@ -1149,14 +1395,18 @@ impl ToTokens for Register {
 
         body.extend(self.generate_field_bodies());
         body.extend(self.generate_offset_const());
+        body.extend(self.maybe_generate_refined_writers());
+        body.extend(self.maybe_generate_reader());
+        body.extend(self.maybe_generate_writer());
+        body.extend(self.maybe_generate_unsafe_reader());
+        body.extend(self.maybe_generate_unsafe_writer());
+        body.extend(self.generate_unsafe_interface());
         body.extend(self.generate_register_struct());
         body.extend(self.maybe_generate_reset_alias());
         body.extend(self.maybe_generate_state_builder());
-        body.extend(self.maybe_generate_register_impl());
+        body.extend(self.generate_register_impls());
         body.extend(self.maybe_generate_conversion_trait_impls());
         body.extend(self.maybe_generate_builder_methods());
-        body.extend(self.maybe_generate_reader());
-        body.extend(self.maybe_generate_writer());
 
         tokens.extend(quote_spanned! { span =>
             pub mod #ident {
