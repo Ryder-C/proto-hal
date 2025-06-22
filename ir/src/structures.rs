@@ -5,7 +5,6 @@ pub mod hal;
 pub mod interrupts;
 pub mod peripheral;
 pub mod register;
-pub mod schema;
 pub mod variant;
 
 pub struct Validated<S> {
