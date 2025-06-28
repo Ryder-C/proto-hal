@@ -436,6 +436,19 @@ impl Field {
 
         None
     }
+
+    fn maybe_generate_marker_ty(
+        entitlements: &Entitlements,
+        ty_name: &Ident,
+    ) -> Option<TokenStream> {
+        if entitlements.is_empty() {
+            None
+        } else {
+            Some(quote! {
+                pub struct #ty_name;
+            })
+        }
+    }
 }
 
 impl ToTokens for Field {
@@ -455,6 +468,10 @@ impl ToTokens for Field {
         body.extend(Self::generate_variant_enum(&self.access));
         body.extend(Self::generate_state_trait(&self.access));
         body.extend(Self::generate_state_impls(&self.access, ident));
+        body.extend(Self::maybe_generate_marker_ty(
+            &self.entitlements,
+            &self.type_name(),
+        ));
 
         let docs = &self.docs;
 
