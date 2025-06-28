@@ -444,8 +444,14 @@ impl Field {
         if entitlements.is_empty() {
             None
         } else {
+            let entitlement_paths = entitlements.iter().map(|entitlement| entitlement.render());
+
             Some(quote! {
                 pub struct #ty_name;
+
+                #(
+                    unsafe impl ::proto_hal::stasis::Entitled<#entitlement_paths> for #ty_name {}
+                )*
             })
         }
     }

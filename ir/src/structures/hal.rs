@@ -249,7 +249,7 @@ impl Hal {
                 Peripherals {
                     // fundamental
                     #(
-                        #fundamental_peripheral_idents: #fundamental_peripheral_idents::Reset::conjure(),
+                        #fundamental_peripheral_idents: unsafe { #fundamental_peripheral_idents::Reset::conjure() },
                     )*
 
                     // conditional

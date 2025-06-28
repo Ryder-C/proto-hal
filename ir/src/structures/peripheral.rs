@@ -184,7 +184,7 @@ impl Peripheral {
                             #entitlement_idents,
                         )*
                         #(
-                            #register_idents: #register_idents::Reset::conjure(),
+                            #register_idents: unsafe { #register_idents::Reset::conjure() },
                         )*
                     }
                 }

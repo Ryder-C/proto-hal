@@ -66,7 +66,13 @@ mod tests {
         fn wdata() {
             let _lock = LOCK.lock().unwrap();
 
-            cordic::wdata::write(|w| w.arg(0xdeadbeefu32));
+            let p = unsafe { crate::peripherals() };
+
+            let rcc::ahb1enr::States { cordicen, .. } =
+                rcc::ahb1enr::transition(|reg| reg.cordicen(p.rcc.ahb1enr.cordicen).enabled());
+            let cordic = p.cordic.unmask(cordicen);
+
+            cordic::wdata::write(|w| w.arg(&cordic.csr.argsize, 0xdeadbeefu32));
 
             assert_eq!(unsafe { MOCK_CORDIC }[1], 0xdeadbeef);
         }

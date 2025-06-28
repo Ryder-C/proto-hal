@@ -472,48 +472,71 @@ impl Register {
         fields: impl Iterator<Item = &'a Field> + Clone,
     ) -> Option<TokenStream> {
         let fields = fields.filter(|field| !field.is_resolvable());
-        let enumerated_fields = fields.clone().filter(|field| match &field.access {
+
+        let accessors = fields.filter_map(|field| match &field.access {
             Access::Write(write) | Access::ReadWrite { read: _, write } => {
-                matches!(write.numericity, Numericity::Enumerated { variants: _ })
+                let ident = field.module_name();
+                let marker_ty = field.type_name();
+
+                let (entitlement_generics, entitlement_args, entitlement_where) = if field.entitlements.is_empty() {
+                    (None, None, None)
+                } else {
+                    let entitlement_tys = field.entitlements.iter().map(|entitlement| entitlement.variant()).collect::<Vec<_>>();
+                    let entitlement_idents = field.entitlements.iter().map(|entitlement|
+                        Ident::new(
+                            inflector::cases::snakecase::to_snake_case(
+                                entitlement.variant().to_string().as_str()).as_str(),
+                            Span::call_site()
+                        ));
+
+                    (
+                        Some(quote! {
+                            <#(#entitlement_tys),*>
+                        }),
+                        Some(quote! {
+                            #(#[expect(unused)] #entitlement_idents: &#entitlement_tys,)*
+                        }),
+                        Some(quote! {
+                            where
+                                #(
+                                    #ident::#marker_ty: ::proto_hal::stasis::Entitled<#entitlement_tys>,
+                                )*
+                        })
+                    )
+                };
+
+                Some(match &write.numericity {
+                    Numericity::Enumerated { variants: _ } => {
+                        let refined_writer_ident = field.writer_ident();
+
+                        // TODO: this should be improved, reduce duplicate code
+                        quote! {
+                            pub fn #ident(&mut self) -> #refined_writer_ident<Self, impl FnOnce(&mut Self, u32)> {
+                                let mask = (u32::MAX >> (32 - #ident::WIDTH)) << #ident::OFFSET;
+
+                                #refined_writer_ident { w: self, f: move |w, value| w.value = (w.value & !mask) | (value << #ident::OFFSET) }
+                            }
+                        }
+                    },
+                    Numericity::Numeric => {
+                        quote! {
+                            pub fn #ident #entitlement_generics (&mut self, #entitlement_args value: impl Into<u32>) -> &mut Self
+                            #entitlement_where
+                            {
+                                let mask = (u32::MAX >> (32 - #ident::WIDTH)) << #ident::OFFSET;
+                                self.value = (self.value & !mask) | (value.into() << #ident::OFFSET);
+
+                                self
+                            }
+                        }
+                    },
+                })
             }
-            _ => false,
-        });
+            _ => None,
+        }).collect::<Vec<_>>();
 
-        let numeric_field_idents = fields
-            .clone()
-            .filter_map(|field| match &field.access {
-                Access::Write(write) | Access::ReadWrite { read: _, write } => {
-                    if matches!(write.numericity, Numericity::Numeric) {
-                        Some(field.module_name())
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-
-        let enumerated_field_idents = enumerated_fields
-            .clone()
-            .map(|field| field.module_name())
-            .collect::<Vec<_>>();
-        let refined_writer_idents = enumerated_fields
-            .map(|field| field.writer_ident())
-            .collect::<Vec<_>>();
-
-        if enumerated_field_idents.is_empty() && numeric_field_idents.is_empty() {
+        if accessors.is_empty() {
             None?
-        }
-
-        let mut entitlement_fields = HashSet::new();
-
-        for field in fields {
-            entitlement_fields.extend(
-                field
-                    .entitlements
-                    .iter()
-                    .map(|entitlement| entitlement.field()),
-            );
         }
 
         Some(quote! {
@@ -522,23 +545,7 @@ impl Register {
             }
 
             impl Writer {
-                // TODO: this should be improved, reduce duplicate code
-                #(
-                    pub fn #enumerated_field_idents(&mut self) -> #refined_writer_idents<Self, impl FnOnce(&mut Self, u32)> {
-                        let mask = (u32::MAX >> (32 - #enumerated_field_idents::WIDTH)) << #enumerated_field_idents::OFFSET;
-
-                        #refined_writer_idents { w: self, f: move |w, value| w.value = (w.value & !mask) | (value << #enumerated_field_idents::OFFSET) }
-                    }
-                )*
-
-                #(
-                    pub fn #numeric_field_idents(&mut self, value: impl Into<u32>) -> &mut Self {
-                        let mask = (u32::MAX >> (32 - #numeric_field_idents::WIDTH)) << #numeric_field_idents::OFFSET;
-                        self.value = (self.value & !mask) | (value.into() << #numeric_field_idents::OFFSET);
-
-                        self
-                    }
-                )*
+                #(#accessors)*
             }
 
             pub fn write(f: impl FnOnce(&mut Writer) -> &mut Writer) {
