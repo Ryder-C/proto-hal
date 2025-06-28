@@ -600,7 +600,7 @@ impl Register {
                     #[allow(unsafe_op_in_unsafe_fn)]
                     Self {
                         #(
-                            #field_idents: <#field_idents::Reset as ::proto_hal::stasis::PartialState<UnsafeWriter>>::conjure(),
+                            #field_idents: unsafe { <#field_idents::Reset as ::proto_hal::stasis::PartialState<UnsafeWriter>>::conjure() },
                         )*
                     }
                 }

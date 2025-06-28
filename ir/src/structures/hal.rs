@@ -256,7 +256,7 @@ impl Hal {
 
                     // conditional
                     #(
-                        #conditional_peripheral_idents: #conditional_peripheral_idents::Masked::conjure(),
+                        #conditional_peripheral_idents: unsafe { #conditional_peripheral_idents::Masked::conjure() },
                     )*
                 }
             }
