@@ -22,10 +22,10 @@ impl Entitlement {
         let mut path = path.as_ref().split("::");
 
         Self {
-            peripheral: Ident::new(path.next().unwrap_or(""), Span::call_site()),
-            register: Ident::new(path.next().unwrap_or(""), Span::call_site()),
-            field: Ident::new(path.next().unwrap_or(""), Span::call_site()),
-            variant: Ident::new(path.next().unwrap_or(""), Span::call_site()),
+            peripheral: Ident::new(path.next().unwrap_or("unknown"), Span::call_site()),
+            register: Ident::new(path.next().unwrap_or("unknown"), Span::call_site()),
+            field: Ident::new(path.next().unwrap_or("unknown"), Span::call_site()),
+            variant: Ident::new(path.next().unwrap_or("unknown"), Span::call_site()),
         }
     }
 

@@ -88,8 +88,10 @@ impl Hal {
                 for field in register.fields.values() {
                     let context = context.clone().and(field.module_name().to_string());
 
-                    // TODO: when field superpositioning is implemented:
-                    // TODO: entitlements.extend(field.entitlements.clone());
+                    entitlements
+                        .entry(context.clone())
+                        .or_default()
+                        .extend(field.entitlements.clone());
 
                     let accesses = [field.access.get_read(), field.access.get_write()];
 

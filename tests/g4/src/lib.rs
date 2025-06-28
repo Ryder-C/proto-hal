@@ -83,7 +83,21 @@ mod tests {
 
             unsafe { MOCK_CORDIC[2] = 0xdeadbeef };
 
-            assert_eq!(cordic::rdata::read().res(), 0xdeadbeef);
+            let p = unsafe { crate::peripherals() };
+
+            let rcc::ahb1enr::States { cordicen, .. } =
+                rcc::ahb1enr::transition(|reg| reg.cordicen(p.rcc.ahb1enr.cordicen).enabled());
+            let cordic = p.cordic.unmask(cordicen);
+
+            let cordic::csr::States { ressize, nres, .. } = cordic::csr::transition(|reg| {
+                reg.ressize(cordic.csr.ressize)
+                    .q15()
+                    .nres(cordic.csr.nres)
+                    .two()
+            });
+
+            assert_eq!(cordic::rdata::read().res0(&ressize), 0xbeef);
+            assert_eq!(cordic::rdata::read().res1(&ressize, &nres), 0xdead);
         }
     }
 }

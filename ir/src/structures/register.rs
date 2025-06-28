@@ -411,34 +411,64 @@ impl Register {
         fields: impl Iterator<Item = &'a Field> + Clone,
     ) -> Option<TokenStream> {
         let fields = fields.filter(|field| !field.is_resolvable());
-        let enumerated_field_idents = fields
-            .clone()
-            .filter_map(|field| match &field.access {
-                Access::Read(read) | Access::ReadWrite { read, write: _ } => {
-                    if matches!(read.numericity, Numericity::Enumerated { variants: _ }) {
-                        Some(field.module_name())
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-            .collect::<Vec<_>>();
 
-        let numeric_field_idents = fields
-            .filter_map(|field| match &field.access {
-                Access::Read(read) | Access::ReadWrite { read, write: _ } => {
-                    if matches!(read.numericity, Numericity::Numeric) {
-                        Some(field.module_name())
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-            .collect::<Vec<_>>();
+        let accessors = fields.filter_map(|field| match &field.access {
+            Access::Read(read) | Access::ReadWrite { read, write: _ } => {
+                let ident = field.module_name();
+                let marker_ty = field.type_name();
 
-        if enumerated_field_idents.is_empty() && numeric_field_idents.is_empty() {
+                let (entitlement_generics, entitlement_args, entitlement_where) = if field.entitlements.is_empty() {
+                    (None, None, None)
+                } else {
+                    let entitlement_tys = field.entitlements.iter().map(|entitlement| entitlement.variant()).collect::<Vec<_>>();
+                    let entitlement_idents = field.entitlements.iter().map(|entitlement|
+                        Ident::new(
+                            inflector::cases::snakecase::to_snake_case(
+                                entitlement.variant().to_string().as_str()).as_str(),
+                            Span::call_site()
+                        ));
+
+                    (
+                        Some(quote! {
+                            <#(#entitlement_tys),*>
+                        }),
+                        Some(quote! {
+                            , #(#[expect(unused)] #entitlement_idents: &#entitlement_tys),*
+                        }),
+                        Some(quote! {
+                            where
+                                #(
+                                    #ident::#marker_ty: ::proto_hal::stasis::Entitled<#entitlement_tys>,
+                                )*
+                        })
+                    )
+                };
+
+                Some(match &read.numericity {
+                    Numericity::Enumerated { variants: _ } => {
+                        quote! {
+                            pub fn #ident #entitlement_generics (&self #entitlement_args) -> #ident::ReadVariant
+                            #entitlement_where
+                            {
+                                self.r.#ident()
+                            }
+                        }
+                    },
+                    Numericity::Numeric => {
+                        quote! {
+                            pub fn #ident #entitlement_generics (&self #entitlement_args) -> u32
+                            #entitlement_where
+                            {
+                                self.r.#ident()
+                            }
+                        }
+                    },
+                })
+            }
+            _ => None,
+        }).collect::<Vec<_>>();
+
+        if accessors.is_empty() {
             None?
         }
 
@@ -448,17 +478,7 @@ impl Register {
             }
 
             impl Reader {
-                #(
-                    pub fn #enumerated_field_idents(&self) -> #enumerated_field_idents::ReadVariant {
-                        self.r.#enumerated_field_idents()
-                    }
-                )*
-
-                #(
-                    pub fn #numeric_field_idents(&self) -> u32 {
-                        self.r.#numeric_field_idents()
-                    }
-                )*
+                #(#accessors)*
             }
 
             // TODO: track potential effects
@@ -494,7 +514,7 @@ impl Register {
                             <#(#entitlement_tys),*>
                         }),
                         Some(quote! {
-                            #(#[expect(unused)] #entitlement_idents: &#entitlement_tys,)*
+                            , #(#[expect(unused)] #entitlement_idents: &#entitlement_tys),*
                         }),
                         Some(quote! {
                             where
@@ -511,7 +531,9 @@ impl Register {
 
                         // TODO: this should be improved, reduce duplicate code
                         quote! {
-                            pub fn #ident(&mut self) -> #refined_writer_ident<Self, impl FnOnce(&mut Self, u32)> {
+                            pub fn #ident #entitlement_generics (&mut self #entitlement_args) -> #refined_writer_ident<Self, impl FnOnce(&mut Self, u32)>
+                            #entitlement_where
+                            {
                                 let mask = (u32::MAX >> (32 - #ident::WIDTH)) << #ident::OFFSET;
 
                                 #refined_writer_ident { w: self, f: move |w, value| w.value = (w.value & !mask) | (value << #ident::OFFSET) }
@@ -520,7 +542,7 @@ impl Register {
                     },
                     Numericity::Numeric => {
                         quote! {
-                            pub fn #ident #entitlement_generics (&mut self, #entitlement_args value: impl Into<u32>) -> &mut Self
+                            pub fn #ident #entitlement_generics (&mut self #entitlement_args, value: impl Into<u32>) -> &mut Self
                             #entitlement_where
                             {
                                 let mask = (u32::MAX >> (32 - #ident::WIDTH)) << #ident::OFFSET;
