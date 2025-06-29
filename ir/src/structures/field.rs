@@ -408,16 +408,20 @@ impl Field {
         }
     }
 
-    fn generate_state_impls(access: &Access, field_ident: &Ident) -> Option<TokenStream> {
-        // note: these traits should only be implemented for "resolvable" fields
-        if let Access::ReadWrite { read: _, write } = access {
+    fn generate_state_impls(field: &Field) -> Option<TokenStream> {
+        if !field.is_resolvable() {
+            None?
+        }
+
+        if let Access::ReadWrite { read: _, write } = &field.access {
             if let Numericity::Enumerated { variants } = &write.numericity {
+                let ident = &field.ident;
                 let variants = variants.values().map(|variant| variant.type_name());
                 return Some(quote! {
                     #(
                         impl ::proto_hal::stasis::PartialState<super::UnsafeWriter> for #variants {
                             fn set(w: &mut super::UnsafeWriter) {
-                                w.#field_ident().variant(Self::RAW);
+                                w.#ident().variant(Self::RAW);
                             }
 
                             unsafe fn conjure() -> Self {
@@ -474,7 +478,7 @@ impl ToTokens for Field {
         }
         body.extend(Self::generate_variant_enum(&self.access));
         body.extend(Self::generate_state_trait(&self.access));
-        body.extend(Self::generate_state_impls(&self.access, ident));
+        body.extend(Self::generate_state_impls(self));
         body.extend(Self::maybe_generate_marker_ty(
             &self.entitlements,
             &self.type_name(),
