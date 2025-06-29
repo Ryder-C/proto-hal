@@ -918,6 +918,7 @@ impl Register {
             .collect::<Vec<_>>();
 
         quote! {
+            #[allow(clippy::type_complexity)]
             pub fn transition<#(#new_states,)*>(f: impl FnOnce(EmptyTransitionBuilder) -> TransitionBuilder<#(#new_states,)*>) -> States<#(#new_states,)*>
             where
                 #(
