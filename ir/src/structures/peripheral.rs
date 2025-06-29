@@ -278,7 +278,10 @@ impl ToTokens for Peripheral {
             ));
         }
 
+        let docs = &self.docs;
+
         tokens.extend(quote! {
+            #(#[doc = #docs])*
             pub mod #ident {
                 #body
             }
