@@ -369,28 +369,37 @@ impl Register {
             }
         }
 
-        fn modify<'a>(mut fields: impl Iterator<Item = &'a Field>) -> Option<TokenStream> {
-            if !fields.any(|field| field.access.is_read() && field.access.is_write()) {
+        fn modify<'a>(mut fields: impl Iterator<Item = &'a Field> + Clone) -> Option<TokenStream> {
+            if !fields
+                .clone()
+                .any(|field| field.access.is_read() && field.access.is_write())
+            {
                 None?
             }
 
-            Some(quote! {
-                /// Write to fields of the register with a default hardware reset value, ignoring any implicative
-                /// effects.
-                ///
-                /// # Safety
-                ///
-                /// Invoking this function will render statically tracked operations unsound if the operation's
-                /// invariances are violated by the effects of the invocation.
-                pub unsafe fn write_from_reset_untracked(f: impl FnOnce(&mut UnsafeWriter) -> &mut UnsafeWriter) {
-                    unsafe {
-                        write_from_zero_untracked(|w| {
-                            ResetTransitionBuilder::new().finish(w);
-                            f(w)
-                        })
-                    }
-                }
+            let mut out = quote! {};
 
+            if fields.any(|field| field.is_resolvable()) {
+                out.extend(quote! {
+                    /// Write to fields of the register with a default hardware reset value, ignoring any implicative
+                    /// effects.
+                    ///
+                    /// # Safety
+                    ///
+                    /// Invoking this function will render statically tracked operations unsound if the operation's
+                    /// invariances are violated by the effects of the invocation.
+                    pub unsafe fn write_from_reset_untracked(f: impl FnOnce(&mut UnsafeWriter) -> &mut UnsafeWriter) {
+                        unsafe {
+                            write_from_zero_untracked(|w| {
+                                ResetTransitionBuilder::new().finish(w);
+                                f(w)
+                            })
+                        }
+                    }
+                });
+            }
+
+            out.extend(quote! {
                 /// Read the contents of a register for modification which can be written back, ignoring implicative
                 /// effects.
                 ///
@@ -406,7 +415,9 @@ impl Register {
 
                     unsafe { ::core::ptr::write_volatile((super::base_addr() + OFFSET) as *mut u32, writer.value) };
                 }
-            })
+            });
+
+            Some(out)
         }
 
         let read = read(fields.clone());
