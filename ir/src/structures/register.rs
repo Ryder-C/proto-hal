@@ -17,8 +17,8 @@ use super::{entitlement::Entitlement, field::Field};
 pub struct Register {
     pub ident: Ident,
     pub offset: u32,
-
     pub fields: HashMap<Ident, Field>,
+    pub docs: Vec<String>,
 }
 
 impl Register {
@@ -33,12 +33,24 @@ impl Register {
             fields: HashMap::from_iter(
                 fields.into_iter().map(|field| (field.module_name(), field)),
             ),
+            docs: Vec::new(),
         }
     }
 
     #[expect(unused)]
     pub fn entitlements(mut self, entitlements: impl IntoIterator<Item = Entitlement>) -> Self {
         todo!()
+    }
+
+    pub fn docs<I>(mut self, docs: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str>,
+    {
+        self.docs
+            .extend(docs.into_iter().map(|doc| doc.as_ref().to_string()));
+
+        self
     }
 
     pub fn module_name(&self) -> Ident {
@@ -952,7 +964,9 @@ impl ToTokens for Register {
             ));
         }
 
+        let docs = &self.docs;
         tokens.extend(quote! {
+            #(#[doc = #docs])*
             pub mod #module_name {
                 #body
             }
