@@ -791,6 +791,7 @@ impl Register {
             let next_states = states.get(i + 1..).unwrap();
 
             methods.extend(quote! {
+                #[allow(clippy::type_complexity)]
                 pub fn #field_module_ident<_OldState>(self, #[expect(unused_variables)] state: _OldState) -> #builder_ident<#(#prev_states,)* _OldState, #(#next_states,)*>
                 where
                     _OldState: #field_module_ident::State,
