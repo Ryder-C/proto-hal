@@ -51,6 +51,24 @@ impl Access {
         }
     }
 
+    pub fn read_write_asymmetrical(
+        read_numericity: Numericity,
+        write_numericity: Numericity,
+    ) -> Access {
+        Access::ReadWrite {
+            read: AccessProperties {
+                numericity: read_numericity,
+                entitlements: HashSet::new(),
+                effects: (),
+            },
+            write: AccessProperties {
+                numericity: write_numericity,
+                entitlements: HashSet::new(),
+                effects: (),
+            },
+        }
+    }
+
     pub fn get_read(&self) -> Option<&AccessProperties> {
         if let Self::Read(read) | Self::ReadWrite { read, write: _ } = self {
             Some(read)
