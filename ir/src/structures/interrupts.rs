@@ -172,6 +172,7 @@ impl ToTokens for Interrupts {
                 InterruptKind::Reserved => None,
                 InterruptKind::Handler(ident) => {
                     let docs = &interrupt.docs;
+                    let position = Index::from(position);
                     Some(quote! {
                         #(#[doc = #docs])*
                         #ident = #position,
