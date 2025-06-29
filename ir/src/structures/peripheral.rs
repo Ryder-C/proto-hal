@@ -14,6 +14,7 @@ pub struct Peripheral {
     pub base_addr: u32,
     pub entitlements: HashSet<Entitlement>,
     pub registers: HashMap<Ident, Register>,
+    pub docs: Vec<String>,
 }
 
 impl Peripheral {
@@ -31,6 +32,7 @@ impl Peripheral {
                     .into_iter()
                     .map(|register| (register.ident.clone(), register)),
             ),
+            docs: Vec::new(),
         }
     }
 
@@ -44,6 +46,17 @@ impl Peripheral {
 
     pub fn entitlements(mut self, entitlements: impl IntoIterator<Item = Entitlement>) -> Self {
         self.entitlements.extend(entitlements);
+        self
+    }
+
+    pub fn docs<I>(mut self, docs: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str>,
+    {
+        self.docs
+            .extend(docs.into_iter().map(|doc| doc.as_ref().to_string()));
+
         self
     }
 
