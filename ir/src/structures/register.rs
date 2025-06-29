@@ -714,6 +714,7 @@ impl Register {
                         unsafe { ::core::mem::transmute(()) }
                     }
 
+                    #[allow(clippy::type_complexity)]
                     pub fn generic<_NewState>(self) -> TransitionBuilder<#(#prev_field_tys,)* _NewState, #(#next_field_tys,)*>
                     where
                         _NewState: #field_module_ident::State,
@@ -726,6 +727,7 @@ impl Register {
                     ///
                     /// This is useful when entitled states must be provided to the builder but need not be
                     /// transitioned.
+                    #[allow(clippy::type_complexity)]
                     pub fn preserve(self) -> TransitionBuilder<#(#field_tys,)*> {
                         unsafe { TransitionBuilder::conjure() }
                     }
@@ -739,6 +741,7 @@ impl Register {
                 .map(|variant| (variant.type_name(), variant.module_name()))
             {
                 body2.extend(quote! {
+                    #[allow(clippy::type_complexity)]
                     pub fn #accessor(self) -> TransitionBuilder<#(#prev_field_tys,)* #field_module_ident::#ty, #(#next_field_tys,)*> {
                         self.generic()
                     }
