@@ -704,6 +704,7 @@ impl Register {
 
             body.extend(quote! {
                 #[allow(clippy::type_complexity)]
+                #[doc(hidden)]
                 pub struct #builder_ident<#(#field_tys,)*>
                 where
                     #(
