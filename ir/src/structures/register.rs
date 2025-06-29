@@ -176,6 +176,7 @@ impl Register {
                     .collect::<Vec<_>>();
 
                 writers.extend(quote! {
+                    #[doc(hidden)]
                     pub struct #writer_ident<'a, W, F>
                     where
                         F: FnOnce(&mut W, u32),
@@ -801,6 +802,7 @@ impl Register {
 
         quote! {
             #[allow(clippy::type_complexity)]
+            #[doc(hidden)]
             pub struct TransitionBuilder<#(#states,)*>
             where
                 #(
