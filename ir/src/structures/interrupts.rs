@@ -164,6 +164,31 @@ impl ToTokens for Interrupts {
             ];
         };
 
+        let vectors = self
+            .interrupts
+            .iter()
+            .enumerate()
+            .filter_map(|(position, interrupt)| match &interrupt.kind {
+                InterruptKind::Reserved => None,
+                InterruptKind::Handler(ident) => {
+                    let docs = &interrupt.docs;
+                    Some(quote! {
+                        #(#[doc = #docs])*
+                        #ident = #position,
+                    })
+                }
+            });
+
+        let enum_ = quote! {
+            #[allow(non_camel_case_types)]
+            #[repr(u16)]
+            pub enum interrupt {
+                #(
+                    #vectors
+                )*
+            }
+        };
+
         tokens.extend(quote! {
             #[cfg(feature = "interrupts")]
             pub use ::cortex_m_rt::interrupt;
@@ -172,6 +197,8 @@ impl ToTokens for Interrupts {
             #symbols
             #[cfg(feature = "interrupts")]
             #table
+            #[cfg(feature = "interrupts")]
+            #enum_
         });
     }
 }
