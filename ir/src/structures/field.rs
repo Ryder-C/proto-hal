@@ -409,7 +409,8 @@ impl Field {
     }
 
     fn generate_state_impls(access: &Access, field_ident: &Ident) -> Option<TokenStream> {
-        if let Access::Write(write) | Access::ReadWrite { read: _, write } = access {
+        // note: these traits should only be implemented for "resolvable" fields
+        if let Access::ReadWrite { read: _, write } = access {
             if let Numericity::Enumerated { variants } = &write.numericity {
                 let variants = variants.values().map(|variant| variant.type_name());
                 return Some(quote! {
