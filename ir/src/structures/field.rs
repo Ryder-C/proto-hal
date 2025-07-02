@@ -400,7 +400,8 @@ impl Field {
                     }
                 })
             } else {
-                todo!()
+                // TODO: eventually numeric states can implement the State trait with some struct Value<const N: u32>
+                None
             }
         } else {
             None
