@@ -148,8 +148,7 @@ impl Field {
                         if largest_variant > variant_limit {
                             diagnostics.insert(
                                 Diagnostic::error(format!(
-                            "field variants exceed field width. (largest variant: {}, largest possible: {})",
-                            largest_variant, variant_limit,
+                            "field variants exceed field width. (largest variant: {largest_variant}, largest possible: {variant_limit})",
                         ))
                                 .with_context(new_context.clone()),
                             );

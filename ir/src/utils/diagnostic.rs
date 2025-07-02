@@ -114,7 +114,7 @@ impl Diagnostic {
                     .join("\n");
 
                 if let Some(context) = context {
-                    format!("in {}:\n{}", context, diagnostics)
+                    format!("in {context}:\n{diagnostics}")
                 } else {
                     diagnostics.to_string()
                 }

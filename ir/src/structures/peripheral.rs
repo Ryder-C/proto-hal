@@ -122,7 +122,7 @@ impl Peripheral {
     }
 
     fn generate_base_addr(base_addr: u32, ident: &Ident) -> TokenStream {
-        let base_addr_formatted = format!("0x{:08x}", base_addr);
+        let base_addr_formatted = format!("0x{base_addr:08x}");
 
         let link_symbol = format!(
             "__PROTO_HAL_ADDR_OF_{}",
