@@ -906,8 +906,13 @@ impl Register {
                                     )
                                 })
                             })
-                            .collect::<HashSet<_>>()
-                            .into_iter();
+                            .collect::<HashSet<_>>();
+
+                        if entitled_fields.is_empty() {
+                            None?
+                        }
+
+                        let entitled_fields = entitled_fields.into_iter();
 
                         Some(quote! {
                             #field_ty: #(::proto_hal::stasis::Entitled<#entitled_fields>)+*
