@@ -276,6 +276,7 @@ impl ToTokens for Peripheral {
 
         tokens.extend(quote! {
             #(#[doc = #docs])*
+            #[allow(clippy::module_inception)]
             pub mod #ident {
                 #body
             }
