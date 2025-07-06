@@ -36,6 +36,14 @@ peripheral::register::transition(|reg| reg.foo(dyn_foo).bar());
 ```
 > Statically resolve a *resolvable* but currently dynamic field state.
 
+## Implicative Effects
+
+As it is now, reading or writing to a dynamic field requires `&mut Dynamic`. But,
+if reading a field has no implicative effects, really only a `&Dynamic` is needed.
+As it is now, proto-hal does not track nor express effects (yet). So I will leave
+it as is in the interest of erring on the side of caution, but once effects are
+tracked, the `&mut Dynamic` can be relaxed to `&Dynamic`.
+
 # Field Traits
 
 There are three situations where a field state constraint could be applied:
