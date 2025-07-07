@@ -37,15 +37,12 @@ pub enum Reset {
     Value(u32),
 }
 
-impl From<Ident> for Reset {
-    fn from(ident: Ident) -> Self {
-        Self::Variant(ident)
-    }
-}
-
 impl From<&str> for Reset {
     fn from(ident: &str) -> Self {
-        Self::Variant(Ident::new(ident, Span::call_site()))
+        Self::Variant(Ident::new(
+            inflector::cases::pascalcase::to_pascal_case(ident.as_ref()).as_str(),
+            Span::call_site(),
+        ))
     }
 }
 
@@ -79,14 +76,8 @@ impl Field {
         }
     }
 
-    pub fn reset(mut self, ident: impl AsRef<str>) -> Self {
-        self.reset = Some(
-            Ident::new(
-                inflector::cases::pascalcase::to_pascal_case(ident.as_ref()).as_str(),
-                Span::call_site(),
-            )
-            .into(),
-        );
+    pub fn reset(mut self, reset: impl Into<Reset>) -> Self {
+        self.reset = Some(reset.into());
 
         self
     }
