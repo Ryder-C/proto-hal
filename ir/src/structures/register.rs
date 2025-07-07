@@ -746,20 +746,6 @@ impl Register {
             let prev_field_tys = field_tys.get(..i).unwrap();
             let next_field_tys = field_tys.get(i + 1..).unwrap();
 
-            let variants = match &field.access {
-                Access::Read(read)
-                | Access::ReadWrite(
-                    ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. },
-                ) => {
-                    let Numericity::Enumerated { variants } = &read.numericity else {
-                        todo!()
-                    };
-
-                    variants
-                }
-                _ => unreachable!(),
-            };
-
             body.extend(quote! {
                 #[allow(clippy::type_complexity)]
                 #[doc(hidden)]
@@ -818,26 +804,52 @@ impl Register {
 
             let mut body2 = quote! {};
 
-            for (ty, accessor) in variants
-                .values()
-                .map(|variant| (variant.type_name(), variant.module_name()))
-            {
-                body2.extend(quote! {
-                    #[allow(clippy::type_complexity)]
-                    pub fn #accessor(self) -> TransitionBuilder<#(#prev_field_tys,)* #field_module_ident::#ty, #(#next_field_tys,)*>
-                    where
-                        #(
-                            #prev_field_tys: ::proto_hal::stasis::Emplace<UnsafeWriter>,
-                        )*
-                        #field_module_ident::#ty: ::proto_hal::stasis::Emplace<UnsafeWriter>,
-                        #(
-                            #next_field_tys: ::proto_hal::stasis::Emplace<UnsafeWriter>,
-                        )*
-                    {
-                        self.generic()
+            match &field.access {
+                Access::Read(read)
+                | Access::ReadWrite(
+                    ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. },
+                ) => match &read.numericity {
+                    Numericity::Numeric => {
+                        body2.extend(quote! {
+                            pub fn value<const N: u32>(self, value: #field_module_ident::Value<N>) -> TransitionBuilder<#(#prev_field_tys,)* #field_module_ident::Value<N>, #(#next_field_tys,)*>
+                            where
+                                #(
+                                    #prev_field_tys: ::proto_hal::stasis::Emplace<UnsafeWriter>,
+                                )*
+                                #field_module_ident::Value<N>: ::proto_hal::stasis::Emplace<UnsafeWriter>,
+                                #(
+                                    #next_field_tys: ::proto_hal::stasis::Emplace<UnsafeWriter>,
+                                )*
+                            {
+                                self.generic()
+                            }
+                        });
                     }
-                });
-            }
+                    Numericity::Enumerated { variants } => {
+                        for (ty, accessor) in variants
+                            .values()
+                            .map(|variant| (variant.type_name(), variant.module_name()))
+                        {
+                            body2.extend(quote! {
+                                    #[allow(clippy::type_complexity)]
+                                    pub fn #accessor(self) -> TransitionBuilder<#(#prev_field_tys,)* #field_module_ident::#ty, #(#next_field_tys,)*>
+                                    where
+                                        #(
+                                            #prev_field_tys: ::proto_hal::stasis::Emplace<UnsafeWriter>,
+                                        )*
+                                        #field_module_ident::#ty: ::proto_hal::stasis::Emplace<UnsafeWriter>,
+                                        #(
+                                            #next_field_tys: ::proto_hal::stasis::Emplace<UnsafeWriter>,
+                                        )*
+                                    {
+                                        self.generic()
+                                    }
+                                });
+                        }
+                    }
+                },
+                _ => unreachable!(),
+            };
 
             body.extend(quote! {
                 impl<#(#field_tys,)*> #builder_ident<#(#field_tys,)*>
