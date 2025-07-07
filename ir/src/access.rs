@@ -10,13 +10,19 @@ pub struct AccessProperties {
 }
 
 #[derive(Debug, Clone)]
-pub enum Access {
-    Read(AccessProperties),
-    Write(AccessProperties),
-    ReadWrite {
+pub enum ReadWrite {
+    Symmetrical(AccessProperties),
+    Asymmetrical {
         read: AccessProperties,
         write: AccessProperties,
     },
+}
+
+#[derive(Debug, Clone)]
+pub enum Access {
+    Read(AccessProperties),
+    Write(AccessProperties),
+    ReadWrite(ReadWrite),
 }
 
 impl Access {
@@ -37,25 +43,18 @@ impl Access {
     }
 
     pub fn read_write(numericity: Numericity) -> Access {
-        Access::ReadWrite {
-            read: AccessProperties {
-                numericity: numericity.clone(),
-                entitlements: HashSet::new(),
-                effects: (),
-            },
-            write: AccessProperties {
-                numericity,
-                entitlements: HashSet::new(),
-                effects: (),
-            },
-        }
+        Access::ReadWrite(ReadWrite::Symmetrical(AccessProperties {
+            numericity: numericity.clone(),
+            entitlements: HashSet::new(),
+            effects: (),
+        }))
     }
 
     pub fn read_write_asymmetrical(
         read_numericity: Numericity,
         write_numericity: Numericity,
     ) -> Access {
-        Access::ReadWrite {
+        Access::ReadWrite(ReadWrite::Asymmetrical {
             read: AccessProperties {
                 numericity: read_numericity,
                 entitlements: HashSet::new(),
@@ -66,11 +65,15 @@ impl Access {
                 entitlements: HashSet::new(),
                 effects: (),
             },
-        }
+        })
     }
 
     pub fn get_read(&self) -> Option<&AccessProperties> {
-        if let Self::Read(read) | Self::ReadWrite { read, write: _ } = self {
+        if let Self::Read(read)
+        | Self::ReadWrite(
+            ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. },
+        ) = self
+        {
             Some(read)
         } else {
             None
@@ -78,7 +81,11 @@ impl Access {
     }
 
     pub fn get_write(&self) -> Option<&AccessProperties> {
-        if let Self::Write(write) | Self::ReadWrite { read: _, write } = self {
+        if let Self::Write(write)
+        | Self::ReadWrite(
+            ReadWrite::Symmetrical(write) | ReadWrite::Asymmetrical { write, .. },
+        ) = self
+        {
             Some(write)
         } else {
             None

@@ -6,7 +6,7 @@ use quote::{format_ident, quote, ToTokens};
 use syn::Ident;
 
 use crate::{
-    access::Access,
+    access::{Access, AccessProperties, ReadWrite},
     structures::entitlement::{Entitlement, Entitlements},
     utils::diagnostic::{Context, Diagnostic, Diagnostics},
 };
@@ -32,12 +32,36 @@ impl Numericity {
 }
 
 #[derive(Debug, Clone)]
+pub enum Reset {
+    Variant(Ident),
+    Value(u32),
+}
+
+impl From<Ident> for Reset {
+    fn from(ident: Ident) -> Self {
+        Self::Variant(ident)
+    }
+}
+
+impl From<&str> for Reset {
+    fn from(ident: &str) -> Self {
+        Self::Variant(Ident::new(ident, Span::call_site()))
+    }
+}
+
+impl From<u32> for Reset {
+    fn from(value: u32) -> Self {
+        Self::Value(value)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Field {
     pub ident: Ident,
     pub offset: u8,
     pub width: u8,
     pub access: Access,
-    pub reset: Option<Ident>,
+    pub reset: Option<Reset>,
     pub entitlements: Entitlements,
     pub docs: Vec<String>,
 }
@@ -56,10 +80,13 @@ impl Field {
     }
 
     pub fn reset(mut self, ident: impl AsRef<str>) -> Self {
-        self.reset = Some(Ident::new(
-            inflector::cases::pascalcase::to_pascal_case(ident.as_ref()).as_str(),
-            Span::call_site(),
-        ));
+        self.reset = Some(
+            Ident::new(
+                inflector::cases::pascalcase::to_pascal_case(ident.as_ref()).as_str(),
+                Span::call_site(),
+            )
+            .into(),
+        );
 
         self
     }
@@ -99,38 +126,15 @@ impl Field {
     }
 
     pub fn is_resolvable(&self) -> bool {
+        self.resolvable().is_some()
+    }
+
+    pub fn resolvable(&self) -> Option<&AccessProperties> {
         // TODO: external resolving effects
-
-        let Access::ReadWrite { read, write } = &self.access else {
-            return false;
-        };
-
-        let (
-            Numericity::Enumerated {
-                variants: read_variants,
-            },
-            Numericity::Enumerated {
-                variants: write_variants,
-            },
-        ) = (&read.numericity, &write.numericity)
-        else {
-            return false;
-        };
-
-        if read_variants.len() != write_variants.len() {
-            return false;
+        match &self.access {
+            Access::ReadWrite(ReadWrite::Symmetrical(access)) => Some(access),
+            _ => None,
         }
-
-        for (key, variant) in read_variants.iter() {
-            if write_variants
-                .get(key)
-                .is_none_or(|other| other.bits != variant.bits)
-            {
-                return false;
-            }
-        }
-
-        true
     }
 
     pub fn validate(&self, context: &Context) -> Diagnostics {
@@ -193,18 +197,51 @@ impl Field {
         {
             validate_numericity(&access.numericity, &mut diagnostics);
 
-            if self.is_resolvable() {
+            if let Some(access) = self.resolvable() {
                 if let Some(reset) = &self.reset {
                     // TODO: resets for resolvable fields with inequal read/write schemas
-                    if let Numericity::Enumerated { variants } = &access.numericity {
-                        if !variants.contains_key(reset) {
-                            diagnostics.insert(
-                                Diagnostic::error(format!(
-                                    "provided reset \"{reset}\" does not exist"
-                                ))
-                                .with_context(new_context.clone()),
-                            );
-                        }
+                    match reset {
+                        Reset::Variant(ident) => match &access.numericity {
+                            Numericity::Numeric => {
+                                diagnostics.insert(
+                                    Diagnostic::error(
+                                        "provided reset is enumerated but field is numeric",
+                                    )
+                                    .with_context(new_context.clone()),
+                                );
+                            }
+                            Numericity::Enumerated { variants } => {
+                                if !variants.contains_key(ident) {
+                                    diagnostics.insert(
+                                        Diagnostic::error(format!(
+                                            "provided reset \"{ident}\" does not exist"
+                                        ))
+                                        .with_context(new_context.clone()),
+                                    );
+                                }
+                            }
+                        },
+                        Reset::Value(value) => match &access.numericity {
+                            Numericity::Numeric => {
+                                if *value > (1 << self.width) {
+                                    diagnostics.insert(
+                                        Diagnostic::error(format!(
+                                            "provided reset value ({value}) exceeds field width"
+                                        ))
+                                        .with_context(new_context.clone()),
+                                    );
+                                }
+                            }
+                            Numericity::Enumerated { variants } => {
+                                if !variants.values().any(|variant| variant.bits.eq(value)) {
+                                    diagnostics.insert(
+                                        Diagnostic::error(format!(
+                                            "provided reset value ({value}) does not correspond to any variants of this field"
+                                        )).with_context(new_context.clone())
+                                    );
+                                }
+                            }
+                        },
                     }
                 } else {
                     diagnostics.insert(
@@ -231,7 +268,7 @@ impl Field {
 
 // codegen
 impl Field {
-    fn generate_states(access: &Access) -> TokenStream {
+    fn generate_states(&self) -> TokenStream {
         // NOTE: if a field is resolvable and has split schemas,
         // the schema that represents the resolvable aspect of the
         // field must be from read access, as the value the field
@@ -242,16 +279,21 @@ impl Field {
         // it holds is statically known)
 
         // all fields have a dynamic state
-        let mut out = quote! {
-            pub struct Dynamic {
-                _sealed: (),
-            }
-        };
+        let mut out = quote! {};
 
-        if let Access::Read(read) | Access::ReadWrite { read, write: _ } = access {
-            if let Numericity::Enumerated { variants } = &read.numericity {
-                let variants = variants.values();
-                out.extend(quote! { #(#variants)* });
+        if let Some(access) = self.resolvable() {
+            match &access.numericity {
+                Numericity::Numeric => {
+                    out.extend(quote! {
+                        pub struct Value<const N: u32> {
+                            _sealed: (),
+                        }
+                    });
+                }
+                Numericity::Enumerated { variants } => {
+                    let variants = variants.values();
+                    out.extend(quote! { #(#variants)* });
+                }
             }
         }
 
@@ -265,8 +307,49 @@ impl Field {
         }
     }
 
-    fn generate_reset(reset: &Option<Ident>) -> TokenStream {
+    fn generate_dynamic() -> TokenStream {
+        quote! {
+            pub struct Dynamic {
+                _sealed: (),
+            }
+
+            impl ::proto_hal::stasis::Conjure for Dynamic {
+                unsafe fn conjure() -> Self {
+                    Self {
+                        _sealed: (),
+                    }
+                }
+            }
+            impl ::proto_hal::stasis::Position<Field> for Dynamic {}
+            impl ::proto_hal::stasis::Outgoing<Field> for Dynamic {}
+        }
+    }
+
+    fn generate_value(&self) -> Option<TokenStream> {
+        if self.is_resolvable() {
+            Some(quote! {
+                pub struct Value<const N: u32> {
+                    _sealed: (),
+                }
+
+                impl<const N: u32> Value<N> {
+                    pub fn into_dynamic(self) -> Dynamic {
+                        unsafe { <Dynamic as ::proto_hal::stasis::Conjure>::conjure() }
+                    }
+                }
+            })
+        } else {
+            None
+        }
+    }
+
+    fn generate_reset(reset: &Option<Reset>) -> TokenStream {
         if let Some(reset) = reset {
+            let reset = match reset {
+                Reset::Variant(ident) => quote! { #ident },
+                Reset::Value(value) => quote! { Value<#value> },
+            };
+
             quote! {
                 pub type Reset = #reset;
             }
@@ -362,9 +445,9 @@ impl Field {
                     None
                 }
             }
-            Access::ReadWrite { read, write } => {
-                if read.numericity == write.numericity {
-                    if let Numericity::Enumerated { variants } = &read.numericity {
+            Access::ReadWrite(read_write) => match read_write {
+                ReadWrite::Symmetrical(access) => {
+                    if let Numericity::Enumerated { variants } = &access.numericity {
                         let variant_enum =
                             variant_enum(syn::Ident::new("Variant", Span::call_site()), variants);
 
@@ -376,7 +459,8 @@ impl Field {
                     } else {
                         None
                     }
-                } else {
+                }
+                ReadWrite::Asymmetrical { read, write } => {
                     let read_enum = if let Numericity::Enumerated { variants } = &read.numericity {
                         Some(variant_enum(
                             syn::Ident::new("ReadVariant", Span::call_site()),
@@ -401,32 +485,16 @@ impl Field {
                         #write_enum
                     })
                 }
-            }
+            },
         }
     }
 
-    fn generate_trait_impls(field: &Field) -> TokenStream {
-        let mut out = quote! {
-            impl ::proto_hal::stasis::Conjure for Dynamic {
-                unsafe fn conjure() -> Self {
-                    Self {
-                        _sealed: (),
-                    }
-                }
-            }
-            impl ::proto_hal::stasis::Position<Field> for Dynamic {}
-            impl ::proto_hal::stasis::Outgoing<Field> for Dynamic {}
-        };
-
-        if !field.is_resolvable() {
-            return out;
-        }
-
-        if let Access::ReadWrite { read: _, write } = &field.access {
-            if let Numericity::Enumerated { variants } = &write.numericity {
-                let ident = &field.ident;
+    fn generate_trait_impls(&self) -> Option<TokenStream> {
+        if let Some(access) = self.resolvable() {
+            if let Numericity::Enumerated { variants } = &access.numericity {
+                let ident = &self.ident;
                 let variants = variants.values().map(|variant| variant.type_name());
-                out.extend(quote! {
+                Some(quote! {
                     #(
                         impl ::proto_hal::stasis::Conjure for #variants {
                             unsafe fn conjure() -> Self {
@@ -449,14 +517,16 @@ impl Field {
                             const RAW: Self::Raw = Self::Raw::#variants;
                         }
                     )*
-                });
+                })
+            } else {
+                None
             }
+        } else {
+            None
         }
-
-        out
     }
 
-    fn maybe_generate_marker_ty(entitlements: &Entitlements) -> TokenStream {
+    fn generate_marker_ty(entitlements: &Entitlements) -> TokenStream {
         let mut out = quote! {
             pub struct Field;
         };
@@ -481,15 +551,17 @@ impl ToTokens for Field {
 
         let mut body = quote! {};
 
-        body.extend(Self::generate_states(&self.access));
+        body.extend(self.generate_states());
         body.extend(Self::generate_layout_consts(
             self.offset as u32,
             self.width as u32,
         ));
+        body.extend(Self::generate_dynamic());
+        body.extend(self.generate_value());
         body.extend(Self::generate_reset(&self.reset));
         body.extend(Self::generate_variant_enum(&self.access));
         body.extend(Self::generate_trait_impls(self));
-        body.extend(Self::maybe_generate_marker_ty(&self.entitlements));
+        body.extend(Self::generate_marker_ty(&self.entitlements));
 
         let docs = &self.docs;
 

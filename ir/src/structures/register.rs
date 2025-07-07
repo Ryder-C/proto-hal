@@ -6,7 +6,7 @@ use quote::{format_ident, quote, ToTokens};
 use syn::{parse_quote, Ident, Path};
 
 use crate::{
-    access::Access,
+    access::{Access, ReadWrite},
     structures::field::Numericity,
     utils::diagnostic::{Context, Diagnostic, Diagnostics},
 };
@@ -157,7 +157,11 @@ impl Register {
         let mut writers = quote! {};
 
         for field in fields {
-            if let Access::Write(write) | Access::ReadWrite { read: _, write } = &field.access {
+            if let Access::Write(write)
+            | Access::ReadWrite(
+                ReadWrite::Symmetrical(write) | ReadWrite::Asymmetrical { write, .. },
+            ) = &field.access
+            {
                 let Numericity::Enumerated { variants } = &write.numericity else {
                     continue;
                 };
@@ -223,7 +227,10 @@ impl Register {
             if fields.clone().any(|field| field.access.is_read()) {
                 let enumerated_field_idents =
                     fields.clone().filter_map(|field| match &field.access {
-                        Access::Read(read) | Access::ReadWrite { read, write: _ } => {
+                        Access::Read(read)
+                        | Access::ReadWrite(
+                            ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. },
+                        ) => {
                             if matches!(read.numericity, Numericity::Enumerated { variants: _ }) {
                                 Some(field.module_name())
                             } else {
@@ -234,7 +241,10 @@ impl Register {
                     });
 
                 let numeric_field_idents = fields.filter_map(|field| match &field.access {
-                    Access::Read(read) | Access::ReadWrite { read, write: _ } => {
+                    Access::Read(read)
+                    | Access::ReadWrite(
+                        ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. },
+                    ) => {
                         if matches!(read.numericity, Numericity::Numeric) {
                             Some(field.module_name())
                         } else {
@@ -295,7 +305,10 @@ impl Register {
         fn write<'a>(fields: impl Iterator<Item = &'a Field> + Clone) -> Option<TokenStream> {
             if fields.clone().any(|field| field.access.is_write()) {
                 let enumerated_fields = fields.clone().filter(|field| match &field.access {
-                    Access::Write(write) | Access::ReadWrite { read: _, write } => {
+                    Access::Write(write)
+                    | Access::ReadWrite(
+                        ReadWrite::Symmetrical(write) | ReadWrite::Asymmetrical { write, .. },
+                    ) => {
                         matches!(write.numericity, Numericity::Enumerated { variants: _ })
                     }
                     _ => false,
@@ -303,7 +316,10 @@ impl Register {
 
                 let numeric_field_idents = fields
                     .filter_map(|field| match &field.access {
-                        Access::Write(write) | Access::ReadWrite { read: _, write } => {
+                        Access::Write(write)
+                        | Access::ReadWrite(
+                            ReadWrite::Symmetrical(write) | ReadWrite::Asymmetrical { write, .. },
+                        ) => {
                             if matches!(write.numericity, Numericity::Numeric) {
                                 Some(field.module_name())
                             } else {
@@ -438,7 +454,7 @@ impl Register {
         fields: impl Iterator<Item = &'a Field> + Clone,
     ) -> Option<TokenStream> {
         let accessors = fields.filter_map(|field| match &field.access {
-            Access::Read(read) | Access::ReadWrite { read, write: _ } => {
+            Access::Read(read) | Access::ReadWrite(ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. }) => {
                 let ident = field.module_name();
 
                 let (entitlement_generics, entitlement_args, entitlement_where) = if field.entitlements.is_empty() {
@@ -516,7 +532,8 @@ impl Register {
         mut fields: impl Iterator<Item = &'a Field> + Clone,
     ) -> Option<TokenStream> {
         let accessors = fields.clone().filter_map(|field| match &field.access {
-            Access::Write(write) | Access::ReadWrite { read: _, write } => {
+            Access::Write(write)
+            | Access::ReadWrite(ReadWrite::Symmetrical(write) | ReadWrite::Asymmetrical { write, .. }) => {
                 let ident = field.module_name();
 
                 let (entitlement_generics, entitlement_args, entitlement_where) = if field.entitlements.is_empty() {
@@ -730,7 +747,10 @@ impl Register {
             let next_field_tys = field_tys.get(i + 1..).unwrap();
 
             let variants = match &field.access {
-                Access::Read(read) | Access::ReadWrite { read, write: _ } => {
+                Access::Read(read)
+                | Access::ReadWrite(
+                    ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. },
+                ) => {
                     let Numericity::Enumerated { variants } = &read.numericity else {
                         todo!()
                     };
@@ -950,7 +970,10 @@ impl Register {
                 }
 
                 match &field.access {
-                    Access::Read(read) | Access::ReadWrite { read, write: _ } => {
+                    Access::Read(read)
+                    | Access::ReadWrite(
+                        ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. },
+                    ) => {
                         let Numericity::Enumerated { variants } = &read.numericity else {
                             unreachable!()
                         };
