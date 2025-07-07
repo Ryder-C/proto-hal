@@ -40,7 +40,7 @@ pub enum Reset {
 impl From<&str> for Reset {
     fn from(ident: &str) -> Self {
         Self::Variant(Ident::new(
-            inflector::cases::pascalcase::to_pascal_case(ident.as_ref()).as_str(),
+            inflector::cases::pascalcase::to_pascal_case(ident).as_str(),
             Span::call_site(),
         ))
     }
@@ -139,7 +139,7 @@ impl Field {
                     if let Some(largest_variant) =
                         variants.values().map(|variant| variant.bits).max()
                     {
-                        let variant_limit = (1 << self.width) - 1;
+                        let variant_limit = (1 << self.width) - 1; // note: this will break if a 32 bit enumerated field were described but that is not likely
                         if largest_variant > variant_limit {
                             diagnostics.insert(
                                 Diagnostic::error(format!(
@@ -214,7 +214,7 @@ impl Field {
                         },
                         Reset::Value(value) => match &access.numericity {
                             Numericity::Numeric => {
-                                if *value > (1 << self.width) {
+                                if *value > u32::MAX >> (32 - self.width) {
                                     diagnostics.insert(
                                         Diagnostic::error(format!(
                                             "provided reset value ({value}) exceeds field width"
