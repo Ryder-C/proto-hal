@@ -987,7 +987,8 @@ impl Register {
                         ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. },
                     ) => {
                         let Numericity::Enumerated { variants } = &read.numericity else {
-                            unreachable!()
+                            // note: how could numeric fields express particular values having entitlements?
+                            None?
                         };
 
                         let field_ty = field.type_name();
