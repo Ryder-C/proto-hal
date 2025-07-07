@@ -811,7 +811,7 @@ impl Register {
                 ) => match &read.numericity {
                     Numericity::Numeric => {
                         body2.extend(quote! {
-                            pub fn value<const N: u32>(self, value: #field_module_ident::Value<N>) -> TransitionBuilder<#(#prev_field_tys,)* #field_module_ident::Value<N>, #(#next_field_tys,)*>
+                            pub fn value<const N: u32>(self) -> TransitionBuilder<#(#prev_field_tys,)* #field_module_ident::Value<N>, #(#next_field_tys,)*>
                             where
                                 #(
                                     #prev_field_tys: ::proto_hal::stasis::Emplace<UnsafeWriter>,

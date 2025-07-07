@@ -48,11 +48,6 @@ mod tests {
                 csr.func().is_sqrt() && csr.scale().is_n0()
             });
 
-            // crate::cordic::wdata::write_from_zero(&cordic.csr.nargs, &cordic.csr.argsize, |w| {
-            //     w.arg(0)
-            // });
-            // crate::cordic::rdata::read(&cordic.csr.nres, &cordic.csr.ressize).res();
-
             unsafe { cordic::csr::write_from_reset_untracked(|w| w) };
 
             assert!({
@@ -138,6 +133,34 @@ mod tests {
                 unsafe { cordic::csr::read_untracked().func().is_cos() },
                 "resolution of dynamic state failed to apply"
             );
+        }
+    }
+
+    mod crc {
+        use crate::{crc, rcc};
+
+        use super::LOCK;
+        static mut MOCK_CRC: [u32; 2] = [0, 0];
+
+        #[unsafe(export_name = "__PROTO_HAL_ADDR_OF_CRC")]
+        fn addr_of_crc() -> usize {
+            (&raw const MOCK_CRC).addr()
+        }
+
+        #[test]
+        fn basic() {
+            let _lock = LOCK.lock().unwrap();
+
+            let p = unsafe { crate::peripherals() };
+
+            let rcc::ahb1enr::States { crcen, .. } =
+                rcc::ahb1enr::transition(|reg| reg.crcen(p.rcc.ahb1enr.crcen).enabled());
+            let crc = p.crc.unmask(crcen);
+
+            let crc::idr::States { idr } =
+                crc::idr::transition(|reg| reg.idr(crc.idr.idr).value::<0xdeadbeef>());
+
+            assert_eq!(idr.value(), unsafe { MOCK_CRC[1] });
         }
     }
 }

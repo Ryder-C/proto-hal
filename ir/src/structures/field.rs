@@ -273,18 +273,9 @@ impl Field {
         let mut out = quote! {};
 
         if let Some(access) = self.resolvable() {
-            match &access.numericity {
-                Numericity::Numeric => {
-                    out.extend(quote! {
-                        pub struct Value<const N: u32> {
-                            _sealed: (),
-                        }
-                    });
-                }
-                Numericity::Enumerated { variants } => {
-                    let variants = variants.values();
-                    out.extend(quote! { #(#variants)* });
-                }
+            if let Numericity::Enumerated { variants } = &access.numericity {
+                let variants = variants.values();
+                out.extend(quote! { #(#variants)* });
             }
         }
 
@@ -317,7 +308,13 @@ impl Field {
     }
 
     fn generate_value(&self) -> Option<TokenStream> {
-        if self.is_resolvable() {
+        if let Some(access) = self.resolvable() {
+            let Numericity::Numeric = &access.numericity else {
+                None?
+            };
+
+            let ident = self.module_name();
+
             Some(quote! {
                 pub struct Value<const N: u32> {
                     _sealed: (),
@@ -327,6 +324,31 @@ impl Field {
                     pub fn into_dynamic(self) -> Dynamic {
                         unsafe { <Dynamic as ::proto_hal::stasis::Conjure>::conjure() }
                     }
+
+                    pub fn value(&self) -> u32 {
+                        N
+                    }
+                }
+
+                impl<const N: u32> ::proto_hal::stasis::Conjure for Value<N> {
+                    unsafe fn conjure() -> Self {
+                        Self {
+                            _sealed: (),
+                        }
+                    }
+                }
+
+                impl<const N: u32> ::proto_hal::stasis::Emplace<super::UnsafeWriter> for Value<N> {
+                    fn set(w: &mut super::UnsafeWriter) {
+                        w.#ident(N);
+                    }
+                }
+
+                impl<const N: u32> ::proto_hal::stasis::Position<Field> for Value<N> {}
+                impl<const N: u32> ::proto_hal::stasis::Outgoing<Field> for Value<N> {}
+                impl<const N: u32> ::proto_hal::stasis::Incoming<Field> for Value<N> {
+                    type Raw = u32;
+                    const RAW: Self::Raw = N;
                 }
             })
         } else {

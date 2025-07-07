@@ -6,10 +6,10 @@ use proto_hal_build::ir::{
     },
 };
 
-pub fn generate() -> Field {
+pub fn generate(ident: impl AsRef<str>, offset: u8) -> Field {
     Field::new(
-        "cordicen",
-        3,
+        ident,
+        offset,
         1,
         Access::read_write(Numericity::enumerated([
             Variant::new("Disabled", 0),
