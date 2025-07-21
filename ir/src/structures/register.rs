@@ -463,14 +463,25 @@ impl Register {
                 None?
             }
 
-            let field_idents = fields
-                .filter_map(|field| {
-                    if field.access.is_write() {
-                        Some(field.module_name())
-                    } else {
-                        None
-                    }
-                })
+            let fields = fields.filter(|field| field.access.is_write());
+
+            let enumerated_field_idents = fields
+                .clone()
+                .filter_map(
+                    |field| match &field.access.get_write().unwrap().numericity {
+                        Numericity::Enumerated { .. } => Some(field.module_name()),
+                        _ => None,
+                    },
+                )
+                .collect::<Vec<_>>();
+
+            let numeric_field_idents = fields
+                .filter_map(
+                    |field| match &field.access.get_write().unwrap().numericity {
+                        Numericity::Numeric => Some(field.module_name()),
+                        _ => None,
+                    },
+                )
                 .collect::<Vec<_>>();
 
             Some(quote! {
@@ -490,9 +501,17 @@ impl Register {
                     }
 
                     #(
-                        pub fn #field_idents(&mut self, value: impl Into<u32>) -> &mut Self {
-                            let mask = (u32::MAX >> (32 - #field_idents::WIDTH)) << #field_idents::OFFSET;
-                            self.value = (self.value & !mask) | (value.into() << #field_idents::OFFSET);
+                        pub fn #enumerated_field_idents(&mut self, variant: #enumerated_field_idents::WriteVariant) -> &mut Self {
+                            let mask = (u32::MAX >> (32 - #enumerated_field_idents::WIDTH)) << #enumerated_field_idents::OFFSET;
+                            self.value = (self.value & !mask) | ((variant as u32) << #enumerated_field_idents::OFFSET);
+
+                            self
+                        }
+                    )*
+                    #(
+                        pub fn #numeric_field_idents(&mut self, value: impl Into<u32>) -> &mut Self {
+                            let mask = (u32::MAX >> (32 - #numeric_field_idents::WIDTH)) << #numeric_field_idents::OFFSET;
+                            self.value = (self.value & !mask) | (value.into() << #numeric_field_idents::OFFSET);
 
                             self
                         }

@@ -62,9 +62,7 @@ mod tests {
             fn unsafe_write() {
                 let _lock = LOCK.lock().unwrap();
 
-                unsafe {
-                    foo0::write_from_zero_untracked(|w| w.a(foo0::a::WriteVariant::V2 as u32))
-                };
+                unsafe { foo0::write_from_zero_untracked(|w| w.a(foo0::a::WriteVariant::V2)) };
                 assert!(unsafe { foo0::read_untracked().a().is_v2() });
             }
 
@@ -72,12 +70,10 @@ mod tests {
             fn unsafe_modify() {
                 let _lock = LOCK.lock().unwrap();
 
-                unsafe {
-                    foo0::write_from_zero_untracked(|w| w.a(foo0::a::WriteVariant::V3 as u32))
-                };
+                unsafe { foo0::write_from_zero_untracked(|w| w.a(foo0::a::WriteVariant::V3)) };
                 unsafe {
                     foo0::modify_untracked(|r, w| {
-                        w.a(foo0::a::Variant::from_bits(r.a() as u32 + 1) as u32)
+                        w.a(foo0::a::Variant::from_bits(r.a() as u32 + 1))
                     })
                 };
 

@@ -392,7 +392,7 @@ impl Field {
     }
 
     fn generate_repr(field_ident: &Ident, access: &Access) -> Option<TokenStream> {
-        let variant_enum = |ident, variants: &HashMap<Ident, Variant>| {
+        let variant_enum = |ident, variants: &HashMap<Ident, Variant>, write| {
             let variant_idents = variants
                 .values()
                 .map(|variant| variant.type_name())
@@ -435,18 +435,18 @@ impl Field {
                         }
                     )*
                 }
-
-                impl ::proto_hal::stasis::Position<Field> for #ident {}
-                impl ::proto_hal::stasis::Corporeal for #ident {}
             };
 
-            if access.is_write() {
+            if write {
                 out.extend(quote! {
                     impl ::proto_hal::stasis::Emplace<super::UnsafeWriter> for #ident {
                         fn set(&self, w: &mut super::UnsafeWriter) {
-                            w.#field_ident(*self as u32);
+                            w.#field_ident(*self);
                         }
                     }
+
+                    impl ::proto_hal::stasis::Position<Field> for #ident {}
+                    impl ::proto_hal::stasis::Corporeal for #ident {}
                 });
             }
 
@@ -456,8 +456,11 @@ impl Field {
         let mut out = match access {
             Access::Read(read) => {
                 if let Numericity::Enumerated { variants } = &read.numericity {
-                    let variant_enum =
-                        variant_enum(syn::Ident::new("Variant", Span::call_site()), variants);
+                    let variant_enum = variant_enum(
+                        syn::Ident::new("Variant", Span::call_site()),
+                        variants,
+                        false,
+                    );
 
                     Some(quote! {
                         pub type ReadVariant = Variant;
@@ -470,8 +473,11 @@ impl Field {
             }
             Access::Write(write) => {
                 if let Numericity::Enumerated { variants } = &write.numericity {
-                    let variant_enum =
-                        variant_enum(syn::Ident::new("Variant", Span::call_site()), variants);
+                    let variant_enum = variant_enum(
+                        syn::Ident::new("Variant", Span::call_site()),
+                        variants,
+                        true,
+                    );
 
                     Some(quote! {
                         pub type ReadVariant = Variant;
@@ -485,8 +491,11 @@ impl Field {
             Access::ReadWrite(read_write) => match read_write {
                 ReadWrite::Symmetrical(access) => {
                     if let Numericity::Enumerated { variants } = &access.numericity {
-                        let variant_enum =
-                            variant_enum(syn::Ident::new("Variant", Span::call_site()), variants);
+                        let variant_enum = variant_enum(
+                            syn::Ident::new("Variant", Span::call_site()),
+                            variants,
+                            true,
+                        );
 
                         Some(quote! {
                             pub type ReadVariant = Variant;
@@ -502,6 +511,7 @@ impl Field {
                         Some(variant_enum(
                             syn::Ident::new("ReadVariant", Span::call_site()),
                             variants,
+                            false,
                         ))
                     } else {
                         None
@@ -512,6 +522,7 @@ impl Field {
                         Some(variant_enum(
                             syn::Ident::new("WriteVariant", Span::call_site()),
                             variants,
+                            true,
                         ))
                     } else {
                         None
@@ -580,7 +591,7 @@ impl Field {
 
                         impl ::proto_hal::stasis::Emplace<super::UnsafeWriter> for #variants {
                             fn set(&self, w: &mut super::UnsafeWriter) {
-                                w.#ident(<Self as ::proto_hal::stasis::Incoming<Field>>::RAW as u32);
+                                w.#ident(<Self as ::proto_hal::stasis::Incoming<Field>>::RAW);
                             }
                         }
 
