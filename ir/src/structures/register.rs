@@ -805,6 +805,7 @@ impl Register {
                 },
                 (false, Numericity::Numeric) => {
                     quote! {
+                        #[allow(clippy::type_complexity)]
                         pub fn #field_ident <#entitlement_generics> (self, #[expect(unused)] instance: &mut #field_ident::Dynamic #entitlement_args, value: impl Into<#field_ident::Numeric>) -> Writer<#(#prev_field_tys,)* #field_ident::Numeric, #(#next_field_tys,)*>
                         where
                             #entitlement_where
@@ -818,6 +819,7 @@ impl Register {
                 },
                 (false, Numericity::Enumerated { .. }) => {
                     quote! {
+                        #[allow(clippy::type_complexity)]
                         pub fn #field_ident <#entitlement_generics> (self, instance: &mut #field_ident::Dynamic #entitlement_args) -> #refined_writer_ident<#(#prev_field_tys,)* &mut #field_ident::Dynamic, #(#next_field_tys,)*>
                         #entitlement_where
                         {
