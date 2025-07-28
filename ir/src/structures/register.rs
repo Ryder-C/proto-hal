@@ -604,48 +604,17 @@ impl Register {
             Access::Read(read) | Access::ReadWrite(ReadWrite::Symmetrical(read) | ReadWrite::Asymmetrical { read, .. }) => {
                 let ident = field.module_name();
 
-                let (entitlement_generics, entitlement_args, entitlement_where) = if field.entitlements.is_empty() {
-                    (None, None, None)
-                } else {
-                    let entitlement_tys = field.entitlements.iter().map(|entitlement| entitlement.variant()).collect::<Vec<_>>();
-                    let entitlement_idents = field.entitlements.iter().map(|entitlement|
-                        Ident::new(
-                            inflector::cases::snakecase::to_snake_case(
-                                entitlement.variant().to_string().as_str()).as_str(),
-                            Span::call_site()
-                        ));
-
-                    (
-                        Some(quote! {
-                            <#(#entitlement_tys),*>
-                        }),
-                        Some(quote! {
-                            , #(#[expect(unused)] #entitlement_idents: &#entitlement_tys),*
-                        }),
-                        Some(quote! {
-                            where
-                                #(
-                                    #ident::Field: ::proto_hal::stasis::Entitled<#entitlement_tys>,
-                                )*
-                        })
-                    )
-                };
-
                 Some(match &read.numericity {
                     Numericity::Enumerated { variants: _ } => {
                         quote! {
-                            pub fn #ident #entitlement_generics (&self, #[expect(unused)] instance: &mut #ident::Dynamic #entitlement_args) -> #ident::ReadVariant
-                            #entitlement_where
-                            {
+                            pub fn #ident(&self, #[expect(unused)] instance: &mut #ident::Dynamic) -> #ident::ReadVariant {
                                 self.r.#ident()
                             }
                         }
                     },
                     Numericity::Numeric => {
                         quote! {
-                            pub fn #ident #entitlement_generics (&self, #[expect(unused)] instance: &mut #ident::Dynamic #entitlement_args) -> u32
-                            #entitlement_where
-                            {
+                            pub fn #ident(&self, #[expect(unused)] instance: &mut #ident::Dynamic) -> u32 {
                                 self.r.#ident()
                             }
                         }
@@ -746,42 +715,6 @@ impl Register {
                 }
             });
 
-            let (entitlement_generics, entitlement_args, entitlement_where) = if field
-                .entitlements
-                .is_empty()
-            {
-                (None, None, None)
-            } else {
-                let entitlement_tys = field
-                    .entitlements
-                    .iter()
-                    .map(|entitlement| entitlement.variant())
-                    .collect::<Vec<_>>();
-                let entitlement_idents = field.entitlements.iter().map(|entitlement| {
-                    Ident::new(
-                        inflector::cases::snakecase::to_snake_case(
-                            entitlement.variant().to_string().as_str(),
-                        )
-                        .as_str(),
-                        Span::call_site(),
-                    )
-                });
-
-                (
-                    Some(quote! {
-                        #(#entitlement_tys),*
-                    }),
-                    Some(quote! {
-                        , #(#[expect(unused)] #entitlement_idents: &#entitlement_tys),*
-                    }),
-                    Some(quote! {
-                        #(
-                            #field_ident::Field: ::proto_hal::stasis::Entitled<#entitlement_tys>,
-                        )*
-                    }),
-                )
-            };
-
             accessors.extend(match (
                 field.is_resolvable(),
                 &field
@@ -792,10 +725,9 @@ impl Register {
             ) {
                 (true, _) => quote! {
                     #[allow(clippy::type_complexity)]
-                    pub fn #field_ident<_OldState, #entitlement_generics>(self #entitlement_args, state: _OldState) -> #refined_writer_ident<#(#prev_field_tys,)* _OldState, #(#next_field_tys,)*>
+                    pub fn #field_ident<_OldState>(self, state: _OldState) -> #refined_writer_ident<#(#prev_field_tys,)* _OldState, #(#next_field_tys,)*>
                     where
                         _OldState: ::proto_hal::stasis::Position<#field_ident::Field>,
-                        #entitlement_where
                     {
                         #refined_writer_ident {
                             #field_ident: state,
@@ -806,10 +738,7 @@ impl Register {
                 (false, Numericity::Numeric) => {
                     quote! {
                         #[allow(clippy::type_complexity)]
-                        pub fn #field_ident <#entitlement_generics> (self, #[expect(unused)] instance: &mut #field_ident::Dynamic #entitlement_args, value: impl Into<#field_ident::Numeric>) -> Writer<#(#prev_field_tys,)* #field_ident::Numeric, #(#next_field_tys,)*>
-                        where
-                            #entitlement_where
-                        {
+                        pub fn #field_ident(self, #[expect(unused)] instance: &mut #field_ident::Dynamic, value: impl Into<#field_ident::Numeric>) -> Writer<#(#prev_field_tys,)* #field_ident::Numeric, #(#next_field_tys,)*> {
                             Writer {
                                 #field_ident: value.into(),
                                 #(#struct_entries,)*
@@ -820,9 +749,7 @@ impl Register {
                 (false, Numericity::Enumerated { .. }) => {
                     quote! {
                         #[allow(clippy::type_complexity)]
-                        pub fn #field_ident <#entitlement_generics> (self, instance: &mut #field_ident::Dynamic #entitlement_args) -> #refined_writer_ident<#(#prev_field_tys,)* &mut #field_ident::Dynamic, #(#next_field_tys,)*>
-                        #entitlement_where
-                        {
+                        pub fn #field_ident(self, instance: &mut #field_ident::Dynamic) -> #refined_writer_ident<#(#prev_field_tys,)* &mut #field_ident::Dynamic, #(#next_field_tys,)*> {
                             #refined_writer_ident {
                                 #field_ident: instance,
                                 #(#struct_entries,)*
