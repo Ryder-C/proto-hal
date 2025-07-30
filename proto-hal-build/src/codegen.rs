@@ -2,7 +2,7 @@ use std::{env, fs, path::Path};
 
 use colored::Colorize as _;
 use ir::{
-    structures::hal::Hal,
+    structures::{hal::Hal, interrupts::InterruptKind},
     utils::diagnostic::{self, Diagnostic, Diagnostics},
 };
 
@@ -50,9 +50,14 @@ pub fn validate(source: impl FnOnce() -> Result<Hal, Diagnostics>) {
                 .map(|register| register.fields.len())
                 .sum::<usize>();
             let interrupts = hal.interrupts.len();
+            let reserved_interrupts = hal
+                .interrupts
+                .iter()
+                .filter(|interrupt| matches!(interrupt.kind, InterruptKind::Reserved))
+                .count();
 
             println!(
-                "Peripherals: {peripherals}\nRegisters: {registers}\nFields: {fields}\nInterrupts: {interrupts}\nLines: {}\n{}",
+                "Peripherals: {peripherals}\nRegisters: {registers}\nFields: {fields}\nInterrupts: {interrupts} ({reserved_interrupts} reserved)\nLines: {}\n{}",
                 output.lines().count(),
                 "Done".green().bold(),
             );
