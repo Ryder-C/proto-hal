@@ -27,7 +27,7 @@ pub fn validate(source: impl FnOnce() -> Result<Hal, Diagnostics>) {
                 .filter(|diagnostic| matches!(diagnostic.kind(), diagnostic::Kind::Error))
                 .count();
 
-            println!("emitted {warning_count} warnings and {error_count} errors.");
+            println!("emitted {warning_count} warnings and {error_count} errors");
             return;
         }
     };

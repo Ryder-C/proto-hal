@@ -167,7 +167,7 @@ impl Field {
                         if lhs.bits == rhs.bits {
                             diagnostics.insert(
                                 Diagnostic::error(format!(
-                                    "variants [{}] and [{}] have overlapping bit values.",
+                                    "variants [{}] and [{}] have overlapping bit values",
                                     lhs.ident.to_string().bold(),
                                     rhs.ident.to_string().bold()
                                 ))
