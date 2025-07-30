@@ -37,9 +37,25 @@ pub fn validate(source: impl FnOnce() -> Result<Hal, Diagnostics>) {
     println!("Validating codegen...");
     match hal.render() {
         Ok(output) => {
+            let peripherals = hal.peripherals.len();
+            let registers = hal
+                .peripherals
+                .values()
+                .map(|peripheral| peripheral.registers.len())
+                .sum::<usize>();
+            let fields = hal
+                .peripherals
+                .values()
+                .flat_map(|peripheral| peripheral.registers.values())
+                .map(|register| register.fields.len())
+                .sum::<usize>();
+
             println!(
-                "{}. Produced {} lines.",
+                "{}. Produced {} peripherals, {} registers, and {} fields, totalling {} lines.",
                 "Done".green().bold(),
+                peripherals,
+                registers,
+                fields,
                 output.lines().count()
             );
         }
