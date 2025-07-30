@@ -49,14 +49,12 @@ pub fn validate(source: impl FnOnce() -> Result<Hal, Diagnostics>) {
                 .flat_map(|peripheral| peripheral.registers.values())
                 .map(|register| register.fields.len())
                 .sum::<usize>();
+            let interrupts = hal.interrupts.len();
 
             println!(
-                "{}. Produced {} peripherals, {} registers, and {} fields, totalling {} lines.",
+                "Peripherals: {peripherals}\nRegisters: {registers}\nFields: {fields}\nInterrupts: {interrupts}\nLines: {}\n{}",
+                output.lines().count(),
                 "Done".green().bold(),
-                peripherals,
-                registers,
-                fields,
-                output.lines().count()
             );
         }
         Err(e) => {
