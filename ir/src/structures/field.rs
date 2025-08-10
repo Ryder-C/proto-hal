@@ -143,7 +143,7 @@ impl Field {
                 if read.numericity == write.numericity
                     && !read.entitlements.is_empty() =>
             {
-                check_numericity(&read)
+                check_numericity(read)
             }
             _ => None,
         }
@@ -338,12 +338,11 @@ impl Field {
 
         let mut out = quote! {};
 
-        if let Some(access) = self.resolvable() {
-            if let Numericity::Enumerated { variants } = &access.numericity {
+        if let Some(access) = self.resolvable()
+            && let Numericity::Enumerated { variants } = &access.numericity {
                 let variants = variants.values();
                 out.extend(quote! { #(#variants)* });
             }
-        }
 
         out
     }
@@ -607,8 +606,7 @@ impl Field {
         | Access::ReadWrite(
             ReadWrite::Symmetrical(write) | ReadWrite::Asymmetrical { write, .. },
         ) = access
-        {
-            if let Numericity::Numeric = &write.numericity {
+            && let Numericity::Numeric = &write.numericity {
                 out.get_or_insert_default().extend(quote! {
                     pub struct Numeric(u32);
 
@@ -636,7 +634,6 @@ impl Field {
                     impl ::proto_hal::stasis::Corporeal for Numeric {}
                 });
             }
-        }
 
         out
     }

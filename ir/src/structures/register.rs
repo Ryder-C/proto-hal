@@ -117,8 +117,8 @@ impl Register {
             }
         }
 
-        if let Some(field) = fields.last() {
-            if field.offset + field.width > 32 {
+        if let Some(field) = fields.last()
+            && field.offset + field.width > 32 {
                 diagnostics.insert(
                     Diagnostic::error(format!(
                         "field [{}] exceeds register width.",
@@ -127,7 +127,6 @@ impl Register {
                     .with_context(new_context.clone()),
                 );
             }
-        }
 
         for field in fields {
             diagnostics.extend(field.validate(&new_context));

@@ -86,8 +86,8 @@ impl Interrupts {
         let mut seen = HashMap::new();
 
         for (i, interrupt) in self.interrupts.iter().enumerate() {
-            if let InterruptKind::Handler(ident) = &interrupt.kind {
-                if let Some(existing) = seen.insert(ident, i) {
+            if let InterruptKind::Handler(ident) = &interrupt.kind
+                && let Some(existing) = seen.insert(ident, i) {
                     diagnostics.insert(
                         Diagnostic::error(format!(
                         "interrupt [{}] at position {i} is already defined at position {existing}",
@@ -96,7 +96,6 @@ impl Interrupts {
                         .with_context(context.clone()),
                     );
                 }
-            }
         }
 
         diagnostics
