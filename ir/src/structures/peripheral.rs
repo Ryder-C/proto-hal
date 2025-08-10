@@ -61,10 +61,7 @@ impl Peripheral {
     }
 
     pub fn module_name(&self) -> Ident {
-        Ident::new(
-            inflector::cases::snakecase::to_snake_case(self.ident.to_string().as_str()).as_str(),
-            Span::call_site(),
-        )
+        self.ident.clone()
     }
 
     pub fn type_name(&self) -> Ident {
