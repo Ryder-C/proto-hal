@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{Ident, Path};
 
 use crate::utils::diagnostic::{Context, Diagnostic, Diagnostics};

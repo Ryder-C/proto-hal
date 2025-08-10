@@ -100,7 +100,9 @@ pub fn generate(source: impl FnOnce() -> (Hal, Diagnostics)) {
             return;
         }
         (1.., _) => {
-            println!("cargo::error=HAL generation contains warnings. Refer to the model crate for details.");
+            println!(
+                "cargo::error=HAL generation contains warnings. Refer to the model crate for details."
+            );
             return;
         }
         (..) => {}

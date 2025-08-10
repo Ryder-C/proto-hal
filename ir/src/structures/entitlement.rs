@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fmt::Display};
 
 use proc_macro2::Span;
-use syn::{parse_quote, Ident, Path};
+use syn::{Ident, Path, parse_quote};
 use ters::ters;
 
 #[ters]

@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use colored::Colorize;
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
-use syn::{parse_quote, Ident, Path};
+use quote::{ToTokens, format_ident, quote};
+use syn::{Ident, Path, parse_quote};
 
 use crate::{
     access::{Access, ReadWrite},
@@ -118,15 +118,16 @@ impl Register {
         }
 
         if let Some(field) = fields.last()
-            && field.offset + field.width > 32 {
-                diagnostics.insert(
-                    Diagnostic::error(format!(
-                        "field [{}] exceeds register width.",
-                        field.module_name().to_string().bold()
-                    ))
-                    .with_context(new_context.clone()),
-                );
-            }
+            && field.offset + field.width > 32
+        {
+            diagnostics.insert(
+                Diagnostic::error(format!(
+                    "field [{}] exceeds register width.",
+                    field.module_name().to_string().bold()
+                ))
+                .with_context(new_context.clone()),
+            );
+        }
 
         for field in fields {
             diagnostics.extend(field.validate(&new_context));

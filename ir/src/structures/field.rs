@@ -141,7 +141,7 @@ impl Field {
                 //
                 // TODO: this is unsolved. read entitlements will always be empty
                 if read.numericity == write.numericity
-                    && !read.entitlements.is_empty() =>
+                    && (!read.entitlements.is_empty() || !write.entitlements.is_empty()) =>
             {
                 check_numericity(read)
             }
@@ -339,10 +339,11 @@ impl Field {
         let mut out = quote! {};
 
         if let Some(access) = self.resolvable()
-            && let Numericity::Enumerated { variants } = &access.numericity {
-                let variants = variants.values();
-                out.extend(quote! { #(#variants)* });
-            }
+            && let Numericity::Enumerated { variants } = &access.numericity
+        {
+            let variants = variants.values();
+            out.extend(quote! { #(#variants)* });
+        }
 
         out
     }
@@ -606,34 +607,35 @@ impl Field {
         | Access::ReadWrite(
             ReadWrite::Symmetrical(write) | ReadWrite::Asymmetrical { write, .. },
         ) = access
-            && let Numericity::Numeric = &write.numericity {
-                out.get_or_insert_default().extend(quote! {
-                    pub struct Numeric(u32);
+            && let Numericity::Numeric = &write.numericity
+        {
+            out.get_or_insert_default().extend(quote! {
+                pub struct Numeric(u32);
 
-                    impl ::core::ops::Deref for Numeric {
-                        type Target = u32;
+                impl ::core::ops::Deref for Numeric {
+                    type Target = u32;
 
-                        fn deref(&self) -> &Self::Target {
-                            &self.0
-                        }
+                    fn deref(&self) -> &Self::Target {
+                        &self.0
                     }
+                }
 
-                    impl ::core::convert::From<u32> for Numeric {
-                        fn from(value: u32) -> Self {
-                            Self(value)
-                        }
+                impl ::core::convert::From<u32> for Numeric {
+                    fn from(value: u32) -> Self {
+                        Self(value)
                     }
+                }
 
-                    impl ::proto_hal::stasis::Emplace<super::UnsafeWriter> for Numeric {
-                        fn set(&self, w: &mut super::UnsafeWriter) {
-                            w.#field_ident(**self);
-                        }
+                impl ::proto_hal::stasis::Emplace<super::UnsafeWriter> for Numeric {
+                    fn set(&self, w: &mut super::UnsafeWriter) {
+                        w.#field_ident(**self);
                     }
+                }
 
-                    impl ::proto_hal::stasis::Position<Field> for Numeric {}
-                    impl ::proto_hal::stasis::Corporeal for Numeric {}
-                });
-            }
+                impl ::proto_hal::stasis::Position<Field> for Numeric {}
+                impl ::proto_hal::stasis::Corporeal for Numeric {}
+            });
+        }
 
         out
     }
