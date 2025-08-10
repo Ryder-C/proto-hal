@@ -587,6 +587,23 @@ impl Field {
                         None
                     }
                 }
+                ReadWrite::Asymmetrical { read, write } if read.numericity == write.numericity => {
+                    if let Numericity::Enumerated { variants } = &read.numericity {
+                        let variant_enum = variant_enum(
+                            syn::Ident::new("Variant", Span::call_site()),
+                            variants,
+                            true,
+                        );
+
+                        Some(quote! {
+                            pub type ReadVariant = Variant;
+                            pub type WriteVariant = Variant;
+                            #variant_enum
+                        })
+                    } else {
+                        None
+                    }
+                }
                 ReadWrite::Asymmetrical { read, write } => {
                     let read_enum = if let Numericity::Enumerated { variants } = &read.numericity {
                         Some(variant_enum(
