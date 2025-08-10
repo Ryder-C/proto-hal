@@ -106,8 +106,8 @@ impl Register {
                         if !field.entitlements.is_empty() || !other.entitlements.is_empty() {
                             vec![format!(
                                 "overlapping fields have non-trivial intersecting entitlement spaces {:?} and {:?}",
-                                field.entitlements.iter().map(|entitlement| entitlement.to_string()).collect::<Vec<_>>(),
-                                other.entitlements.iter().map(|entitlement| entitlement.to_string()).collect::<Vec<_>>(),
+                                field.entitlements.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                                other.entitlements.iter().map(ToString::to_string).collect::<Vec<_>>(),
                             )]
                         } else {
                             vec![]

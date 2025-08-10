@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use colored::Colorize;
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{Ident, Path};
 
 use crate::{
@@ -117,19 +117,33 @@ impl Field {
     }
 
     pub fn resolvable(&self) -> Option<&AccessProperties> {
-        // TODO: external resolving effects
+        // TODO: external resolving effects nor external *unresolving* effects can currently be expressed
+        // TODO: so both possibilities are ignored for now
 
-        match &self.access {
-            Access::ReadWrite(ReadWrite::Symmetrical(access)) => {
-                if let Numericity::Enumerated { variants } = &access.numericity {
-                    if variants.values().any(|variant| variant.inert) {
-                        None
-                    } else {
-                        Some(access)
-                    }
+        fn check_numericity(access: &AccessProperties) -> Option<&AccessProperties> {
+            if let Numericity::Enumerated { variants } = &access.numericity {
+                if variants.values().any(|variant| variant.inert) {
+                    None
                 } else {
                     Some(access)
                 }
+            } else {
+                Some(access)
+            }
+        }
+
+        match &self.access {
+            Access::ReadWrite(ReadWrite::Symmetrical(access)) => check_numericity(access),
+            Access::ReadWrite(ReadWrite::Asymmetrical { read, write })
+                // a field that is conditionally readable, implies it is one of:
+                // 1. aligned with write access which means the entire field is effectively conditional
+                // 2. read and write are disjoint which means the field necessarily is stateless
+                //
+                // TODO: this is unsolved. read entitlements will always be empty
+                if read.numericity == write.numericity
+                    && !read.entitlements.is_empty() =>
+            {
+                check_numericity(&read)
             }
             _ => None,
         }
@@ -210,84 +224,89 @@ impl Field {
             }
         };
 
-        let unused_reset = |diagnostics: &mut Diagnostics| {
-            // TODO: check for resolving effects
-            if self.reset.is_some() {
-                diagnostics.insert(
-                    Diagnostic::warning("provided reset unused because the field is unresolvable")
-                        .with_context(new_context.clone()),
-                );
-            }
-        };
-
         for access in [self.access.get_read(), self.access.get_write()]
             .into_iter()
             .flatten()
         {
             validate_numericity(&access.numericity, &mut diagnostics);
 
-            if let Some(access) = self.resolvable() {
-                if let Some(reset) = &self.reset {
-                    // TODO: resets for resolvable fields with inequal read/write schemas
-                    match reset {
-                        Reset::Variant(ident) => match &access.numericity {
-                            Numericity::Numeric => {
-                                diagnostics.insert(
-                                    Diagnostic::error(
-                                        "provided reset is enumerated but field is numeric",
-                                    )
-                                    .with_context(new_context.clone()),
-                                );
-                            }
-                            Numericity::Enumerated { variants } => {
-                                if !variants.contains_key(ident) {
-                                    diagnostics.insert(
-                                        Diagnostic::error(format!(
-                                            "provided reset \"{ident}\" does not exist"
-                                        ))
-                                        .with_context(new_context.clone()),
-                                    );
-                                }
-                            }
-                        },
-                        Reset::Value(value) => match &access.numericity {
-                            Numericity::Numeric => {
-                                if *value > u32::MAX >> (32 - self.width) {
-                                    diagnostics.insert(
-                                        Diagnostic::error(format!(
-                                            "provided reset value ({value}) exceeds field width"
-                                        ))
-                                        .with_context(new_context.clone()),
-                                    );
-                                }
-                            }
-                            Numericity::Enumerated { variants } => {
-                                if !variants.values().any(|variant| variant.bits.eq(value)) {
-                                    diagnostics.insert(
-                                        Diagnostic::error(format!(
-                                            "provided reset value ({value}) does not correspond to any variants of this field"
-                                        )).with_context(new_context.clone())
-                                    );
-                                }
-                            }
-                        },
-                    }
-                } else {
-                    diagnostics.insert(
-                        Diagnostic::error(
-                            "resolvable fields require a reset state to be specified",
-                        )
-                        .with_context(new_context.clone()),
-                    );
-                }
-            } else {
-                unused_reset(&mut diagnostics);
-            }
-
             if let Numericity::Enumerated { variants } = &access.numericity {
                 for variant in variants.values() {
                     diagnostics.extend(variant.validate(&new_context));
                 }
+            }
+        }
+
+        // validate access entitlements
+        if let (Some(read), Some(..)) = (self.access.get_read(), self.access.get_write())
+            && !read.entitlements.is_empty()
+        {
+            diagnostics.insert(
+                Diagnostic::error("writable fields cannot be conditionally readable")
+                    .notes(["for more information, refer to the \"Access Entitlement Quandaries\" section in `notes.md`"])
+                    .with_context(new_context.clone()),
+            );
+        }
+
+        if let Some(access) = self.resolvable() {
+            if let Some(reset) = &self.reset {
+                // TODO: resets for resolvable fields with inequal read/write schemas
+                match reset {
+                    Reset::Variant(ident) => match &access.numericity {
+                        Numericity::Numeric => {
+                            diagnostics.insert(
+                                Diagnostic::error(
+                                    "provided reset is enumerated but field is numeric",
+                                )
+                                .with_context(new_context.clone()),
+                            );
+                        }
+                        Numericity::Enumerated { variants } => {
+                            if !variants.contains_key(ident) {
+                                diagnostics.insert(
+                                    Diagnostic::error(format!(
+                                        "provided reset \"{ident}\" does not exist"
+                                    ))
+                                    .with_context(new_context.clone()),
+                                );
+                            }
+                        }
+                    },
+                    Reset::Value(value) => match &access.numericity {
+                        Numericity::Numeric => {
+                            if *value > u32::MAX >> (32 - self.width) {
+                                diagnostics.insert(
+                                    Diagnostic::error(format!(
+                                        "provided reset value ({value}) exceeds field width"
+                                    ))
+                                    .with_context(new_context.clone()),
+                                );
+                            }
+                        }
+                        Numericity::Enumerated { variants } => {
+                            if !variants.values().any(|variant| variant.bits.eq(value)) {
+                                diagnostics.insert(
+                                    Diagnostic::error(format!(
+                                        "provided reset value ({value}) does not correspond to any variants of this field"
+                                    )).with_context(new_context.clone())
+                                );
+                            }
+                        }
+                    },
+                }
+            } else {
+                diagnostics.insert(
+                    Diagnostic::error("resolvable fields require a reset state to be specified")
+                        .with_context(new_context.clone()),
+                );
+            }
+        } else {
+            // TODO: check for resolving effects
+            if self.reset.is_some() {
+                diagnostics.insert(
+                    Diagnostic::warning("provided reset unused because the field is unresolvable")
+                        .with_context(new_context.clone()),
+                );
             }
         }
 

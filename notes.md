@@ -163,3 +163,28 @@ let some::reg::States { foo, .. } = some::reg::write(|w| {
 > `foo` is a resolvable enumerated field. `bar` is an unresolvable numeric field.
 > All other fields have at least one inert write variant.
 > The generics in `States` are still only for resolvable fields.
+
+# Access Entitlement Quandaries
+
+If a field's read access is conditional, then there exists a set of
+entitlements such that the field is writable but not readable. This means the `modify`
+function would exist, and could read unreadable fields, then write back to them. This
+could potentially read undefined values and write them back. Of course, an unacceptable
+scenario.
+
+This means that for fields of this kind, the `modify` function must:
+
+1. Prefill an inert value if one exists.
+1. Require the final value in the writer to be corporeal.
+
+This is the same logic employed by `write`, but only for the fields of discussion, rather
+than all writable fields.
+
+If at some point the field *is* readable and writable with no inert variants and the user
+intends to retain the value while modifying other fields, the user must use the reader to
+capture the value, and forward it to the writer.
+
+This kind of feels bad... also, could this not be represented by two superpositioned fields?
+Does that mean if someone where to do so it would be unsound?
+
+For now, conditional readability with any kind of writability will be forbidden.
