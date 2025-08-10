@@ -544,7 +544,7 @@ impl Register {
 
             let mut out = quote! {};
 
-            if fields.any(|field| field.is_resolvable()) {
+            if fields.any(|field| field.is_resolvable() && field.entitlements.is_empty()) {
                 out.extend(quote! {
                     /// Write to fields of the register with a default hardware reset value, ignoring any implicative
                     /// effects.
