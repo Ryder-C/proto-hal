@@ -18,5 +18,5 @@ pub fn generate() -> Field {
             Variant::new("P7", 3),
         ])),
     )
-    .reset("P32")
+    .reset(0)
 }

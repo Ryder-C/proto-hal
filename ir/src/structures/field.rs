@@ -445,7 +445,21 @@ impl Field {
         if let Some(reset) = &self.reset {
             let reset = match reset {
                 Reset::Variant(ident) => quote! { #ident },
-                Reset::Value(value) => quote! { Value<#value> },
+                Reset::Value(value) => {
+                    if let Some(access) = self.resolvable()
+                        && let Numericity::Enumerated { variants } = &access.numericity
+                    {
+                        let variant = variants
+                            .values()
+                            .find(|variant| variant.bits == *value)
+                            .expect("exactly one variant must correspond to the reset value");
+                        let ident = variant.type_name();
+
+                        quote! { #ident }
+                    } else {
+                        quote! { Value<#value> }
+                    }
+                }
             };
 
             quote! {
