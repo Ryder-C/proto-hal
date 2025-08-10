@@ -230,7 +230,7 @@ impl ToTokens for Peripheral {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let mut body = quote! {};
 
-        let ident = &self.ident;
+        let ident = self.module_name();
 
         body.extend(Self::generate_registers(self.registers.values()));
         body.extend(Self::generate_base_addr(self.base_addr, &self.ident));
