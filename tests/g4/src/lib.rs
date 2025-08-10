@@ -31,10 +31,12 @@ mod tests {
                 let p = unsafe { crate::peripherals() };
 
                 let rcc::ahb1enr::States { cordicen, .. } =
-                    rcc::ahb1enr::modify(cs, |_, w| w.cordicen(p.rcc.ahb1enr.cordicen).enabled());
+                    rcc::ahb1enr::modify_in_cs(cs, |_, w| {
+                        w.cordicen(p.rcc.ahb1enr.cordicen).enabled()
+                    });
                 let cordic = p.cordic.unmask(cordicen);
 
-                cordic::csr::modify(cs, |_, w| {
+                cordic::csr::modify_in_cs(cs, |_, w| {
                     w.func(cordic.csr.func)
                         .sqrt()
                         .scale(cordic.csr.scale)
@@ -63,7 +65,9 @@ mod tests {
                 let p = unsafe { crate::peripherals() };
 
                 let rcc::ahb1enr::States { cordicen, .. } =
-                    rcc::ahb1enr::modify(cs, |_, w| w.cordicen(p.rcc.ahb1enr.cordicen).enabled());
+                    rcc::ahb1enr::modify_in_cs(cs, |_, w| {
+                        w.cordicen(p.rcc.ahb1enr.cordicen).enabled()
+                    });
                 let cordic = p.cordic.unmask(cordicen);
 
                 let mut arg = cordic.wdata.arg.unmask(cordic.csr.argsize);
@@ -82,11 +86,13 @@ mod tests {
                 let p = unsafe { crate::peripherals() };
 
                 let rcc::ahb1enr::States { cordicen, .. } =
-                    rcc::ahb1enr::modify(cs, |_, w| w.cordicen(p.rcc.ahb1enr.cordicen).enabled());
+                    rcc::ahb1enr::modify_in_cs(cs, |_, w| {
+                        w.cordicen(p.rcc.ahb1enr.cordicen).enabled()
+                    });
                 let cordic = p.cordic.unmask(cordicen);
 
                 let cordic::csr::States { ressize, .. } =
-                    cordic::csr::modify(cs, |_, w| w.ressize(cordic.csr.ressize).q15());
+                    cordic::csr::modify_in_cs(cs, |_, w| w.ressize(cordic.csr.ressize).q15());
 
                 // multiple fields are entitled to these states, so the state must be explicitly frozen.
                 let (_, [res0_nres_ent, res1_nres_ent]) = cordic.csr.nres.freeze();
@@ -119,7 +125,7 @@ mod tests {
                 let p = unsafe { crate::peripherals() };
 
                 let rcc::ahb1enr::States { crcen, .. } =
-                    rcc::ahb1enr::modify(cs, |_, w| w.crcen(p.rcc.ahb1enr.crcen).enabled());
+                    rcc::ahb1enr::modify_in_cs(cs, |_, w| w.crcen(p.rcc.ahb1enr.crcen).enabled());
                 let crc = p.crc.unmask(crcen);
 
                 let crc::idr::States { idr } =
@@ -135,7 +141,7 @@ mod tests {
                 let p = unsafe { crate::peripherals() };
 
                 let rcc::ahb1enr::States { crcen, .. } =
-                    rcc::ahb1enr::modify(cs, |_, w| w.crcen(p.rcc.ahb1enr.crcen).enabled());
+                    rcc::ahb1enr::modify_in_cs(cs, |_, w| w.crcen(p.rcc.ahb1enr.crcen).enabled());
                 let crc = p.crc.unmask(crcen);
 
                 // "rst" need not be specified because it has an inert variant

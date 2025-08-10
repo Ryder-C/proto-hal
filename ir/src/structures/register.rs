@@ -942,8 +942,11 @@ impl Register {
 
         if fields.iter().any(|field| field.access.is_read()) {
             out.extend(quote! {
+                /// Modify the contents of the register by passing field handles through the gate.
+                ///
+                /// This function accepts a critical section to avoid nested critical section acquisition.
                 #[allow(clippy::type_complexity)]
-                pub fn modify<#(#field_tys,)*>(cs: ::proto_hal::critical_section::CriticalSection<'_>, gate: impl FnOnce(Reader, EmptyWriter) -> Writer<#(#field_tys,)*>) #states_return
+                pub fn modify_in_cs<#(#field_tys,)*>(cs: ::proto_hal::critical_section::CriticalSection<'_>, gate: impl FnOnce(Reader, EmptyWriter) -> Writer<#(#field_tys,)*>) #states_return
                 where
                     #(
                         #field_tys: ::proto_hal::stasis::Emplace<UnsafeWriter> +
@@ -959,6 +962,27 @@ impl Register {
                     unsafe { modify_untracked(cs, |r, w| gate(Reader { r }, Writer::empty()).finish(w)) };
 
                     #states_conjure
+                }
+
+                /// Modify the contents of the register by passing field handles through the gate.
+                ///
+                /// This function acquires a critical section to perform the read-modify-write sequence.
+                /// Use [`modify_in_cs`] to accept an existing critical section context.
+                #[allow(clippy::type_complexity)]
+                pub fn modify<#(#field_tys,)*>(gate: impl FnOnce(Reader, EmptyWriter) -> Writer<#(#field_tys,)*>) #states_return
+                where
+                    #(
+                        #field_tys: ::proto_hal::stasis::Emplace<UnsafeWriter> +
+                        ::proto_hal::stasis::Position<#field_idents::Field>,
+                    )*
+                    #(
+                        #resolvable_field_tys: ::proto_hal::stasis::Conjure,
+                    )*
+                    #(
+                        #entitlement_bounds,
+                    )*
+                {
+                    ::proto_hal::critical_section::with(|cs| modify_in_cs(cs, gate))
                 }
             })
         }
