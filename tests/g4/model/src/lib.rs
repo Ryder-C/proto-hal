@@ -15,7 +15,7 @@ pub enum DeviceVariant {
     G484,
 }
 
-pub fn generate(variant: DeviceVariant) -> Result<Hal, Diagnostics> {
+pub fn generate(variant: DeviceVariant) -> (Hal, Diagnostics) {
     let extra_interrupts = |interrupt| {
         if matches!(variant, DeviceVariant::G474 | DeviceVariant::G484) {
             interrupt
@@ -131,9 +131,5 @@ pub fn generate(variant: DeviceVariant) -> Result<Hal, Diagnostics> {
 
     let diagnostics = hal.validate();
 
-    if !diagnostics.is_empty() {
-        Err(diagnostics)?
-    }
-
-    Ok(hal)
+    (hal, diagnostics)
 }

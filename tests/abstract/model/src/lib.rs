@@ -11,7 +11,7 @@ use proto_hal_build::ir::{
     utils::diagnostic::Diagnostics,
 };
 
-pub fn generate() -> Result<Hal, Diagnostics> {
+pub fn generate() -> (Hal, Diagnostics) {
     let hal = Hal::new([
         Peripheral::new(
             "foo",
@@ -65,11 +65,7 @@ pub fn generate() -> Result<Hal, Diagnostics> {
 
     let diagnostics = hal.validate();
 
-    if !diagnostics.is_empty() {
-        Err(diagnostics)?
-    }
-
-    Ok(hal)
+    (hal, diagnostics)
 }
 
 #[cfg(test)]

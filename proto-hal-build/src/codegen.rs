@@ -9,29 +9,30 @@ use ir::{
 /// Validate a HAL model is properly defined and codegen succeeds.
 ///
 /// *Note: This function is intended to be called in the "model" phase of synthesis.*
-pub fn validate(source: impl FnOnce() -> Result<Hal, Diagnostics>) {
+pub fn validate(source: impl FnOnce() -> (Hal, Diagnostics)) {
     // model validation
     println!("Validating model...");
-    let hal = match source() {
-        Ok(hal) => hal,
-        Err(diagnostics) => {
-            println!("{}", Diagnostic::report(&diagnostics));
+    let (hal, diagnostics) = source();
 
-            let warning_count = diagnostics
-                .iter()
-                .filter(|diagnostic| matches!(diagnostic.kind(), diagnostic::Kind::Warning))
-                .count();
+    if !diagnostics.is_empty() {
+        println!("{}", Diagnostic::report(&diagnostics));
+    }
 
-            let error_count = diagnostics
-                .iter()
-                .filter(|diagnostic| matches!(diagnostic.kind(), diagnostic::Kind::Error))
-                .count();
+    let warning_count = diagnostics
+        .iter()
+        .filter(|diagnostic| matches!(diagnostic.kind(), diagnostic::Kind::Warning))
+        .count();
 
-            println!("emitted {warning_count} warnings and {error_count} errors");
-            return;
-        }
-    };
-    println!("{} with 0 errors and 0 warnings.", "Done".green().bold());
+    let error_count = diagnostics
+        .iter()
+        .filter(|diagnostic| matches!(diagnostic.kind(), diagnostic::Kind::Error))
+        .count();
+
+    println!("emitted {warning_count} warnings and {error_count} errors");
+
+    if error_count != 0 {
+        return;
+    }
 
     // codegen validation
     println!("Validating codegen...");
@@ -77,14 +78,33 @@ pub fn validate(source: impl FnOnce() -> Result<Hal, Diagnostics>) {
 /// Generate and emit HAL code for use.
 ///
 /// *Note: This function is intended to be called in the "out" phase of synthesis.*
-pub fn generate(source: impl FnOnce() -> Result<Hal, Diagnostics>) {
+pub fn generate(source: impl FnOnce() -> (Hal, Diagnostics)) {
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("hal.rs");
 
-    let Ok(hal) = source() else {
-        println!("cargo::error=HAL generation failed. Refer to the model crate for details.");
-        return;
-    };
+    let (hal, diagnostics) = source();
+
+    let warning_count = diagnostics
+        .iter()
+        .filter(|diagnostic| matches!(diagnostic.kind(), diagnostic::Kind::Warning))
+        .count();
+
+    let error_count = diagnostics
+        .iter()
+        .filter(|diagnostic| matches!(diagnostic.kind(), diagnostic::Kind::Error))
+        .count();
+
+    match (warning_count, error_count) {
+        (_, 1..) => {
+            println!("cargo::error=HAL generation failed. Refer to the model crate for details.");
+            return;
+        }
+        (1.., _) => {
+            println!("cargo::error=HAL generation contains warnings. Refer to the model crate for details.");
+            return;
+        }
+        (..) => {}
+    }
 
     let Ok(codegen) = hal.render() else {
         println!("cargo::error=Codegen failed. Refer to the model crate for details.");
