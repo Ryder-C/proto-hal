@@ -28,6 +28,9 @@ pub fn validate(source: impl FnOnce() -> (Hal, Diagnostics)) {
         .filter(|diagnostic| matches!(diagnostic.kind(), diagnostic::Kind::Error))
         .count();
 
+    if error_count == 0 {
+        print!("{}. ", "Finished".green().bold());
+    }
     println!("emitted {warning_count} warnings and {error_count} errors");
 
     if error_count != 0 {
@@ -60,7 +63,7 @@ pub fn validate(source: impl FnOnce() -> (Hal, Diagnostics)) {
             println!(
                 "Peripherals: {peripherals}\nRegisters: {registers}\nFields: {fields}\nInterrupts: {interrupts} ({reserved_interrupts} reserved)\nLines: {}\n{}",
                 output.lines().count(),
-                "Done".green().bold(),
+                "Finished".green().bold(),
             );
         }
         Err(e) => {
