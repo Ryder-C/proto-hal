@@ -544,7 +544,7 @@ impl Register {
 
             let mut out = quote! {};
 
-            if fields.any(|field| field.is_resolvable() && field.entitlements.is_empty()) {
+            if fields.any(|field| field.reset.is_some() && field.entitlements.is_empty()) {
                 out.extend(quote! {
                     /// Write to fields of the register with a default hardware reset value, ignoring any implicative
                     /// effects.
@@ -866,7 +866,6 @@ impl Register {
 
             type EmptyWriter = Writer<#(#unresolved,)*>;
             type InertWriter = Writer<#(#inert_tys,)*>;
-            type ResetWriter = Writer<#(#reset_tys,)*>;
 
             #[allow(clippy::new_without_default)]
             impl EmptyWriter {
@@ -882,16 +881,6 @@ impl Register {
                 pub fn inert() -> Self {
                     Self {
                         #(#field_idents: #inert_values,)*
-                    }
-                }
-            }
-
-            impl ::proto_hal::stasis::Conjure for ResetWriter {
-                unsafe fn conjure() -> Self {
-                    unsafe {
-                        Self {
-                            #(#field_idents: #reset_tys::conjure(),)*
-                        }
                     }
                 }
             }
@@ -917,6 +906,26 @@ impl Register {
                 }
             }
         };
+
+        // reset writer
+        if fields
+            .iter()
+            .any(|field| field.reset.is_some() && field.entitlements.is_empty())
+        {
+            out.extend(quote! {
+                type ResetWriter = Writer<#(#reset_tys,)*>;
+
+                impl ::proto_hal::stasis::Conjure for ResetWriter {
+                    unsafe fn conjure() -> Self {
+                        unsafe {
+                            Self {
+                                #(#field_idents: #reset_tys::conjure(),)*
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         // gates
 
