@@ -929,6 +929,17 @@ impl Register {
 
         // gates
 
+        let resolvable_field_idents = fields
+            .iter()
+            .filter_map(|field| {
+                if field.is_resolvable() {
+                    Some(field.module_name())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
         let resolvable_field_tys = fields
             .iter()
             .filter_map(|field| {
@@ -942,8 +953,12 @@ impl Register {
 
         let (states_return, states_conjure) = if fields.iter().any(|field| field.is_resolvable()) {
             (
-                Some(quote! { -> States<#(#resolvable_field_tys,)*> }),
-                Some(quote! { unsafe { States::conjure() } }),
+                Some(
+                    quote! { -> States<#(<#resolvable_field_tys as ::proto_hal::stasis::PartialConjure>::Target,)*> },
+                ),
+                Some(
+                    quote! { unsafe { <States<#(#resolvable_field_tys,)*> as::proto_hal::stasis::PartialConjure>::partial_conjure() } },
+                ),
             )
         } else {
             (None, None)
@@ -962,7 +977,8 @@ impl Register {
                         ::proto_hal::stasis::Position<#field_idents::Field>,
                     )*
                     #(
-                        #resolvable_field_tys: ::proto_hal::stasis::Conjure,
+                        #resolvable_field_tys: ::proto_hal::stasis::PartialConjure,
+                        #resolvable_field_tys::Target: ::proto_hal::stasis::Position<#resolvable_field_idents::Field>,
                     )*
                     #(
                         #entitlement_bounds,
@@ -985,7 +1001,8 @@ impl Register {
                         ::proto_hal::stasis::Position<#field_idents::Field>,
                     )*
                     #(
-                        #resolvable_field_tys: ::proto_hal::stasis::Conjure,
+                        #resolvable_field_tys: ::proto_hal::stasis::PartialConjure,
+                        #resolvable_field_tys::Target: ::proto_hal::stasis::Position<#resolvable_field_idents::Field>,
                     )*
                     #(
                         #entitlement_bounds,
@@ -1006,7 +1023,8 @@ impl Register {
                     ::proto_hal::stasis::Corporeal,
                 )*
                 #(
-                    #resolvable_field_tys: ::proto_hal::stasis::Conjure,
+                    #resolvable_field_tys: ::proto_hal::stasis::PartialConjure,
+                    #resolvable_field_tys::Target: ::proto_hal::stasis::Position<#resolvable_field_idents::Field>,
                 )*
                 #(
                     #entitlement_bounds,
@@ -1072,20 +1090,21 @@ impl Register {
                 )*
             }
 
-            impl<#(#states,)*> States<#(#states,)*>
+            impl<#(#states,)*> ::proto_hal::stasis::PartialConjure for States<#(#states,)*>
             where
                 #(
                     #states: ::proto_hal::stasis::Position<#field_idents::Field> +
-                    ::proto_hal::stasis::Conjure,
+                    ::proto_hal::stasis::PartialConjure,
+                    #states::Target: ::proto_hal::stasis::Position<#field_idents::Field>,
                 )*
             {
-                /// # Safety
-                /// TODO: link to conjure docs.
-                pub unsafe fn conjure() -> Self {
+                type Target = States<#(<#states as ::proto_hal::stasis::PartialConjure>::Target,)*>;
+
+                unsafe fn partial_conjure() -> Self::Target {
                     unsafe {
-                        Self {
+                        States {
                             #(
-                                #field_idents: #states::conjure(),
+                                #field_idents: #states::partial_conjure(),
                             )*
                         }
                     }

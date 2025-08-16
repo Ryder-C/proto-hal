@@ -109,11 +109,31 @@ pub struct Unresolved;
 /// this impl is needed.
 unsafe impl Entitled<Self> for Unresolved {}
 
+pub trait PartialConjure {
+    type Target;
+
+    /// # Safety
+    /// Produce a value where the invariants of the value's existance
+    /// are upheld by the user.
+    unsafe fn partial_conjure() -> Self::Target;
+}
+
 pub trait Conjure {
     /// # Safety
     /// Produce a value where the invariants of the value's existence
     /// are upheld by the user.
     unsafe fn conjure() -> Self;
+}
+
+impl<T> PartialConjure for T
+where
+    T: Conjure,
+{
+    type Target = Self;
+
+    unsafe fn partial_conjure() -> Self::Target {
+        unsafe { Self::conjure() }
+    }
 }
 
 pub trait Emplace<Writer> {

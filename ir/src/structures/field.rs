@@ -665,6 +665,14 @@ impl Field {
 
                 impl ::proto_hal::stasis::Position<Field> for Numeric {}
                 impl ::proto_hal::stasis::Corporeal for Numeric {}
+
+                impl ::proto_hal::stasis::PartialConjure for Numeric {
+                    type Target = ::proto_hal::stasis::Unresolved;
+
+                    unsafe fn partial_conjure() -> Self::Target {
+                        ::proto_hal::stasis::Unresolved
+                    }
+                }
             });
         }
 
