@@ -123,3 +123,11 @@ impl Access {
         self.get_write().is_some()
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum HardwareAccess {
+    /// The hardware is only capable of reading.
+    ReadOnly,
+    /// The hardware is capable of writing.
+    Write,
+}

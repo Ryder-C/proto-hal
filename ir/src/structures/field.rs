@@ -6,7 +6,7 @@ use quote::{ToTokens, format_ident, quote};
 use syn::{Ident, Path};
 
 use crate::{
-    access::{Access, AccessProperties, ReadWrite},
+    access::{Access, AccessProperties, HardwareAccess, ReadWrite},
     structures::entitlement::{Entitlement, Entitlements},
     utils::diagnostic::{Context, Diagnostic, Diagnostics},
 };
@@ -60,6 +60,7 @@ pub struct Field {
     pub access: Access,
     pub reset: Option<Reset>,
     pub entitlements: Entitlements,
+    pub hardware_access: Option<HardwareAccess>,
     pub docs: Vec<String>,
 }
 
@@ -72,6 +73,7 @@ impl Field {
             access,
             reset: None,
             entitlements: Entitlements::new(),
+            hardware_access: None,
             docs: Vec::new(),
         }
     }
@@ -85,6 +87,13 @@ impl Field {
     pub fn entitlements(mut self, entitlements: impl IntoIterator<Item = Entitlement>) -> Self {
         self.entitlements.extend(entitlements);
         self
+    }
+
+    pub fn hardware_access(self, access: HardwareAccess) -> Self {
+        Self {
+            hardware_access: Some(access),
+            ..self
+        }
     }
 
     pub fn docs<I>(mut self, docs: I) -> Self
@@ -120,30 +129,30 @@ impl Field {
         // TODO: external resolving effects nor external *unresolving* effects can currently be expressed
         // TODO: so both possibilities are ignored for now
 
-        fn check_numericity(access: &AccessProperties) -> Option<&AccessProperties> {
-            if let Numericity::Enumerated { variants } = &access.numericity {
-                if variants.values().any(|variant| variant.inert) {
-                    None
-                } else {
-                    Some(access)
-                }
-            } else {
+        let hardware_access = self.hardware_access.unwrap_or(HardwareAccess::ReadOnly);
+
+        match (&self.access, hardware_access) {
+            (Access::ReadWrite(ReadWrite::Symmetrical(access)), HardwareAccess::ReadOnly) => {
+                // when hardware is read only, symmetrical fields are intrinsically resolvable because:
+                // 1. the values written are the values read (even numeric)
+                // 2. read/write access is unconditional
+
                 Some(access)
             }
-        }
-
-        match &self.access {
-            Access::ReadWrite(ReadWrite::Symmetrical(access)) => check_numericity(access),
-            Access::ReadWrite(ReadWrite::Asymmetrical { read, write })
-                // a field that is conditionally readable, implies it is one of:
-                // 1. aligned with write access which means the entire field is effectively conditional
-                // 2. read and write are disjoint which means the field necessarily is stateless
-                //
-                // TODO: this is unsolved. read entitlements will always be empty
-                if read.numericity == write.numericity
-                    && (!read.entitlements.is_empty() || !write.entitlements.is_empty()) =>
+            (
+                Access::ReadWrite(ReadWrite::Asymmetrical { read, write }),
+                HardwareAccess::ReadOnly,
+            ) if read.numericity == write.numericity
+                && !(matches!(read.numericity, Numericity::Numeric)
+                    && read.entitlements.is_empty()
+                    && write.entitlements.is_empty()) =>
             {
-                check_numericity(read)
+                // asymmetrical fields *can be* resolvable if:
+                // 1. the read/write numericities are equal
+                // 2. the numericity is not numeric with unconditional read/write access (would have been symmetrical)
+                // 3. hardware access is read only
+
+                Some(read)
             }
             _ => None,
         }
@@ -244,6 +253,32 @@ impl Field {
             diagnostics.insert(
                 Diagnostic::error("writable fields cannot be conditionally readable")
                     .notes(["for more information, refer to the \"Access Entitlement Quandaries\" section in `notes.md`"])
+                    .with_context(new_context.clone()),
+            );
+        }
+
+        // inert is write only
+        if let Some(read) = self.access.get_read()
+            && let Numericity::Enumerated { variants } = &read.numericity
+            && variants.values().any(|variant| variant.inert)
+        {
+            diagnostics.insert(
+                Diagnostic::error("readable variants cannot be inert")
+                    .notes([
+                        "for more information, refer to the \"Inertness\" section in `notes.md`",
+                    ])
+                    .with_context(new_context.clone()),
+            );
+        }
+
+        // conditional writability requires hardware write to be specified
+        if let (Some(write), Some(..)) = (self.access.get_write(), self.access.get_read())
+            && !write.entitlements.is_empty()
+            && self.hardware_access.is_none()
+        {
+            diagnostics.insert(
+                Diagnostic::error("field value retainment is ambiguous")
+                    .notes(["specify the hardware field access with `.hardware_access(...)` to disambiguate how this field retains values"])
                     .with_context(new_context.clone()),
             );
         }
