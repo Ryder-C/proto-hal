@@ -272,13 +272,23 @@ impl Field {
         }
 
         // conditional writability requires hardware write to be specified
-        if let (Some(write), Some(..)) = (self.access.get_write(), self.access.get_read())
-            && !write.entitlements.is_empty()
-            && self.hardware_access.is_none()
-        {
+        let ambiguous = self.access.get_read().is_some()
+            && self
+                .access
+                .get_write()
+                .is_some_and(|write| !write.entitlements.is_empty());
+
+        if ambiguous && self.hardware_access.is_none() {
             diagnostics.insert(
                 Diagnostic::error("field value retainment is ambiguous")
                     .notes(["specify the hardware field access with `.hardware_access(...)` to disambiguate how this field retains values"])
+                    .with_context(new_context.clone()),
+            );
+        }
+
+        if !ambiguous && let Some(hardware_access) = self.hardware_access {
+            diagnostics.insert(
+                Diagnostic::warning(format!("hardware access specified as {hardware_access:?} when it can be inferred as such"))
                     .with_context(new_context.clone()),
             );
         }
