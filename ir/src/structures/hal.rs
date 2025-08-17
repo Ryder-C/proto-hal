@@ -159,9 +159,13 @@ impl Hal {
                     continue;
                 };
 
-                let Some(read) = field.access.get_read() else {
+                let Some(read) = field.resolvable() else {
                     diagnostics.insert(
-                        Diagnostic::error(format!("entitlements path [{}] targets unresolvable field which cannot be entitled to", entitlement.to_string().bold()))
+                        Diagnostic::error(format!(
+                            "entitlement [{}] resides within unresolvable field [{}] and as such cannot be entitled to",
+                            entitlement.to_string().bold(),
+                            entitlement.field().to_string().bold()
+                        ))
                             .with_context(context.clone()),
                     );
 
