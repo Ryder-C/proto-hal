@@ -271,6 +271,7 @@ impl Field {
             );
         }
 
+        // TODO: this section can definitely be improved and likely has errors
         // conditional writability requires hardware write to be specified
         let ambiguous = self.access.get_read().is_some()
             && self
@@ -286,11 +287,25 @@ impl Field {
             );
         }
 
-        if !ambiguous && let Some(hardware_access) = self.hardware_access {
-            diagnostics.insert(
+        if !ambiguous {
+            let inferred_hardware_access = match (
+                self.access.get_read().is_some(),
+                self.access.get_write().is_some(),
+            ) {
+                (true, true) => HardwareAccess::ReadOnly,
+                (true, false) => HardwareAccess::Write,
+                (false, true) => HardwareAccess::ReadOnly,
+                (false, false) => unreachable!(),
+            };
+
+            if let Some(hardware_access) = self.hardware_access
+                && hardware_access == inferred_hardware_access
+            {
+                diagnostics.insert(
                 Diagnostic::warning(format!("hardware access specified as {hardware_access:?} when it can be inferred as such"))
                     .with_context(new_context.clone()),
             );
+            }
         }
 
         if let Some(access) = self.resolvable() {

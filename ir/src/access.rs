@@ -124,7 +124,7 @@ impl Access {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum HardwareAccess {
     /// The hardware is only capable of reading.
     ReadOnly,
