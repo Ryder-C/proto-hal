@@ -605,7 +605,6 @@ impl Field {
 
                     Some(quote! {
                         pub type ReadVariant = Variant;
-                        pub type WriteVariant = Variant;
                         #variant_enum
                     })
                 } else {
@@ -621,7 +620,6 @@ impl Field {
                     );
 
                     Some(quote! {
-                        pub type ReadVariant = Variant;
                         pub type WriteVariant = Variant;
                         #variant_enum
                     })
