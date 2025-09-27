@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use colored::Colorize;
 use proc_macro2::{Span, TokenStream};
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote};
 use syn::{Ident, Path, Type, parse_quote};
 
 use crate::{
@@ -129,17 +129,17 @@ impl Field {
         }
     }
 
-    pub(crate) fn reset_ty(&self, register_reset: Option<u32>) -> Type {
+    pub(crate) fn reset_ty(&self, path: Path, register_reset: Option<u32>) -> Type {
         if !self.entitlements.is_empty() {
-            return parse_quote! { Unavailable };
+            return parse_quote! { ::proto_hal::stasis::Unavailable };
         }
 
         let Some(read) = self.access.get_read() else {
-            return parse_quote! { Dynamic };
+            return parse_quote! { ::proto_hal::stasis::Dynamic };
         };
 
         if !self.is_resolvable() {
-            return parse_quote! { Dynamic };
+            return parse_quote! { ::proto_hal::stasis::Dynamic };
         }
 
         let register_reset =
@@ -149,7 +149,7 @@ impl Field {
         let reset = (register_reset >> self.offset) & mask;
 
         match &read.numericity {
-            Numericity::Numeric => parse_quote! { Value::<#reset> },
+            Numericity::Numeric => parse_quote! { ::proto_hal::stasis::Value<#reset> },
             Numericity::Enumerated { variants } => {
                 let ty = variants
                     .values()
@@ -157,7 +157,7 @@ impl Field {
                     .expect("exactly one variant must correspond to the reset value")
                     .type_name();
 
-                parse_quote! { #ty }
+                parse_quote! { #path::#ty }
             }
         }
     }
@@ -344,101 +344,43 @@ impl Field {
             && let Numericity::Enumerated { variants } = &access.numericity
         {
             let variants = variants.values();
-            out.extend(quote! { #(#variants)* });
+            variants.for_each(|variant| out.extend(variant.generate()));
         }
 
         out
     }
 
-    fn generate_layout_consts(offset: u32, width: u32) -> TokenStream {
+    fn generate_marker(offset: u8) -> TokenStream {
         quote! {
-            pub const OFFSET: u32 = #offset;
-            pub const WIDTH: u32 = #width;
+            pub struct Field;
+
+            impl ::proto_hal::stasis::Field for Field {
+                type Parent = super::Register;
+                const OFFSET: u8 = #offset;
+            }
         }
     }
 
-    fn generate_dynamic(
-        entitlement_idents: &Vec<Ident>,
-        entitlement_paths: &Vec<Path>,
-    ) -> TokenStream {
+    fn generate_container(ident: Ident) -> TokenStream {
         quote! {
-            pub struct Dynamic {
-                #(
-                    #[expect(unused)] #entitlement_idents: ::proto_hal::stasis::Entitlement<#entitlement_paths>,
-                )*
-
-                _sealed: (),
+            pub struct #ident<S>
+            where
+                S: ::proto_hal::stasis::State<Field>,
+            {
+                pub state: S,
             }
 
-            impl ::proto_hal::stasis::Conjure for Dynamic {
-                unsafe fn conjure() -> Self {
-                    Self {
-                        #(
-                            #entitlement_idents: unsafe { <::proto_hal::stasis::Entitlement<#entitlement_paths> as ::proto_hal::stasis::Conjure>::conjure() },
-                        )*
-                        _sealed: (),
-                    }
-                }
+            impl<S> ::proto_hal::stasis::Container for #ident<S>
+            where
+                S: ::proto_hal::stasis::State<Field>,
+            {
+                type Parent = Field;
             }
-
-            impl ::proto_hal::stasis::Position<Field> for Dynamic {}
-            impl ::proto_hal::stasis::Outgoing<Field> for Dynamic {}
-            impl ::proto_hal::stasis::Position<Field> for &mut Dynamic {}
         }
     }
 
-    fn generate_value(&self) -> Option<TokenStream> {
-        if let Some(access) = self.resolvable() {
-            let Numericity::Numeric = &access.numericity else {
-                None?
-            };
-
-            let ident = self.module_name();
-
-            Some(quote! {
-                pub struct Value<const N: u32> {
-                    _sealed: (),
-                }
-
-                impl<const N: u32> Value<N> {
-                    pub fn into_dynamic(self) -> Dynamic {
-                        unsafe { <Dynamic as ::proto_hal::stasis::Conjure>::conjure() }
-                    }
-
-                    pub fn value(&self) -> u32 {
-                        N
-                    }
-                }
-
-                impl<const N: u32> ::proto_hal::stasis::Conjure for Value<N> {
-                    unsafe fn conjure() -> Self {
-                        Self {
-                            _sealed: (),
-                        }
-                    }
-                }
-
-                impl<const N: u32> ::proto_hal::stasis::Emplace<super::UnsafeWriter> for Value<N> {
-                    fn set(&self, w: &mut super::UnsafeWriter) {
-                        w.#ident(N);
-                    }
-                }
-
-                impl<const N: u32> ::proto_hal::stasis::Corporeal for Value<N> {}
-                impl<const N: u32> ::proto_hal::stasis::Position<Field> for Value<N> {}
-                impl<const N: u32> ::proto_hal::stasis::Outgoing<Field> for Value<N> {}
-                impl<const N: u32> ::proto_hal::stasis::Incoming<Field> for Value<N> {
-                    type Raw = u32;
-                    const RAW: Self::Raw = N;
-                }
-            })
-        } else {
-            None
-        }
-    }
-
-    fn generate_repr(field_ident: &Ident, access: &Access) -> Option<TokenStream> {
-        let variant_enum = |ident, variants: &HashMap<Ident, Variant>, write| {
+    fn generate_repr(access: &Access) -> Option<TokenStream> {
+        let variant_enum = |ident, variants: &HashMap<Ident, Variant>| {
             let variant_idents = variants
                 .values()
                 .map(|variant| variant.type_name())
@@ -452,7 +394,7 @@ impl Field {
                 .values()
                 .map(|variant| format_ident!("is_{}", variant.module_name()));
 
-            let mut out = quote! {
+            quote! {
                 #[derive(Clone, Copy)]
                 #[repr(u32)]
                 pub enum #ident {
@@ -481,32 +423,14 @@ impl Field {
                         }
                     )*
                 }
-            };
-
-            if write {
-                out.extend(quote! {
-                    impl ::proto_hal::stasis::Emplace<super::UnsafeWriter> for #ident {
-                        fn set(&self, w: &mut super::UnsafeWriter) {
-                            w.#field_ident(*self);
-                        }
-                    }
-
-                    impl ::proto_hal::stasis::Position<Field> for #ident {}
-                    impl ::proto_hal::stasis::Corporeal for #ident {}
-                });
             }
-
-            out
         };
 
-        let mut out = match access {
+        match access {
             Access::Read(read) => {
                 if let Numericity::Enumerated { variants } = &read.numericity {
-                    let variant_enum = variant_enum(
-                        syn::Ident::new("Variant", Span::call_site()),
-                        variants,
-                        false,
-                    );
+                    let variant_enum =
+                        variant_enum(syn::Ident::new("Variant", Span::call_site()), variants);
 
                     Some(quote! {
                         pub type ReadVariant = Variant;
@@ -518,11 +442,8 @@ impl Field {
             }
             Access::Write(write) => {
                 if let Numericity::Enumerated { variants } = &write.numericity {
-                    let variant_enum = variant_enum(
-                        syn::Ident::new("Variant", Span::call_site()),
-                        variants,
-                        true,
-                    );
+                    let variant_enum =
+                        variant_enum(syn::Ident::new("Variant", Span::call_site()), variants);
 
                     Some(quote! {
                         pub type WriteVariant = Variant;
@@ -535,11 +456,8 @@ impl Field {
             Access::ReadWrite(read_write) => match read_write {
                 ReadWrite::Symmetrical(access) => {
                     if let Numericity::Enumerated { variants } = &access.numericity {
-                        let variant_enum = variant_enum(
-                            syn::Ident::new("Variant", Span::call_site()),
-                            variants,
-                            true,
-                        );
+                        let variant_enum =
+                            variant_enum(syn::Ident::new("Variant", Span::call_site()), variants);
 
                         Some(quote! {
                             pub type ReadVariant = Variant;
@@ -552,11 +470,8 @@ impl Field {
                 }
                 ReadWrite::Asymmetrical { read, write } if read.numericity == write.numericity => {
                     if let Numericity::Enumerated { variants } = &read.numericity {
-                        let variant_enum = variant_enum(
-                            syn::Ident::new("Variant", Span::call_site()),
-                            variants,
-                            true,
-                        );
+                        let variant_enum =
+                            variant_enum(syn::Ident::new("Variant", Span::call_site()), variants);
 
                         Some(quote! {
                             pub type ReadVariant = Variant;
@@ -572,7 +487,6 @@ impl Field {
                         Some(variant_enum(
                             syn::Ident::new("ReadVariant", Span::call_site()),
                             variants,
-                            false,
                         ))
                     } else {
                         None
@@ -583,7 +497,6 @@ impl Field {
                         Some(variant_enum(
                             syn::Ident::new("WriteVariant", Span::call_site()),
                             variants,
-                            true,
                         ))
                     } else {
                         None
@@ -595,57 +508,12 @@ impl Field {
                     })
                 }
             },
-        };
-
-        if let Access::Write(write)
-        | Access::ReadWrite(
-            ReadWrite::Symmetrical(write) | ReadWrite::Asymmetrical { write, .. },
-        ) = access
-            && let Numericity::Numeric = &write.numericity
-        {
-            out.get_or_insert_default().extend(quote! {
-                pub struct Numeric(u32);
-
-                impl ::core::ops::Deref for Numeric {
-                    type Target = u32;
-
-                    fn deref(&self) -> &Self::Target {
-                        &self.0
-                    }
-                }
-
-                impl ::core::convert::From<u32> for Numeric {
-                    fn from(value: u32) -> Self {
-                        Self(value)
-                    }
-                }
-
-                impl ::proto_hal::stasis::Emplace<super::UnsafeWriter> for Numeric {
-                    fn set(&self, w: &mut super::UnsafeWriter) {
-                        w.#field_ident(**self);
-                    }
-                }
-
-                impl ::proto_hal::stasis::Position<Field> for Numeric {}
-                impl ::proto_hal::stasis::Corporeal for Numeric {}
-
-                impl ::proto_hal::stasis::PartialConjure for Numeric {
-                    type Target = ::proto_hal::stasis::Unresolved;
-
-                    unsafe fn partial_conjure() -> Self::Target {
-                        ::proto_hal::stasis::Unresolved
-                    }
-                }
-            });
         }
-
-        out
     }
 
-    fn generate_trait_impls(&self) -> Option<TokenStream> {
+    fn generate_state_impls(&self) -> Option<TokenStream> {
         if let Some(access) = self.resolvable() {
             if let Numericity::Enumerated { variants } = &access.numericity {
-                let ident = &self.ident;
                 let variants = variants.values().map(|variant| variant.type_name());
                 Some(quote! {
                     #(
@@ -657,19 +525,7 @@ impl Field {
                             }
                         }
 
-                        impl ::proto_hal::stasis::Emplace<super::UnsafeWriter> for #variants {
-                            fn set(&self, w: &mut super::UnsafeWriter) {
-                                w.#ident(<Self as ::proto_hal::stasis::Incoming<Field>>::RAW);
-                            }
-                        }
-
-                        impl ::proto_hal::stasis::Corporeal for #variants {}
-                        impl ::proto_hal::stasis::Position<Field> for #variants {}
-                        impl ::proto_hal::stasis::Outgoing<Field> for #variants {}
-                        impl ::proto_hal::stasis::Incoming<Field> for #variants {
-                            type Raw = ReadVariant;
-                            const RAW: Self::Raw = Self::Raw::#variants;
-                        }
+                        impl ::proto_hal::stasis::State<Field> for #variants {}
                     )*
                 })
             } else {
@@ -679,105 +535,30 @@ impl Field {
             None
         }
     }
-
-    fn generate_marker_ty(entitlements: &Entitlements) -> TokenStream {
-        let mut out = quote! {
-            pub struct Field;
-        };
-
-        if !entitlements.is_empty() {
-            let entitlement_paths = entitlements.iter().map(|entitlement| entitlement.render());
-
-            out.extend(quote! {
-                #(
-                    unsafe impl ::proto_hal::stasis::Entitled<#entitlement_paths> for Field {}
-                )*
-            });
-        }
-
-        out
-    }
-
-    fn generate_unavailable(
-        entitlement_idents: &Vec<Ident>,
-        entitlement_paths: &Vec<Path>,
-    ) -> TokenStream {
-        quote! {
-            pub struct Unavailable {
-                _sealed: (),
-            }
-
-            impl ::proto_hal::stasis::Conjure for Unavailable {
-                unsafe fn conjure() -> Self {
-                    Self {
-                        _sealed: (),
-                    }
-                }
-            }
-
-            impl Unavailable {
-                pub fn unmask(self, #(#entitlement_idents: impl Into<::proto_hal::stasis::Entitlement<#entitlement_paths>>),*) -> Dynamic {
-                    Dynamic {
-                        #(#entitlement_idents: #entitlement_idents.into(),)*
-                        _sealed: (),
-                    }
-                }
-            }
-        }
-    }
 }
 
-impl ToTokens for Field {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+impl Field {
+    pub fn generate(&self) -> TokenStream {
         let ident = &self.ident;
 
         let mut body = quote! {};
 
         body.extend(self.generate_states());
-        body.extend(Self::generate_layout_consts(
-            self.offset as u32,
-            self.width as u32,
-        ));
-        body.extend(self.generate_value());
-        body.extend(Self::generate_repr(&self.ident, &self.access));
-        body.extend(Self::generate_trait_impls(self));
-        body.extend(Self::generate_marker_ty(&self.entitlements));
-
-        let mut entitlements = self.entitlements.iter().collect::<Vec<_>>();
-        entitlements.sort_by(|lhs, rhs| lhs.field().cmp(rhs.field()));
-
-        let entitlement_idents = entitlements
-            .iter()
-            .enumerate()
-            .map(|(i, ..)| format_ident!("entitlement_{i}"))
-            .collect::<Vec<_>>();
-        let entitlement_paths = entitlements
-            .iter()
-            .map(|entitlement| entitlement.render())
-            .collect::<Vec<_>>();
-
-        body.extend(Self::generate_dynamic(
-            &entitlement_idents,
-            &entitlement_paths,
-        ));
-
-        if !self.entitlements.is_empty() {
-            body.extend(Self::generate_unavailable(
-                &entitlement_idents,
-                &entitlement_paths,
-            ));
-        }
+        body.extend(Self::generate_marker(self.offset));
+        body.extend(Self::generate_container(self.type_name()));
+        body.extend(Self::generate_repr(&self.access));
+        body.extend(self.generate_state_impls());
 
         let docs = &self.docs;
 
         // final module
-        tokens.extend(quote! {
+        quote! {
             #(
                 #[doc = #docs]
             )*
             pub mod #ident {
                 #body
             }
-        });
+        }
     }
 }

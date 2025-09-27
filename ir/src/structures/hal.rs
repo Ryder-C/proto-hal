@@ -218,12 +218,14 @@ impl Hal {
 
 // codegen
 impl Hal {
-    fn generate_peripherals<'a>(peripherals: impl Iterator<Item = &'a Peripheral>) -> TokenStream {
-        quote! {
-            #(
-                #peripherals
-            )*
-        }
+    fn generate_peripherals(&self) -> TokenStream {
+        self.peripherals
+            .values()
+            .fold(quote! {}, |mut acc, peripheral| {
+                acc.extend(peripheral.generate());
+
+                acc
+            })
     }
 
     fn generate_peripherals_struct<'a>(
@@ -274,12 +276,12 @@ impl Hal {
                 Peripherals {
                     // fundamental
                     #(
-                        #fundamental_peripheral_idents: unsafe { #fundamental_peripheral_idents::Reset::conjure() },
+                        #fundamental_peripheral_idents: unsafe { <#fundamental_peripheral_idents::Reset as ::proto_hal::stasis::Conjure>::conjure() },
                     )*
 
                     // conditional
                     #(
-                        #conditional_peripheral_idents: unsafe { #conditional_peripheral_idents::Masked::conjure() },
+                        #conditional_peripheral_idents: unsafe { <#conditional_peripheral_idents::Masked as ::proto_hal::stasis::Conjure>::conjure() },
                     )*
                 }
             }
@@ -289,7 +291,7 @@ impl Hal {
 
 impl ToTokens for Hal {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        tokens.extend(Self::generate_peripherals(self.peripherals.values()));
+        tokens.extend(self.generate_peripherals());
         tokens.extend(Self::generate_peripherals_struct(self.peripherals.values()));
         self.interrupts.to_tokens(tokens);
     }

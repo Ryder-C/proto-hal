@@ -1,5 +1,5 @@
 use proc_macro2::{Span, TokenStream};
-use quote::{ToTokens, quote};
+use quote::quote;
 use syn::Ident;
 
 use crate::{
@@ -97,51 +97,17 @@ impl Variant {
             pub struct #ident {
                 _sealed: (),
             }
-
-            impl #ident {
-                pub fn into_dynamic(self) -> Dynamic {
-                    unsafe { <Dynamic as ::proto_hal::stasis::Conjure>::conjure() }
-                }
-            }
-        }
-    }
-
-    pub fn generate_entitlement_impls(ident: &Ident, entitlements: &Entitlements) -> TokenStream {
-        if entitlements.is_empty() {
-            // any T satisfies this state's entitlement requirements
-
-            quote! {
-                unsafe impl<T> ::proto_hal::stasis::Entitled<T> for #ident {}
-            }
-        } else {
-            // exactly this finite set of states satisfy this state's entitlement requirements
-
-            let entitlement_paths = entitlements.iter().map(|entitlement| entitlement.render());
-
-            quote! {
-                #(
-                    unsafe impl ::proto_hal::stasis::Entitled<#entitlement_paths> for #ident {}
-                )*
-            }
-        }
-    }
-
-    pub fn generate_freeze_impl(ident: &Ident) -> TokenStream {
-        quote! {
-            impl ::proto_hal::stasis::Freeze for #ident {}
         }
     }
 }
 
-impl ToTokens for Variant {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+impl Variant {
+    pub fn generate(&self) -> TokenStream {
         let ident = Ident::new(
             &inflector::cases::pascalcase::to_pascal_case(self.ident.to_string().as_str()),
             Span::call_site(),
         );
 
-        tokens.extend(Self::generate_state(&ident, self.docs.iter()));
-        tokens.extend(Self::generate_entitlement_impls(&ident, &self.entitlements));
-        tokens.extend(Self::generate_freeze_impl(&ident));
+        Self::generate_state(&ident, self.docs.iter())
     }
 }

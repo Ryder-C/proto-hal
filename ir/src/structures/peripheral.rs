@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use proc_macro2::{Span, TokenStream};
-use quote::{ToTokens, format_ident, quote};
-use syn::{Ident, Path};
+use quote::quote;
+use syn::Ident;
 
 use crate::utils::diagnostic::{Context, Diagnostic, Diagnostics};
 
@@ -110,48 +110,48 @@ impl Peripheral {
 
 // codegen
 impl Peripheral {
-    fn generate_registers<'a>(registers: impl Iterator<Item = &'a Register>) -> TokenStream {
+    fn generate_registers(&self) -> TokenStream {
+        self.registers
+            .values()
+            .fold(quote! {}, |mut acc, register| {
+                acc.extend(register.generate());
+
+                acc
+            })
+    }
+
+    fn generate_marker(base_addr: u32) -> TokenStream {
         quote! {
-            #(
-                #registers
-            )*
+            pub struct Peripheral;
+
+            impl ::proto_hal::stasis::Peripheral for Peripheral {
+                const BASE_ADDR: u32 = #base_addr;
+            }
         }
     }
 
-    fn generate_base_addr(base_addr: u32, ident: &Ident) -> TokenStream {
-        let base_addr_formatted = format!("0x{base_addr:08x}");
+    fn generate_masked(&self) -> Option<TokenStream> {
+        if self.entitlements.is_empty() {
+            None?
+        }
 
-        let link_symbol = format!(
-            "__PROTO_HAL_ADDR_OF_{}",
-            inflector::cases::screamingsnakecase::to_screaming_snake_case(
-                ident.to_string().as_str()
-            )
-        );
-
-        quote! {
-            #[cfg(not(test))]
-            #[doc = #base_addr_formatted]
-            pub const fn base_addr() -> usize {
-                #base_addr as _
+        // Q: Does masked need to be sealed? Creating it just prevents
+        // the peripheral from being used, which is not dangerous.
+        // TODO: Consider changing masked to a unit struct.
+        Some(quote! {
+            pub struct Masked {
+                _sealed: (),
             }
 
-            #[cfg(test)]
-            pub fn base_addr() -> usize {
-                unsafe extern "Rust" {
-                    #[link_name = #link_symbol]
-                    fn addr_of() -> usize;
+            impl ::proto_hal::stasis::Conjure for Masked {
+                unsafe fn conjure() -> Self {
+                    Self { _sealed: () }
                 }
-
-                unsafe { addr_of() }
             }
-        }
+        })
     }
 
-    fn generate_reset<'a>(
-        registers: impl Iterator<Item = &'a Register>,
-        entitlement_idents: &Vec<Ident>,
-        entitlement_paths: &Vec<Path>,
-    ) -> TokenStream {
+    fn generate_reset<'a>(registers: impl Iterator<Item = &'a Register>) -> TokenStream {
         let register_idents = registers
             .map(|register| register.module_name())
             .collect::<Vec<_>>();
@@ -159,63 +159,16 @@ impl Peripheral {
         quote! {
             pub struct Reset {
                 #(
-                    #[expect(unused)] #entitlement_idents: ::proto_hal::stasis::Entitlement<#entitlement_paths>,
-                )*
-
-                #(
                     pub #register_idents: #register_idents::Reset,
                 )*
             }
 
-            impl Reset {
-                /// # Safety
-                /// TODO: link to conjure docs.
-                pub unsafe fn conjure() -> Self {
-                    #[allow(unsafe_op_in_unsafe_fn)]
+            impl ::proto_hal::stasis::Conjure for Reset {
+                unsafe fn conjure() -> Self {
                     Self {
                         #(
-                            #entitlement_idents: unsafe { <::proto_hal::stasis::Entitlement<#entitlement_paths> as ::proto_hal::stasis::Conjure>::conjure() },
+                            #register_idents: unsafe { <#register_idents::Reset as ::proto_hal::stasis::Conjure>::conjure() },
                         )*
-                        #(
-                            #register_idents: unsafe { #register_idents::Reset::conjure() },
-                        )*
-                    }
-                }
-            }
-        }
-    }
-
-    fn generate_masked<'a>(
-        registers: impl Iterator<Item = &'a Register>,
-        entitlement_idents: &Vec<Ident>,
-        entitlement_paths: &Vec<Path>,
-    ) -> TokenStream {
-        let register_idents = registers.map(|register| register.module_name());
-
-        quote! {
-            pub struct Masked {
-                _sealed: (),
-            }
-
-            impl Masked {
-                /// # Safety
-                /// TODO: link to conjure docs.
-                pub unsafe fn conjure() -> Self {
-                    Self {
-                        _sealed: (),
-                    }
-                }
-
-                pub fn unmask(self, #(#entitlement_idents: impl Into<::proto_hal::stasis::Entitlement<#entitlement_paths>>),*) -> Reset {
-                    unsafe {
-                        Reset {
-                            #(
-                                #entitlement_idents: #entitlement_idents.into(),
-                            )*
-                            #(
-                                #register_idents: #register_idents::Reset::conjure(),
-                            )*
-                        }
                     }
                 }
             }
@@ -223,49 +176,25 @@ impl Peripheral {
     }
 }
 
-impl ToTokens for Peripheral {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+impl Peripheral {
+    pub fn generate(&self) -> TokenStream {
         let mut body = quote! {};
 
         let ident = self.module_name();
 
-        body.extend(Self::generate_registers(self.registers.values()));
-        body.extend(Self::generate_base_addr(self.base_addr, &self.ident));
-
-        let entitlement_idents = self
-            .entitlements
-            .iter()
-            .enumerate()
-            .map(|(i, ..)| format_ident!("entitlement_{i}"))
-            .collect::<Vec<_>>();
-        let entitlement_paths = self
-            .entitlements
-            .iter()
-            .map(|entitlement| entitlement.render())
-            .collect::<Vec<_>>();
-
-        body.extend(Self::generate_reset(
-            self.registers.values(),
-            &entitlement_idents,
-            &entitlement_paths,
-        ));
-
-        if !self.entitlements.is_empty() {
-            body.extend(Self::generate_masked(
-                self.registers.values(),
-                &entitlement_idents,
-                &entitlement_paths,
-            ));
-        }
+        body.extend(self.generate_registers());
+        body.extend(Self::generate_marker(self.base_addr));
+        body.extend(self.generate_masked());
+        body.extend(Self::generate_reset(self.registers.values()));
 
         let docs = &self.docs;
 
-        tokens.extend(quote! {
+        quote! {
             #(#[doc = #docs])*
             #[allow(clippy::module_inception)]
             pub mod #ident {
                 #body
             }
-        });
+        }
     }
 }
