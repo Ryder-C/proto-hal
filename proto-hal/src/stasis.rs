@@ -12,11 +12,12 @@ pub trait Field {
     type Parent: Register;
 
     const OFFSET: u8;
+    const WIDTH: u8;
 }
 
 pub trait State<Parent: Field>: Conjure {}
 
-pub trait Container {
+pub trait Container: Conjure {
     type Parent: Field;
 }
 

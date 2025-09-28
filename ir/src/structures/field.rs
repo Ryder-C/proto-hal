@@ -350,13 +350,14 @@ impl Field {
         out
     }
 
-    fn generate_marker(offset: u8) -> TokenStream {
+    fn generate_marker(offset: u8, width: u8) -> TokenStream {
         quote! {
             pub struct Field;
 
             impl ::proto_hal::stasis::Field for Field {
                 type Parent = super::Register;
                 const OFFSET: u8 = #offset;
+                const WIDTH: u8 = #width;
             }
         }
     }
@@ -367,7 +368,7 @@ impl Field {
             where
                 S: ::proto_hal::stasis::State<Field>,
             {
-                pub state: S,
+                _state: S,
             }
 
             impl<S> ::proto_hal::stasis::Container for #ident<S>
@@ -375,6 +376,17 @@ impl Field {
                 S: ::proto_hal::stasis::State<Field>,
             {
                 type Parent = Field;
+            }
+
+            impl<S> ::proto_hal::stasis::Conjure for #ident<S>
+            where
+                S: ::proto_hal::stasis::State<Field>,
+            {
+                unsafe fn conjure() -> Self {
+                    Self {
+                        _state: unsafe { <S as ::proto_hal::stasis::Conjure>::conjure() },
+                    }
+                }
             }
         }
     }
@@ -544,7 +556,7 @@ impl Field {
         let mut body = quote! {};
 
         body.extend(self.generate_states());
-        body.extend(Self::generate_marker(self.offset));
+        body.extend(Self::generate_marker(self.offset, self.width));
         body.extend(Self::generate_container(self.type_name()));
         body.extend(Self::generate_repr(&self.access));
         body.extend(self.generate_state_impls());

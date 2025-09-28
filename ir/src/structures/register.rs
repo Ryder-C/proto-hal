@@ -210,7 +210,7 @@ impl Register {
                 unsafe fn conjure() -> Self {
                     Self {
                         #(
-                            #field_idents: #field_idents::#field_tys { state: unsafe { <#reset_tys as ::proto_hal::stasis::Conjure>::conjure() } },
+                            #field_idents: unsafe { <#field_idents::#field_tys<#reset_tys> as ::proto_hal::stasis::Conjure>::conjure() },
                         )*
                     }
                 }
