@@ -1,24 +1,7 @@
-pub trait Peripheral {
-    const BASE_ADDR: u32;
-}
-
-pub trait Register {
-    type Parent: Peripheral;
-
-    const OFFSET: u32;
-}
-
-pub trait Field {
-    type Parent: Register;
-
-    const OFFSET: u8;
-    const WIDTH: u8;
-}
-
-pub trait State<Parent: Field>: Conjure {}
+pub trait State<Parent>: Conjure {}
 
 pub trait Container: Conjure {
-    type Parent: Field;
+    type Parent;
 }
 
 pub trait PartialConjure {
@@ -66,7 +49,7 @@ impl Conjure for Unavailable {
     }
 }
 
-impl<F> State<F> for Unavailable where F: Field {}
+impl<F> State<F> for Unavailable {}
 
 impl Conjure for Dynamic {
     unsafe fn conjure() -> Self {
@@ -74,7 +57,7 @@ impl Conjure for Dynamic {
     }
 }
 
-impl<F> State<F> for Dynamic where F: Field {}
+impl<F> State<F> for Dynamic {}
 
 impl<const V: u32> Conjure for Value<V> {
     unsafe fn conjure() -> Self {
@@ -82,4 +65,4 @@ impl<const V: u32> Conjure for Value<V> {
     }
 }
 
-impl<F, const V: u32> State<F> for Value<V> where F: Field {}
+impl<F, const V: u32> State<F> for Value<V> {}

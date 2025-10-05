@@ -350,15 +350,11 @@ impl Field {
         out
     }
 
-    fn generate_marker(offset: u8, width: u8) -> TokenStream {
+    fn generate_markers(offset: u8, width: u8) -> TokenStream {
         quote! {
             pub struct Field;
-
-            impl ::proto_hal::stasis::Field for Field {
-                type Parent = super::Register;
-                const OFFSET: u8 = #offset;
-                const WIDTH: u8 = #width;
-            }
+            const OFFSET: u8 = #offset;
+            const WIDTH: u8 = #width;
         }
     }
 
@@ -556,7 +552,7 @@ impl Field {
         let mut body = quote! {};
 
         body.extend(self.generate_states());
-        body.extend(Self::generate_marker(self.offset, self.width));
+        body.extend(Self::generate_markers(self.offset, self.width));
         body.extend(Self::generate_container(self.type_name()));
         body.extend(Self::generate_repr(&self.access));
         body.extend(self.generate_state_impls());

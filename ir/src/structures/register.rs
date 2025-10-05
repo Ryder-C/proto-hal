@@ -169,14 +169,9 @@ impl Register {
         })
     }
 
-    fn generate_marker(offset: u32) -> TokenStream {
+    fn generate_addr(offset: u32) -> TokenStream {
         quote! {
-            pub struct Register;
-
-            impl ::proto_hal::stasis::Register for Register {
-                type Parent = super::Peripheral;
-                const OFFSET: u32 = #offset;
-            }
+            const ADDR: u32 = super::BASE_ADDR + #offset;
         }
     }
 
@@ -226,7 +221,7 @@ impl Register {
         let module_name = self.module_name();
 
         body.extend(self.generate_fields());
-        body.extend(Self::generate_marker(self.offset));
+        body.extend(Self::generate_addr(self.offset));
         body.extend(Self::generate_reset(self.fields.values(), self.reset));
 
         let docs = &self.docs;

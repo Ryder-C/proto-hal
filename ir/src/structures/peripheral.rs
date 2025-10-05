@@ -120,13 +120,9 @@ impl Peripheral {
             })
     }
 
-    fn generate_marker(base_addr: u32) -> TokenStream {
+    fn generate_base_addr(base_addr: u32) -> TokenStream {
         quote! {
-            pub struct Peripheral;
-
-            impl ::proto_hal::stasis::Peripheral for Peripheral {
-                const BASE_ADDR: u32 = #base_addr;
-            }
+            const BASE_ADDR: u32 = #base_addr;
         }
     }
 
@@ -183,7 +179,7 @@ impl Peripheral {
         let ident = self.module_name();
 
         body.extend(self.generate_registers());
-        body.extend(Self::generate_marker(self.base_addr));
+        body.extend(Self::generate_base_addr(self.base_addr));
         body.extend(self.generate_masked());
         body.extend(Self::generate_reset(self.registers.values()));
 
