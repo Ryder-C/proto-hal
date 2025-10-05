@@ -8,5 +8,7 @@ proc-macro2 = "1.0.101"
 quote = "1.0.40"
 syn = "2.0.106"
 
+proto-hal-build = { path = "../proto-hal-build" }
+
 [lib]
 proc-macro = true

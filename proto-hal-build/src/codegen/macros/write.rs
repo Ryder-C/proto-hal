@@ -43,39 +43,50 @@ impl Parse for WriteArgs {
 
 #[derive(Debug)]
 struct RegisterArgs {
-    register_path: Path,
-    brace_token: Brace,
+    path: Path,
     fields: Punctuated<FieldArgs, Comma>,
 }
 
 impl Parse for RegisterArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let register_path = input.parse()?;
+        let path = input.parse()?;
+
+        if !input.peek(Brace) {
+            return Ok(Self {
+                path,
+                fields: Default::default(),
+            });
+        }
+
         let block;
-        let brace_token = braced!(block in input);
+        braced!(block in input);
 
         let fields = block.parse_terminated(Parse::parse, Comma)?;
 
-        Ok(Self {
-            register_path,
-            brace_token,
-            fields,
-        })
+        Ok(Self { path, fields })
     }
 }
 
 #[derive(Debug)]
 struct FieldArgs {
     ident: Ident,
-    colon_token: Colon,
-    binding: BindingArgs,
+    binding: Option<Expr>,
     transition: Option<TransitionArgs>,
 }
 
 impl Parse for FieldArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let ident = input.parse()?;
-        let colon_token = input.parse()?;
+
+        if !input.peek(Token![:]) {
+            return Ok(Self {
+                ident,
+                binding: None,
+                transition: None,
+            });
+        }
+
+        input.parse::<Token![:]>()?;
         let binding = input.parse()?;
         let transition = if input.peek(Token![=>]) {
             Some(input.parse()?)
@@ -85,55 +96,23 @@ impl Parse for FieldArgs {
 
         Ok(Self {
             ident,
-            colon_token,
-            binding,
+            binding: Some(binding),
             transition,
         })
     }
 }
 
 #[derive(Debug)]
-struct BindingArgs {
-    reference: Option<(Token![&], Option<Token![mut]>)>,
-    ident: Ident,
-}
-
-impl Parse for BindingArgs {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let reference = if input.peek(Token![&]) {
-            Some((
-                input.parse()?,
-                if input.peek(Token![mut]) {
-                    Some(input.parse()?)
-                } else {
-                    None
-                },
-            ))
-        } else {
-            None
-        };
-
-        let ident = input.parse()?;
-
-        Ok(Self { reference, ident })
-    }
-}
-
-#[derive(Debug)]
 struct TransitionArgs {
-    fat_arrow_token: Token![=>],
     state: StateArgs,
 }
 
 impl Parse for TransitionArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let fat_arrow_token = input.parse()?;
+        input.parse::<Token![=>]>()?;
         let state = input.parse()?;
 
-        Ok(Self {
-            fat_arrow_token,
-            state,
-        })
+        Ok(Self { state })
     }
 }
 
@@ -180,7 +159,7 @@ impl RegisterArgs {
     fn validate(&self, model: &Hal) -> Result<(), Vec<syn::Error>> {
         let mut diagnostics = Vec::new();
 
-        let register = Self::get_register(&self.register_path, model).map_err(|e| vec![e])?;
+        let register = Self::get_register(&self.path, model).map_err(|e| vec![e])?;
 
         for field in &self.fields {
             if let Err(e) = field.validate(register) {
@@ -217,7 +196,7 @@ impl RegisterArgs {
             .registers
             .get(register_ident)
             .ok_or(syn::Error::new_spanned(
-                peripheral_ident,
+                register_ident,
                 format!("register \"{register_ident}\" does not exist in peripheral \"{peripheral_ident}\""),
             ))?;
 
@@ -245,10 +224,55 @@ impl FieldArgs {
     }
 }
 
-pub fn write(model: Hal, args: WriteArgs) -> TokenStream {
+pub fn write(model: Hal, tokens: TokenStream) -> TokenStream {
+    let args = match syn::parse2::<WriteArgs>(tokens) {
+        Ok(args) => args,
+        Err(e) => return e.to_compile_error(),
+    };
+
+    let errors = if let Err(e) = args.validate(&model) {
+        let errors = e.into_iter().map(|e| e.to_compile_error());
+
+        Some(quote! {
+            #(
+                #errors
+            )*
+        })
+    } else {
+        None
+    };
+
+    let field_paths = args.registers.iter().flat_map(|register| {
+        let path = &register.path;
+
+        if register.fields.is_empty() {
+            vec![quote! {
+                use #path as _;
+            }]
+        } else {
+            register
+                .fields
+                .iter()
+                .map(|field| {
+                    let ident = &field.ident;
+
+                    quote! {
+                        use #path::#ident as _;
+                    }
+                })
+                .collect()
+        }
+    });
+
     quote! {
+        #errors
+
         {
             fn gate() {
+                #(
+                    #field_paths
+                )*
+
                 // unsafe { ::core::ptr::write_volatile(#addr as *mut u32, #reg) };
             }
         }
@@ -259,10 +283,9 @@ pub fn write(model: Hal, args: WriteArgs) -> TokenStream {
 mod tests {
     mod parsing {
         use quote::quote;
+        use syn::Expr;
 
-        use crate::codegen::macros::write::{
-            BindingArgs, FieldArgs, RegisterArgs, StateArgs, WriteArgs,
-        };
+        use crate::codegen::macros::write::{FieldArgs, RegisterArgs, StateArgs, WriteArgs};
 
         fn get_register(write_args: &WriteArgs, ident: impl AsRef<str>) -> &RegisterArgs {
             let ident = ident.as_ref();
@@ -272,7 +295,7 @@ mod tests {
                 .iter()
                 .find(|register| {
                     register
-                        .register_path
+                        .path
                         .segments
                         .last()
                         .expect("register paths should be non-empty")
@@ -292,12 +315,6 @@ mod tests {
                 .expect(&format!("expected field with ident \"{ident}\""))
         }
 
-        fn get_binding(field_args: &FieldArgs, ident: impl AsRef<str>) -> &BindingArgs {
-            assert_eq!(field_args.binding.ident, ident.as_ref());
-
-            &field_args.binding
-        }
-
         #[test]
         fn foo() {
             let tokens = quote! {
@@ -308,12 +325,9 @@ mod tests {
 
             let parsed = syn::parse2::<WriteArgs>(tokens).expect("parsing should succeed");
             let baz = get_field(get_register(&parsed, "bar"), "baz");
-            let binding = get_binding(baz, "my_baz");
 
             assert!(
-                binding
-                    .reference
-                    .is_some_and(|reference| reference.1.is_none()),
+                matches!(baz.binding, Some(Expr::Reference(..))),
                 "expected binding to be shared reference"
             );
 
@@ -338,10 +352,9 @@ mod tests {
 
             let parsed = syn::parse2::<WriteArgs>(tokens).expect("parsing should succeed");
             let func = get_field(get_register(&parsed, "csr"), "func");
-            let binding = get_binding(func, "my_func");
 
             assert!(
-                binding.reference.is_none(),
+                matches!(func.binding, Some(Expr::Path(..))),
                 "expected func binding to have no reference"
             );
 
