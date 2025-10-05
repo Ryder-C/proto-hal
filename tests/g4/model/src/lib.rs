@@ -15,7 +15,7 @@ pub enum DeviceVariant {
     G484,
 }
 
-pub fn generate(variant: DeviceVariant) -> (Hal, Diagnostics) {
+pub fn generate(variant: DeviceVariant) -> Hal {
     let extra_interrupts = |interrupt| {
         if matches!(variant, DeviceVariant::G474 | DeviceVariant::G484) {
             interrupt
@@ -24,7 +24,7 @@ pub fn generate(variant: DeviceVariant) -> (Hal, Diagnostics) {
         }
     };
 
-    let hal = Hal::new([rcc::generate(), cordic::generate(), crc::generate()]).interrupts([
+    Hal::new([rcc::generate(), cordic::generate(), crc::generate()]).interrupts([
         Interrupt::handler("WWDG").docs(["Window Watchdog"]),
         Interrupt::handler("PVD_PVM").docs(["PVD through EXTI line detection"]),
         Interrupt::handler("RTC_TAMP_CSS_LSE"),
@@ -127,9 +127,5 @@ pub fn generate(variant: DeviceVariant) -> (Hal, Diagnostics) {
         extra_interrupts(Interrupt::handler("DMA2_CH8")),
         Interrupt::handler("CORDIC"),
         Interrupt::handler("FMAC"),
-    ]);
-
-    let diagnostics = hal.validate();
-
-    (hal, diagnostics)
+    ])
 }

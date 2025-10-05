@@ -8,11 +8,10 @@ use proto_hal_build::ir::{
         register::Register,
         variant::Variant,
     },
-    utils::diagnostic::Diagnostics,
 };
 
-pub fn generate() -> (Hal, Diagnostics) {
-    let hal = Hal::new([
+pub fn generate() -> Hal {
+    Hal::new([
         Peripheral::new(
             "foo",
             0,
@@ -61,11 +60,7 @@ pub fn generate() -> (Hal, Diagnostics) {
             0x100,
             [Register::new("bar0", 0, []), Register::new("bar1", 4, [])],
         ),
-    ]);
-
-    let diagnostics = hal.validate();
-
-    (hal, diagnostics)
+    ])
 }
 
 #[cfg(test)]
