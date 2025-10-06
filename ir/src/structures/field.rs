@@ -353,8 +353,8 @@ impl Field {
     fn generate_markers(offset: u8, width: u8) -> TokenStream {
         quote! {
             pub struct Field;
-            const OFFSET: u8 = #offset;
-            const WIDTH: u8 = #width;
+            pub const OFFSET: u8 = #offset;
+            pub const WIDTH: u8 = #width;
         }
     }
 
@@ -365,13 +365,6 @@ impl Field {
                 S: ::proto_hal::stasis::State<Field>,
             {
                 _state: S,
-            }
-
-            impl<S> ::proto_hal::stasis::Container for #ident<S>
-            where
-                S: ::proto_hal::stasis::State<Field>,
-            {
-                type Parent = Field;
             }
 
             impl<S> ::proto_hal::stasis::Conjure for #ident<S>

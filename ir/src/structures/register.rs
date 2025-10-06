@@ -169,9 +169,9 @@ impl Register {
         })
     }
 
-    fn generate_addr(offset: u32) -> TokenStream {
+    fn generate_offset(offset: u32) -> TokenStream {
         quote! {
-            const ADDR: u32 = super::BASE_ADDR + #offset;
+            pub const OFFSET: u32 = #offset;
         }
     }
 
@@ -221,7 +221,7 @@ impl Register {
         let module_name = self.module_name();
 
         body.extend(self.generate_fields());
-        body.extend(Self::generate_addr(self.offset));
+        body.extend(Self::generate_offset(self.offset));
         body.extend(Self::generate_reset(self.fields.values(), self.reset));
 
         let docs = &self.docs;

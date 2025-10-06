@@ -1,9 +1,5 @@
 pub trait State<Parent>: Conjure {}
 
-pub trait Container: Conjure {
-    type Parent;
-}
-
 pub trait PartialConjure {
     type Target;
 

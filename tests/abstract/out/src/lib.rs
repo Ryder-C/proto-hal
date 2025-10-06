@@ -35,25 +35,27 @@ mod tests {
 
         mod unsafe_interface {
             extern crate std;
+            use macros::read_untracked;
+
             use crate::foo::{self, foo0};
 
             static mut MOCK_FOO: u32 = u32::MAX;
-
-            #[unsafe(export_name = "__PROTO_HAL_ADDR_OF_FOO")]
-            fn addr_of() -> usize {
-                (&raw const MOCK_FOO).addr()
-            }
-
-            #[test]
-            fn harness_addressing() {
-                assert_eq!(foo::base_addr(), addr_of());
-            }
 
             #[test]
             fn unsafe_read() {
                 critical_section::with(|_| {
                     unsafe { MOCK_FOO = foo0::a::Variant::V1 as _ };
-                    assert!(unsafe { foo0::read_untracked().a().is_v1() });
+
+                    let a = unsafe {
+                        read_untracked! {
+                            foo::foo0 {
+                                a,
+                            }
+                            @base_addr foo (&raw const MOCK_FOO).addr()
+                        }
+                    };
+
+                    assert!(a.is_v1());
                 });
             }
 
