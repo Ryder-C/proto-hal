@@ -14,7 +14,11 @@ use syn::{
     token::{Brace, Comma},
 };
 
-pub use gates::{read_untracked::read_untracked, write::write};
+pub use gates::{
+    read_untracked::read_untracked,
+    write::write,
+    write_untracked::{write_from_reset_untracked, write_from_zero_untracked},
+};
 pub use scaffolding::scaffolding;
 
 #[derive(Debug)]
@@ -207,7 +211,7 @@ fn get_field<'a>(ident: &Ident, register: &'a Register) -> syn::Result<&'a Field
 }
 
 pub fn reexports() -> TokenStream {
-    let idents = vec!["write", "read_untracked"]
+    let idents = vec!["write", "read_untracked", "write_from_zero_untracked"]
         .into_iter()
         .map(|name| Ident::new(name, Span::call_site()));
 

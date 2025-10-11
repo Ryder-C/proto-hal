@@ -1,7 +1,4 @@
-use proto_hal_build::ir::{
-    structures::{hal::Hal, interrupts::Interrupt},
-    utils::diagnostic::Diagnostics,
-};
+use proto_hal_build::ir::structures::{hal::Hal, interrupts::Interrupt};
 
 pub mod cordic;
 pub mod crc;

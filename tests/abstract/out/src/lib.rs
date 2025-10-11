@@ -35,7 +35,7 @@ mod tests {
 
         mod unsafe_interface {
             extern crate std;
-            use macros::read_untracked;
+            use macros::{read_untracked, write_from_zero_untracked};
 
             use crate::foo;
 
@@ -64,9 +64,12 @@ mod tests {
             fn unsafe_write() {
                 critical_section::with(|_| {
                     unsafe {
-                        foo::foo0::write_from_zero_untracked(|w| {
-                            w.a(foo::foo0::a::WriteVariant::V2)
-                        })
+                        write_from_zero_untracked! {
+                            foo::foo0 {
+                                a => V2,
+                            }
+                            @base_addr foo (&raw const MOCK_FOO).addr()
+                        }
                     };
                     assert!(unsafe {
                         read_untracked! {
@@ -83,7 +86,14 @@ mod tests {
             #[test]
             fn unsafe_modify() {
                 critical_section::with(|cs| {
-                    unsafe { foo0::write_from_zero_untracked(|w| w.a(foo0::a::WriteVariant::V3)) };
+                    unsafe {
+                        write_from_zero_untracked! {
+                            foo::foo0 {
+                                a => V3,
+                            }
+                            @base_addr foo (&raw const MOCK_FOO).addr()
+                        }
+                    }
                     unsafe {
                         foo0::modify_untracked(cs, |r, w| {
                             w.a(foo0::a::Variant::from_bits(r.a() as u32 + 1))
