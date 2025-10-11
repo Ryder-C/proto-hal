@@ -37,18 +37,18 @@ mod tests {
             extern crate std;
             use macros::read_untracked;
 
-            use crate::foo::{self, foo0};
+            use crate::foo;
 
             static mut MOCK_FOO: u32 = u32::MAX;
 
             #[test]
             fn unsafe_read() {
                 critical_section::with(|_| {
-                    unsafe { MOCK_FOO = foo0::a::Variant::V1 as _ };
+                    unsafe { MOCK_FOO = foo::foo0::a::Variant::V1 as _ };
 
                     let a = unsafe {
                         read_untracked! {
-                            foo::foo0 {
+                            foo::foo1 {
                                 a,
                             }
                             @base_addr foo (&raw const MOCK_FOO).addr()
@@ -62,8 +62,12 @@ mod tests {
             #[test]
             fn unsafe_write() {
                 critical_section::with(|_| {
-                    unsafe { foo0::write_from_zero_untracked(|w| w.a(foo0::a::WriteVariant::V2)) };
-                    assert!(unsafe { foo0::read_untracked().a().is_v2() });
+                    unsafe {
+                        foo::foo0::write_from_zero_untracked(|w| {
+                            w.a(foo::foo0::a::WriteVariant::V2)
+                        })
+                    };
+                    assert!(unsafe { foo::foo0::read_untracked().a().is_v2() });
                 });
             }
 

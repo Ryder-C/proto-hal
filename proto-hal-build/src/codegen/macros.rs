@@ -104,16 +104,13 @@ impl Parse for FieldArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let ident = input.parse()?;
 
-        if !input.peek(Token![:]) {
-            return Ok(Self {
-                ident,
-                binding: None,
-                transition: None,
-            });
-        }
+        let binding = if input.peek(Token![:]) {
+            input.parse::<Token![:]>()?;
+            Some(input.parse()?)
+        } else {
+            None
+        };
 
-        input.parse::<Token![:]>()?;
-        let binding = input.parse()?;
         let transition = if input.peek(Token![=>]) {
             Some(input.parse()?)
         } else {
@@ -122,7 +119,7 @@ impl Parse for FieldArgs {
 
         Ok(Self {
             ident,
-            binding: Some(binding),
+            binding,
             transition,
         })
     }

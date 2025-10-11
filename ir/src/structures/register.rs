@@ -5,7 +5,10 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{Ident, parse_quote};
 
-use crate::utils::diagnostic::{Context, Diagnostic, Diagnostics};
+use crate::{
+    structures::peripheral::Peripheral,
+    utils::diagnostic::{Context, Diagnostic, Diagnostics},
+};
 
 use super::{entitlement::Entitlement, field::Field};
 
@@ -169,9 +172,10 @@ impl Register {
         })
     }
 
-    fn generate_offset(offset: u32) -> TokenStream {
+    fn generate_addr(base_addr: u32, offset: u32) -> TokenStream {
+        let addr = base_addr + offset;
         quote! {
-            pub const OFFSET: u32 = #offset;
+            pub const ADDR: u32 = #addr;
         }
     }
 
@@ -215,13 +219,13 @@ impl Register {
 }
 
 impl Register {
-    pub fn generate(&self) -> TokenStream {
+    pub fn generate(&self, parent: &Peripheral) -> TokenStream {
         let mut body = quote! {};
 
         let module_name = self.module_name();
 
         body.extend(self.generate_fields());
-        body.extend(Self::generate_offset(self.offset));
+        body.extend(Self::generate_addr(parent.base_addr, self.offset));
         body.extend(Self::generate_reset(self.fields.values(), self.reset));
 
         let docs = &self.docs;

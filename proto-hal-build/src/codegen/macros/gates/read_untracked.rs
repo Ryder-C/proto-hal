@@ -6,18 +6,18 @@ use ir::structures::{
     peripheral::Peripheral,
     register::Register,
 };
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
-use syn::{Expr, Ident, Path};
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, quote_spanned};
+use syn::{Expr, Ident, Path, spanned::Spanned};
 
-use crate::codegen::macros::{Args, Override, get_field, get_register};
+use crate::codegen::macros::{Args, Override, RegisterArgs, get_field, get_register};
 
-fn validate<'hal>(
+fn parse<'hal>(
     args: &Args,
     model: &'hal Hal,
 ) -> (
     HashMap<
-        Ident,
+        Path,
         (
             &'hal Peripheral,
             &'hal Register,
@@ -26,46 +26,104 @@ fn validate<'hal>(
     >,
     Vec<syn::Error>,
 ) {
-    let mut diagnostics = Vec::new();
+    let mut out = HashMap::new();
+    let mut errors = Vec::new();
 
-    let mut fields = HashMap::new();
+    let (registers, e) = parse_registers(args, model);
+    errors.extend(e);
+
+    for (register_ident, (register_args, peripheral, register)) in registers {
+        let (f, e) = parse_fields(register_args, register);
+        errors.extend(e);
+
+        out.insert(register_ident.clone(), (peripheral, register, f));
+    }
+
+    (out, errors)
+}
+
+/// Lookup peripherals and registers from the model given provided register paths.
+fn parse_registers<'args, 'hal>(
+    args: &'args Args,
+    model: &'hal Hal,
+) -> (
+    HashMap<Path, (&'args RegisterArgs, &'hal Peripheral, &'hal Register)>,
+    Vec<syn::Error>,
+) {
+    let mut registers = HashMap::new();
+    let mut errors = Vec::new();
+
+    if args.registers.is_empty() {
+        errors.push(syn::Error::new(
+            Span::call_site(),
+            "at least one register must be specified",
+        ));
+    }
+
     for register_args in &args.registers {
-        match get_register(&register_args.path, model) {
-            Ok((peripheral, register)) => {
-                for field_args in &register_args.fields {
-                    match get_field(&field_args.ident, register) {
-                        Ok(field) => {
-                            fields
-                                .entry(format_ident!(
-                                    "{}_{}",
-                                    peripheral.module_name(),
-                                    register.module_name()
-                                ))
-                                .or_insert((peripheral, register, HashMap::new()))
-                                .2
-                                .insert(field.module_name(), field);
-                        }
-                        Err(e) => diagnostics.push(e),
-                    }
-                }
+        let mut parse_register = || {
+            let (peripheral, register) = get_register(&register_args.path, model)?;
+
+            if let Some(..) = registers.insert(
+                register_args.path.clone(),
+                (register_args, peripheral, register),
+            ) {
+                Err(syn::Error::new_spanned(
+                    &register_args.path,
+                    "register already specified",
+                ))?
             }
-            Err(e) => {
-                diagnostics.push(e);
-            }
+
+            Ok(())
+        };
+
+        if let Err(e) = parse_register() {
+            errors.push(e);
         }
     }
 
-    (fields, diagnostics)
+    (registers, errors)
 }
 
-fn register_unique_ident(path: &Path) -> Option<Ident> {
-    path.segments
-        .iter()
-        .map(|segment| &segment.ident)
-        .cloned()
-        .rev()
-        .take(2)
-        .reduce(|acc, ident| format_ident!("{ident}_{acc}"))
+/// Lookup fields from a register given provided field idents.
+fn parse_fields<'args, 'hal>(
+    register_args: &'args RegisterArgs,
+    register: &'hal Register,
+) -> (HashMap<Ident, &'hal Field>, Vec<syn::Error>) {
+    let mut fields = HashMap::new();
+    let mut errors = Vec::new();
+
+    if register_args.fields.is_empty() {
+        errors.push(syn::Error::new(
+            Span::call_site(),
+            "at least one field must be specified",
+        ));
+    }
+
+    for field_args in &register_args.fields {
+        let mut parse_field = || {
+            let field = get_field(&field_args.ident, register)?;
+
+            if let Some(..) = fields.insert(field_args.ident.clone(), field) {
+                Err(syn::Error::new_spanned(
+                    &field_args.ident,
+                    "field already specified",
+                ))?
+            }
+
+            Ok(())
+        };
+
+        if let Err(e) = parse_field() {
+            errors.push(e);
+        }
+    }
+
+    (fields, errors)
+}
+
+fn unique_register_ident(peripheral: &Peripheral, register: &Register) -> Ident {
+    format_ident!("{}_{}", peripheral.module_name(), register.module_name(),)
 }
 
 pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
@@ -74,10 +132,32 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error(),
     };
 
-    let (fields, diagnostics) = validate(&args, &model);
+    let (parsed, errors) = parse(&args, &model);
+
+    let suggestions = if errors.is_empty() {
+        None
+    } else {
+        let imports = args
+            .registers
+            .iter()
+            .map(|register| {
+                let path = &register.path;
+                let fields = register.fields.iter().map(|field| &field.ident);
+
+                let span = path.span();
+
+                quote_spanned! { span =>
+                    use #path::{#(
+                        #fields as _,
+                    )*};
+                }
+            })
+            .collect::<TokenStream>();
+        Some(imports)
+    };
 
     let errors = {
-        let errors = diagnostics.into_iter().map(|e| e.to_compile_error());
+        let errors = errors.into_iter().map(|e| e.to_compile_error());
 
         quote! {
             #(
@@ -98,75 +178,55 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
         overridden_base_addrs.insert(ident, expr.clone());
     }
 
-    let returns = args.registers.iter().flat_map(|register| {
-        let register_path = &register.path;
-
-        register
-            .fields
+    let returns = parsed.iter().flat_map(|(path, (.., fields))| {
+        fields
             .iter()
-            .filter_map(|field| {
-                let field = fields
-                    .get(&register_unique_ident(&register.path)?)?
-                    .2
-                    .get(&field.ident)?;
-
-                let ident = field.module_name();
-
+            .filter_map(|(ident, field)| {
                 Some(match field.access.get_read()?.numericity {
                     Numericity::Numeric => quote! { u32 },
                     Numericity::Enumerated { .. } => quote! {
-                        #register_path::#ident::ReadVariant
+                        #path::#ident::ReadVariant
                     },
                 })
             })
             .collect::<Vec<_>>()
     });
 
-    let regs = args
-        .registers
-        .iter()
-        .filter_map(|register| register_unique_ident(&register.path))
+    let reg_idents = parsed
+        .values()
+        .map(|(peripheral, register, ..)| unique_register_ident(peripheral, register))
         .collect::<Vec<_>>();
 
-    let addrs = args.registers.iter().filter_map(|register| {
-        let ident = register_unique_ident(&register.path)?;
-        let (peripheral, register, ..) = fields.get(&ident)?;
+    let addrs = parsed
+        .iter()
+        .filter_map(|(path, (peripheral, register, ..))| {
+            let register_offset = register.offset as usize;
 
-        let register_offset = register.offset as usize;
+            Some(
+                if let Some(base_addr) = overridden_base_addrs.get(&peripheral.module_name()) {
+                    quote! { (#base_addr + #register_offset) }
+                } else {
+                    quote! { #path::ADDR }
+                },
+            )
+        });
 
-        Some(
-            if let Some(base_addr) = overridden_base_addrs.get(&peripheral.module_name()) {
-                quote! { (#base_addr + #register_offset) }
-            } else {
-                let addr = (peripheral.base_addr + register.offset) as usize;
-                quote! { #addr }
-            },
-        )
-    });
-
-    let values = args.registers.iter().map(|register| {
-        let register_ident = register_unique_ident(&register.path);
-        let register_path = &register.path;
-
-        register
-            .fields
+    let values = parsed.iter().map(|(path, (peripheral, register, fields))| {
+        fields
             .iter()
-            .filter_map(|field| {
-                let reg = register_ident.as_ref()?;
-                let ident = &field.ident;
-                let field = fields.get(reg)?.2.get(&field.ident)?;
+            .filter_map(|(ident, field)| {
+                let reg = unique_register_ident(peripheral, register);
 
-                let offset = field.offset;
                 let mask = u32::MAX >> (32 - field.width);
 
                 let value = quote! {
-                    (#reg >> #offset) & #mask
+                    (#reg >> #path::#ident::OFFSET) & #mask
                 };
 
                 Some(match field.access.get_read()?.numericity {
                     Numericity::Numeric => value,
                     Numericity::Enumerated { .. } => quote! {
-                        unsafe { #register_path::#ident::ReadVariant::from_bits(#value) }
+                        unsafe { #path::#ident::ReadVariant::from_bits(#value) }
                     },
                 })
             })
@@ -174,12 +234,13 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
     });
 
     quote! {
+        #suggestions
         #errors
 
         {
             unsafe fn gate() -> (#(#returns),*) {
                 #(
-                    let #regs = unsafe {
+                    let #reg_idents = unsafe {
                         ::core::ptr::read_volatile(#addrs as *const u32)
                     };
                 )*

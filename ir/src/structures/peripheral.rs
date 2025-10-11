@@ -114,7 +114,7 @@ impl Peripheral {
         self.registers
             .values()
             .fold(quote! {}, |mut acc, register| {
-                acc.extend(register.generate());
+                acc.extend(register.generate(self));
 
                 acc
             })
@@ -122,7 +122,7 @@ impl Peripheral {
 
     fn generate_base_addr(base_addr: u32) -> TokenStream {
         quote! {
-            const BASE_ADDR: u32 = #base_addr;
+            pub const BASE_ADDR: u32 = #base_addr;
         }
     }
 
