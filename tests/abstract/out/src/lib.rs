@@ -29,8 +29,8 @@ mod tests {
 
         #[test]
         fn offset() {
-            assert_eq!(foo0::OFFSET, 0);
-            assert_eq!(bar0::OFFSET, 0);
+            assert_eq!(foo0::ADDR, 0);
+            assert_eq!(bar0::ADDR, 0);
         }
 
         mod unsafe_interface {
@@ -46,16 +46,17 @@ mod tests {
                 critical_section::with(|_| {
                     unsafe { MOCK_FOO = foo::foo0::a::Variant::V1 as _ };
 
-                    let a = unsafe {
-                        read_untracked! {
-                            foo::foo1 {
-                                a,
+                    assert!(
+                        unsafe {
+                            read_untracked! {
+                                foo::foo0 {
+                                    a,
+                                }
+                                @base_addr foo (&raw const MOCK_FOO).addr()
                             }
-                            @base_addr foo (&raw const MOCK_FOO).addr()
                         }
-                    };
-
-                    assert!(a.is_v1());
+                        .is_v1()
+                    );
                 });
             }
 
@@ -67,7 +68,15 @@ mod tests {
                             w.a(foo::foo0::a::WriteVariant::V2)
                         })
                     };
-                    assert!(unsafe { foo::foo0::read_untracked().a().is_v2() });
+                    assert!(unsafe {
+                        read_untracked! {
+                            foo::foo0 {
+                                a,
+                            }
+                            @base_addr foo (&raw const MOCK_FOO).addr()
+                        }
+                        .is_v2()
+                    });
                 });
             }
 
@@ -81,7 +90,15 @@ mod tests {
                         })
                     };
 
-                    assert!(unsafe { foo0::read_untracked().a().is_v4() });
+                    assert!(unsafe {
+                        read_untracked! {
+                            foo::foo0 {
+                                a,
+                            }
+                            @base_addr foo (&raw const MOCK_FOO).addr()
+                        }
+                        .is_v4()
+                    });
                 });
             }
         }

@@ -10,22 +10,17 @@ use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
 use syn::{Expr, Ident, Path, spanned::Spanned};
 
-use crate::codegen::macros::{Args, Override, RegisterArgs, get_field, get_register};
+use crate::codegen::macros::{Args, Override, RegisterArgs, StateArgs, get_field, get_register};
 
-fn parse<'hal>(
-    args: &Args,
-    model: &'hal Hal,
-) -> (
-    HashMap<
-        Path,
-        (
-            &'hal Peripheral,
-            &'hal Register,
-            HashMap<Ident, &'hal Field>,
-        ),
-    >,
-    Vec<syn::Error>,
-) {
+/// A parsed unit of the provided tokens and corresponding model nodes which
+/// represents a single register.
+struct Parsed<'hal> {
+    peripheral: &'hal Peripheral,
+    register: &'hal Register,
+    fields: HashMap<Ident, &'hal Field>,
+}
+
+fn parse<'hal>(args: &Args, model: &'hal Hal) -> (HashMap<Path, Parsed<'hal>>, Vec<syn::Error>) {
     let mut out = HashMap::new();
     let mut errors = Vec::new();
 
@@ -33,10 +28,17 @@ fn parse<'hal>(
     errors.extend(e);
 
     for (register_ident, (register_args, peripheral, register)) in registers {
-        let (f, e) = parse_fields(register_args, register);
+        let (fields, e) = parse_fields(register_args, register);
         errors.extend(e);
 
-        out.insert(register_ident.clone(), (peripheral, register, f));
+        out.insert(
+            register_ident.clone(),
+            Parsed {
+                peripheral,
+                register,
+                fields,
+            },
+        );
     }
 
     (out, errors)
@@ -117,9 +119,40 @@ fn parse_fields<'args, 'hal>(
         if let Err(e) = parse_field() {
             errors.push(e);
         }
+
+        if let Some(binding) = &field_args.binding {
+            errors.push(syn::Error::new_spanned(binding, "no binding is accepted"));
+        }
+
+        if let Some(transition) = &field_args.transition {
+            errors.push(syn::Error::new(
+                match &transition.state {
+                    StateArgs::Path(path) => path.span(),
+                    StateArgs::Lit(lit_int) => lit_int.span(),
+                },
+                "no transition is accepted",
+            ));
+        }
     }
 
     (fields, errors)
+}
+
+fn validate<'hal>(parsed: &HashMap<Path, Parsed<'hal>>) -> Vec<syn::Error> {
+    parsed
+        .values()
+        .flat_map(|Parsed { fields, .. }| fields.iter())
+        .filter_map(|(ident, field)| {
+            if field.access.get_read().is_none() {
+                Some(syn::Error::new_spanned(
+                    ident,
+                    format!("field \"{ident}\" is not readable"),
+                ))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
 }
 
 fn unique_register_ident(peripheral: &Peripheral, register: &Register) -> Ident {
@@ -132,7 +165,11 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error(),
     };
 
-    let (parsed, errors) = parse(&args, &model);
+    let mut errors = Vec::new();
+
+    let (parsed, e) = parse(&args, &model);
+    errors.extend(e);
+    errors.extend(validate(&parsed));
 
     let suggestions = if errors.is_empty() {
         None
@@ -147,6 +184,7 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
                 let span = path.span();
 
                 quote_spanned! { span =>
+                    #[allow(unused_imports)]
                     use #path::{#(
                         #fields as _,
                     )*};
@@ -178,7 +216,7 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
         overridden_base_addrs.insert(ident, expr.clone());
     }
 
-    let returns = parsed.iter().flat_map(|(path, (.., fields))| {
+    let returns = parsed.iter().flat_map(|(path, Parsed { fields, .. })| {
         fields
             .iter()
             .filter_map(|(ident, field)| {
@@ -194,28 +232,27 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
 
     let reg_idents = parsed
         .values()
-        .map(|(peripheral, register, ..)| unique_register_ident(peripheral, register))
+        .map(|parsed| unique_register_ident(parsed.peripheral, parsed.register))
         .collect::<Vec<_>>();
 
-    let addrs = parsed
-        .iter()
-        .filter_map(|(path, (peripheral, register, ..))| {
-            let register_offset = register.offset as usize;
+    let addrs = parsed.iter().filter_map(|(path, parsed)| {
+        let register_offset = parsed.register.offset as usize;
 
-            Some(
-                if let Some(base_addr) = overridden_base_addrs.get(&peripheral.module_name()) {
-                    quote! { (#base_addr + #register_offset) }
-                } else {
-                    quote! { #path::ADDR }
-                },
-            )
-        });
+        Some(
+            if let Some(base_addr) = overridden_base_addrs.get(&parsed.peripheral.module_name()) {
+                quote! { (#base_addr + #register_offset) }
+            } else {
+                quote! { #path::ADDR }
+            },
+        )
+    });
 
-    let values = parsed.iter().map(|(path, (peripheral, register, fields))| {
-        fields
+    let values = parsed.iter().map(|(path, parsed)| {
+        parsed
+            .fields
             .iter()
             .filter_map(|(ident, field)| {
-                let reg = unique_register_ident(peripheral, register);
+                let reg = unique_register_ident(parsed.peripheral, parsed.register);
 
                 let mask = u32::MAX >> (32 - field.width);
 
