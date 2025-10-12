@@ -130,9 +130,6 @@ impl Peripheral {
             None?
         }
 
-        // Q: Does masked need to be sealed? Creating it just prevents
-        // the peripheral from being used, which is not dangerous.
-        // TODO: Consider changing masked to a unit struct.
         Some(quote! {
             pub struct Masked {
                 _sealed: (),
