@@ -1,5 +1,6 @@
-use std::{collections::HashSet, fmt::Display};
+use std::fmt::Display;
 
+use indexmap::IndexSet;
 use proc_macro2::Span;
 use syn::{Ident, Path, parse_quote};
 use ters::ters;
@@ -53,4 +54,4 @@ impl Display for Entitlement {
     }
 }
 
-pub type Entitlements = HashSet<Entitlement>;
+pub type Entitlements = IndexSet<Entitlement>;

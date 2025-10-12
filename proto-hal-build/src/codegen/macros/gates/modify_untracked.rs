@@ -144,11 +144,16 @@ fn validate<'args, 'hal>(parsed: &IndexMap<Path, Parsed<'args, 'hal>>) -> Vec<sy
     parsed
         .values()
         .flat_map(|Parsed { transitions, .. }| transitions.iter())
-        .filter_map(|(ident, (field, ..))| {
-            if field.access.get_write().is_none() {
+        .filter_map(|(ident, (field, transition))| {
+            if transition.is_some() && !field.access.is_write() {
                 Some(syn::Error::new_spanned(
                     ident,
                     format!("field \"{ident}\" is not writable"),
+                ))
+            } else if !field.access.is_read() {
+                Some(syn::Error::new_spanned(
+                    ident,
+                    format!("field \"{ident}\" is not readable"),
                 ))
             } else {
                 None

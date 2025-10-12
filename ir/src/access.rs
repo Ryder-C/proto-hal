@@ -1,11 +1,13 @@
-use std::collections::HashSet;
-
-use crate::structures::{entitlement::Entitlement, field::Numericity, variant::Variant};
+use crate::structures::{
+    entitlement::{Entitlement, Entitlements},
+    field::Numericity,
+    variant::Variant,
+};
 
 #[derive(Debug, Clone)]
 pub struct AccessProperties {
     pub numericity: Numericity,
-    pub entitlements: HashSet<Entitlement>,
+    pub entitlements: Entitlements,
     pub effects: (),
 }
 
@@ -13,7 +15,7 @@ impl AccessProperties {
     pub fn enumerated(variants: impl IntoIterator<Item = Variant>) -> Self {
         Self {
             numericity: Numericity::enumerated(variants),
-            entitlements: HashSet::new(),
+            entitlements: Entitlements::new(),
             effects: (),
         }
     }
@@ -21,7 +23,7 @@ impl AccessProperties {
     pub fn numeric() -> Self {
         Self {
             numericity: Numericity::Numeric,
-            entitlements: HashSet::new(),
+            entitlements: Entitlements::new(),
             effects: (),
         }
     }
@@ -52,7 +54,7 @@ impl Access {
     pub fn read(numericity: Numericity) -> Access {
         Access::Read(AccessProperties {
             numericity,
-            entitlements: HashSet::new(),
+            entitlements: Entitlements::new(),
             effects: (),
         })
     }
@@ -60,7 +62,7 @@ impl Access {
     pub fn write(numericity: Numericity) -> Access {
         Access::Write(AccessProperties {
             numericity,
-            entitlements: HashSet::new(),
+            entitlements: Entitlements::new(),
             effects: (),
         })
     }
@@ -68,7 +70,7 @@ impl Access {
     pub fn read_write(numericity: Numericity) -> Access {
         Access::ReadWrite(ReadWrite::Symmetrical(AccessProperties {
             numericity: numericity.clone(),
-            entitlements: HashSet::new(),
+            entitlements: Entitlements::new(),
             effects: (),
         }))
     }
@@ -80,12 +82,12 @@ impl Access {
         Access::ReadWrite(ReadWrite::Asymmetrical {
             read: AccessProperties {
                 numericity: read_numericity,
-                entitlements: HashSet::new(),
+                entitlements: Entitlements::new(),
                 effects: (),
             },
             write: AccessProperties {
                 numericity: write_numericity,
-                entitlements: HashSet::new(),
+                entitlements: Entitlements::new(),
                 effects: (),
             },
         })

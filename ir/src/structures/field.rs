@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use colored::Colorize;
+use indexmap::IndexMap;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{Ident, Path, Type, parse_quote};
@@ -16,13 +15,13 @@ use super::variant::Variant;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Numericity {
     Numeric,
-    Enumerated { variants: HashMap<Ident, Variant> },
+    Enumerated { variants: IndexMap<Ident, Variant> },
 }
 
 impl Numericity {
     pub fn enumerated(variants: impl IntoIterator<Item = Variant>) -> Self {
         Self::Enumerated {
-            variants: HashMap::from_iter(
+            variants: IndexMap::from_iter(
                 variants
                     .into_iter()
                     .map(|variant| (variant.type_name(), variant)),
@@ -381,7 +380,7 @@ impl Field {
     }
 
     fn generate_repr(access: &Access) -> Option<TokenStream> {
-        let variant_enum = |variants: &HashMap<Ident, Variant>| {
+        let variant_enum = |variants: &IndexMap<Ident, Variant>| {
             let variant_idents = variants
                 .values()
                 .map(|variant| variant.type_name())

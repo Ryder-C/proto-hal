@@ -1,5 +1,4 @@
-use std::collections::{HashMap, HashSet};
-
+use indexmap::{IndexMap, IndexSet};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::Ident;
@@ -12,8 +11,8 @@ use super::{entitlement::Entitlement, register::Register};
 pub struct Peripheral {
     pub ident: Ident,
     pub base_addr: u32,
-    pub entitlements: HashSet<Entitlement>,
-    pub registers: HashMap<Ident, Register>,
+    pub entitlements: IndexSet<Entitlement>,
+    pub registers: IndexMap<Ident, Register>,
     pub docs: Vec<String>,
 }
 
@@ -26,8 +25,8 @@ impl Peripheral {
         Self {
             ident: Ident::new(ident.as_ref(), Span::call_site()),
             base_addr,
-            entitlements: HashSet::new(),
-            registers: HashMap::from_iter(
+            entitlements: IndexSet::new(),
+            registers: IndexMap::from_iter(
                 registers
                     .into_iter()
                     .map(|register| (register.ident.clone(), register)),

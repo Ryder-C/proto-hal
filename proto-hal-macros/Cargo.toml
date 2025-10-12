@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-proc-macro2 = "1.0.101"
-quote = "1.0.40"
-syn = "2.0.106"
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
 
 proto-hal-build = { path = "../proto-hal-build" }
 

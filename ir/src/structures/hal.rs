@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use colored::Colorize;
+use indexmap::IndexMap;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::Ident;
@@ -14,14 +13,14 @@ use super::{entitlement::Entitlement, field::Numericity, peripheral::Peripheral}
 
 #[derive(Debug, Clone)]
 pub struct Hal {
-    pub peripherals: HashMap<Ident, Peripheral>,
+    pub peripherals: IndexMap<Ident, Peripheral>,
     pub interrupts: Interrupts,
 }
 
 impl Hal {
     pub fn new(peripherals: impl IntoIterator<Item = Peripheral>) -> Self {
         Self {
-            peripherals: HashMap::from_iter(
+            peripherals: IndexMap::from_iter(
                 peripherals
                     .into_iter()
                     .map(|peripheral| (peripheral.ident.clone(), peripheral)),
@@ -89,7 +88,7 @@ impl Hal {
         }
 
         // collect all entitlements
-        let mut entitlements = HashMap::<Context, Vec<Entitlement>>::new();
+        let mut entitlements = IndexMap::<Context, Vec<Entitlement>>::new();
 
         let context = Context::new();
 

@@ -1,9 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-};
+use std::fmt::Display;
 
 use colored::Colorize;
+use indexmap::{IndexMap, IndexSet};
 use ters::ters;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -96,8 +94,8 @@ impl Diagnostic {
         self
     }
 
-    pub fn report(diagnostics: &HashSet<Self>) -> String {
-        let mut diagnostic_groups = HashMap::new();
+    pub fn report(diagnostics: &Diagnostics) -> String {
+        let mut diagnostic_groups = IndexMap::new();
 
         for diagnostic in diagnostics {
             diagnostic_groups
@@ -149,10 +147,10 @@ impl Display for Diagnostic {
     }
 }
 
-pub type Diagnostics = HashSet<Diagnostic>;
+pub type Diagnostics = IndexSet<Diagnostic>;
 
 impl From<Diagnostic> for Diagnostics {
     fn from(diagnostic: Diagnostic) -> Self {
-        HashSet::from([diagnostic])
+        IndexSet::from([diagnostic])
     }
 }

@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use colored::Colorize;
+use indexmap::IndexMap;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{Ident, parse_quote};
@@ -16,7 +15,7 @@ use super::{entitlement::Entitlement, field::Field};
 pub struct Register {
     pub ident: Ident,
     pub offset: u32,
-    pub fields: HashMap<Ident, Field>,
+    pub fields: IndexMap<Ident, Field>,
     pub reset: Option<u32>,
     pub docs: Vec<String>,
 }
@@ -30,7 +29,7 @@ impl Register {
         Self {
             ident: Ident::new(ident.as_ref().to_lowercase().as_str(), Span::call_site()),
             offset,
-            fields: HashMap::from_iter(
+            fields: IndexMap::from_iter(
                 fields.into_iter().map(|field| (field.module_name(), field)),
             ),
             reset: None,
