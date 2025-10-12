@@ -18,7 +18,7 @@ use crate::codegen::macros::{Args, Override, RegisterArgs, StateArgs, get_field,
 struct Parsed<'args, 'hal> {
     peripheral: &'hal Peripheral,
     register: &'hal Register,
-    transitions: IndexMap<Ident, (&'hal Field, Option<&'args StateArgs>)>,
+    items: IndexMap<Ident, (&'hal Field, Option<&'args StateArgs>)>,
 }
 
 fn parse<'args, 'hal>(
@@ -32,7 +32,7 @@ fn parse<'args, 'hal>(
     errors.extend(e);
 
     for (register_ident, (register_args, peripheral, register)) in registers {
-        let (transitions, e) = parse_fields(register_args, register);
+        let (items, e) = parse_fields(register_args, register);
         errors.extend(e);
 
         out.insert(
@@ -40,7 +40,7 @@ fn parse<'args, 'hal>(
             Parsed {
                 peripheral,
                 register,
-                transitions,
+                items,
             },
         );
     }
@@ -99,7 +99,7 @@ fn parse_fields<'args, 'hal>(
     IndexMap<Ident, (&'hal Field, Option<&'args StateArgs>)>,
     Vec<syn::Error>,
 ) {
-    let mut transitions = IndexMap::new();
+    let mut items = IndexMap::new();
     let mut errors = Vec::new();
 
     if register_args.fields.is_empty() {
@@ -118,7 +118,7 @@ fn parse_fields<'args, 'hal>(
                 .as_ref()
                 .map(|transition| &transition.state);
 
-            if let Some(..) = transitions.insert(field_args.ident.clone(), (field, transition)) {
+            if let Some(..) = items.insert(field_args.ident.clone(), (field, transition)) {
                 Err(syn::Error::new_spanned(
                     &field_args.ident,
                     "field already specified",
@@ -137,13 +137,13 @@ fn parse_fields<'args, 'hal>(
         }
     }
 
-    (transitions, errors)
+    (items, errors)
 }
 
 fn validate<'args, 'hal>(parsed: &IndexMap<Path, Parsed<'args, 'hal>>) -> Vec<syn::Error> {
     parsed
         .values()
-        .flat_map(|Parsed { transitions, .. }| transitions.iter())
+        .flat_map(|Parsed { items, .. }| items.iter())
         .filter_map(|(ident, (field, transition))| {
             if transition.is_some() && !field.access.is_write() {
                 Some(syn::Error::new_spanned(
@@ -342,7 +342,7 @@ pub fn modify_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
         .iter()
         .map(|(path, parsed)| {
             let (returns, read_values, read_field_idents) = parsed
-                .transitions
+                .items
                 .iter()
                 .filter_map(|(ident, (field, ..))| {
                     Some((
@@ -376,7 +376,7 @@ pub fn modify_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
         .iter()
         .map(|(path, parsed)| {
             let (parameter_idents, parameter_tys, write_values, offsets) = parsed
-                .transitions
+                .items
                 .iter()
                 .filter_map(|(ident, (field, transition))| {
                     Some((
