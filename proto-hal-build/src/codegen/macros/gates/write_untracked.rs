@@ -8,7 +8,7 @@ use ir::structures::{
     register::Register,
 };
 use proc_macro2::{Span, TokenStream};
-use quote::{quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned};
 use syn::{Expr, Ident, Path, spanned::Spanned};
 
 use crate::codegen::macros::{Args, Override, RegisterArgs, StateArgs, get_field, get_register};
@@ -166,6 +166,65 @@ fn validate<'args, 'hal>(parsed: &IndexMap<Path, Parsed<'args, 'hal>>) -> Vec<sy
         .collect::<Vec<_>>()
 }
 
+fn unique_field_ident(peripheral: &Peripheral, register: &Register, field: &Ident) -> Ident {
+    format_ident!(
+        "{}_{}_{}",
+        peripheral.module_name(),
+        register.module_name(),
+        field
+    )
+}
+
+fn addrs<'args, 'hal>(
+    path: &Path,
+    parsed: &Parsed<'args, 'hal>,
+    overridden_base_addrs: &HashMap<Ident, Expr>,
+) -> TokenStream {
+    let register_offset = parsed.register.offset as usize;
+
+    if let Some(base_addr) = overridden_base_addrs.get(&parsed.peripheral.module_name()) {
+        quote! { (#base_addr + #register_offset) }
+    } else {
+        quote! { #path::ADDR }
+    }
+}
+
+fn initials<'args, 'hal>(scheme: &Scheme, parsed: &Parsed<'args, 'hal>) -> u32 {
+    match scheme {
+        Scheme::FromZero => 0,
+        Scheme::FromReset => {
+            let mask = parsed.register.fields.values().fold(0, |acc, field| {
+                acc | ((u32::MAX >> (32 - field.width)) << field.offset)
+            });
+
+            parsed.register.reset.unwrap_or(0) & !mask
+        }
+    }
+}
+
+fn write_values(
+    path: &Path,
+    transition: &StateArgs,
+    ident: &Ident,
+    field: &Field,
+) -> Option<TokenStream> {
+    Some(match (transition, &field.access.get_write()?.numericity) {
+        (StateArgs::Expr(expr), Numericity::Enumerated { .. }) => {
+            quote! {{
+                #[allow(unused_imports)]
+                use #path::#ident::write::Variant::*;
+                #expr as u32
+            }}
+        }
+        (StateArgs::Expr(expr), ..) => {
+            quote! {{
+                #expr as u32
+            }}
+        }
+        (StateArgs::Lit(lit_int), ..) => quote! { #lit_int },
+    })
+}
+
 fn write_untracked(scheme: Scheme, model: &Hal, tokens: TokenStream) -> TokenStream {
     let args = match syn::parse2::<Args>(tokens) {
         Ok(args) => args,
@@ -177,6 +236,24 @@ fn write_untracked(scheme: Scheme, model: &Hal, tokens: TokenStream) -> TokenStr
     let (parsed, e) = parse(&args, &model);
     errors.extend(e);
     errors.extend(validate(&parsed));
+
+    let mut overridden_base_addrs: HashMap<Ident, Expr> = HashMap::new();
+
+    for override_ in &args.overrides {
+        match override_ {
+            Override::BaseAddress(ident, expr) => {
+                overridden_base_addrs.insert(ident.clone(), expr.clone());
+            }
+            Override::CriticalSection(expr) => errors.push(syn::Error::new_spanned(
+                &expr,
+                "stand-alone read access is atomic and doesn't require a critical section",
+            )),
+            Override::Unknown(ident) => errors.push(syn::Error::new_spanned(
+                &ident,
+                format!("unexpected override \"{}\"", ident),
+            )),
+        };
+    }
 
     let suggestions = if errors.is_empty() {
         None
@@ -211,93 +288,52 @@ fn write_untracked(scheme: Scheme, model: &Hal, tokens: TokenStream) -> TokenStr
         }
     };
 
-    let mut overridden_base_addrs: HashMap<Ident, Expr> = HashMap::new();
-
-    for (ident, expr) in args
-        .overrides
+    let (addrs, initials, parameter_idents, parameter_tys, write_values, offsets) = parsed
         .iter()
-        .filter_map(|override_| match override_ {
-            Override::BaseAddress(ident, expr) => Some((ident.clone(), expr)),
+        .map(|(path, parsed)| {
+            let (parameter_idents, parameter_tys, write_values, offsets) = parsed
+                .transitions
+                .iter()
+                .filter_map(|(ident, (field, transition))| {
+                    Some((
+                        unique_field_ident(parsed.peripheral, parsed.register, ident),
+                        quote! { u32 },
+                        write_values(path, transition, ident, field)?,
+                        quote! { #path::#ident::OFFSET },
+                    ))
+                })
+                .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
+
+            (
+                addrs(path, parsed, &overridden_base_addrs),
+                initials(&scheme, parsed),
+                parameter_idents,
+                parameter_tys,
+                write_values,
+                offsets,
+            )
         })
-    {
-        overridden_base_addrs.insert(ident, expr.clone());
-    }
-
-    let addrs = parsed.iter().map(|(path, parsed)| {
-        let register_offset = parsed.register.offset as usize;
-
-        if let Some(base_addr) = overridden_base_addrs.get(&parsed.peripheral.module_name()) {
-            quote! { (#base_addr + #register_offset) }
-        } else {
-            quote! { #path::ADDR }
-        }
-    });
-
-    let initials = parsed.values().map(|parsed| match scheme {
-        Scheme::FromZero => 0,
-        Scheme::FromReset => {
-            let mask = parsed.register.fields.values().fold(0, |acc, field| {
-                acc | ((u32::MAX >> (32 - field.width)) << field.offset)
-            });
-
-            parsed.register.reset.unwrap_or(0) & !mask
-        }
-    });
-
-    let values = parsed.iter().map(|(path, parsed)| {
-        parsed
-            .transitions
-            .iter()
-            .map(|(ident, (field, transition))| {
-                let value = match (
-                    transition,
-                    &field
-                        .access
-                        .get_write()
-                        .expect("field should be writable")
-                        .numericity,
-                ) {
-                    (StateArgs::Path(state_path), Numericity::Enumerated { .. }) => {
-                        quote! {{
-                            #[allow(unused_imports)]
-                            use #path::#ident::write::Variant::*;
-                            #state_path as u32
-                        }}
-                    }
-                    (StateArgs::Path(state_path), ..) => {
-                        quote! {{
-                            #state_path as u32
-                        }}
-                    }
-                    (StateArgs::Lit(lit_int), ..) => quote! { #lit_int },
-                };
-
-                quote! {
-                    #value << #path::#ident::OFFSET
-                }
-            })
-            .collect::<Vec<_>>()
-    });
+        .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
 
     quote! {
         #suggestions
         #errors
 
         {
-            unsafe fn gate() {
+            unsafe fn gate(#(#(#parameter_idents: #parameter_tys,)*)*) {
                 #(
                     unsafe {
                         ::core::ptr::write_volatile(
                             #addrs as *mut u32,
                             #initials #(
-                                | #values
+                                | (#parameter_idents << #offsets)
                             )*
                         )
                     };
                 )*
             }
 
-            gate()
+            gate(#(#(#write_values,)*)*)
         }
     }
 }

@@ -8,13 +8,14 @@ use ir::structures::{field::Field, hal::Hal, peripheral::Peripheral, register::R
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    Expr, ExprLit, ExprPath, Ident, Lit, LitInt, Path, Token, braced,
+    Expr, ExprLit, Ident, Lit, LitInt, Path, Token, braced,
     parse::Parse,
     punctuated::Punctuated,
     token::{Brace, Comma},
 };
 
 pub use gates::{
+    modify_untracked::modify_untracked,
     read_untracked::read_untracked,
     write::write,
     write_untracked::{write_from_reset_untracked, write_from_zero_untracked},
@@ -51,23 +52,23 @@ impl Parse for Args {
 #[derive(Debug)]
 enum Override {
     BaseAddress(Ident, Expr),
+    CriticalSection(Expr),
+    Unknown(Ident),
 }
 
 impl Parse for Override {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let ident = input.parse::<Ident>()?;
 
-        match ident.to_string().as_str() {
+        Ok(match ident.to_string().as_str() {
             "base_addr" => {
                 let peripheral_ident = input.parse()?;
                 let addr = input.parse::<Expr>()?;
-                Ok(Self::BaseAddress(peripheral_ident, addr))
+                Self::BaseAddress(peripheral_ident, addr)
             }
-            other => Err(syn::Error::new_spanned(
-                ident,
-                format!("unknown override \"{other}\""),
-            )),
-        }
+            "critical_section" => Self::CriticalSection(input.parse()?),
+            _unknown => Self::Unknown(ident),
+        })
     }
 }
 
@@ -145,7 +146,7 @@ impl Parse for TransitionArgs {
 
 #[derive(Debug)]
 enum StateArgs {
-    Path(Path),
+    Expr(Expr),
     Lit(LitInt),
 }
 
@@ -155,11 +156,7 @@ impl Parse for StateArgs {
             Expr::Lit(ExprLit {
                 lit: Lit::Int(lit), ..
             }) => Self::Lit(lit),
-            Expr::Path(ExprPath { path, .. }) => Self::Path(path),
-            other => Err(syn::Error::new_spanned(
-                other,
-                "expected path or integer literal",
-            ))?,
+            other => Self::Expr(other),
         })
     }
 }
@@ -211,9 +208,14 @@ fn get_field<'a>(ident: &Ident, register: &'a Register) -> syn::Result<&'a Field
 }
 
 pub fn reexports() -> TokenStream {
-    let idents = vec!["write", "read_untracked", "write_from_zero_untracked"]
-        .into_iter()
-        .map(|name| Ident::new(name, Span::call_site()));
+    let idents = vec![
+        "write",
+        "read_untracked",
+        "write_from_zero_untracked",
+        "modify_untracked",
+    ]
+    .into_iter()
+    .map(|name| Ident::new(name, Span::call_site()));
 
     quote! {
         #(

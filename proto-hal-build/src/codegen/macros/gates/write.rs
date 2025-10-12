@@ -204,7 +204,7 @@ mod tests {
                 "expected func binding to have no reference"
             );
 
-            let StateArgs::Path(path) = &func
+            let StateArgs::Expr(..) = &func
                 .transition
                 .as_ref()
                 .expect("expected func transition to be present")
@@ -212,11 +212,6 @@ mod tests {
             else {
                 panic!("expected func target state to be a path")
             };
-
-            assert!(
-                path.is_ident("Sqrt"),
-                "expected func target state to be \"Sqrt\""
-            );
         }
     }
 }

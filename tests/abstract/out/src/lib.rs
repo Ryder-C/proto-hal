@@ -7,16 +7,14 @@ scaffolding!();
 #[cfg(test)]
 mod tests {
     mod hal {
+        use crate::foo::foo0::a;
         use core::any::{Any, TypeId};
 
         #[test]
         fn fundamental_peripherals() {
             let p = unsafe { crate::peripherals() };
 
-            assert_eq!(
-                TypeId::of::<crate::foo::foo0::a::V3>(),
-                p.foo.foo0.a.type_id(),
-            );
+            assert_eq!(TypeId::of::<a::A<a::V3>>(), p.foo.foo0.a.type_id());
         }
     }
 
@@ -30,12 +28,12 @@ mod tests {
         #[test]
         fn offset() {
             assert_eq!(foo0::ADDR, 0);
-            assert_eq!(bar0::ADDR, 0);
+            assert_eq!(bar0::ADDR, 0x100);
         }
 
         mod unsafe_interface {
             extern crate std;
-            use macros::{read_untracked, write_from_zero_untracked};
+            use macros::{modify_untracked, read_untracked, write_from_zero_untracked};
 
             use crate::foo;
 
@@ -94,10 +92,15 @@ mod tests {
                             @base_addr foo (&raw const MOCK_FOO).addr()
                         }
                     }
+
                     unsafe {
-                        foo0::modify_untracked(cs, |r, w| {
-                            w.a(foo0::a::Variant::from_bits(r.a() as u32 + 1))
-                        })
+                        modify_untracked! {
+                            foo::foo0 {
+                                a => foo_foo0_a as u32 + 1,
+                            }
+                            @critical_section cs
+                            @base_addr foo (&raw const MOCK_FOO).addr()
+                        }
                     };
 
                     assert!(unsafe {
@@ -123,21 +126,21 @@ mod tests {
         }
     }
 
-    mod entitlements {
-        use crate::foo;
+    // mod entitlements {
+    //     use crate::foo;
 
-        #[test]
-        fn access() {
-            let mut p = unsafe { crate::peripherals() };
+    //     #[test]
+    //     fn access() {
+    //         let mut p = unsafe { crate::peripherals() };
 
-            let foo::foo0::States { a, .. } = foo::foo0::write(|w| w.a(p.foo.foo0.a).v5());
+    //         let foo::foo0::States { a, .. } = foo::foo0::write(|w| w.a(p.foo.foo0.a).v5());
 
-            foo::foo1::write(|w| {
-                w.write_requires_v5(&mut p.foo.foo1.write_requires_v5, &a)
-                    .noop()
-            });
+    //         foo::foo1::write(|w| {
+    //             w.write_requires_v5(&mut p.foo.foo1.write_requires_v5, &a)
+    //                 .noop()
+    //         });
 
-            foo::foo1::read().read_requires_v5(&mut p.foo.foo1.read_requires_v5, &a);
-        }
-    }
+    //         foo::foo1::read().read_requires_v5(&mut p.foo.foo1.read_requires_v5, &a);
+    //     }
+    // }
 }

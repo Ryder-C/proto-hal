@@ -128,7 +128,7 @@ fn parse_fields<'args, 'hal>(
         if let Some(transition) = &field_args.transition {
             errors.push(syn::Error::new(
                 match &transition.state {
-                    StateArgs::Path(path) => path.span(),
+                    StateArgs::Expr(expr) => expr.span(),
                     StateArgs::Lit(lit_int) => lit_int.span(),
                 },
                 "no transition is accepted",
@@ -160,6 +160,50 @@ fn unique_register_ident(peripheral: &Peripheral, register: &Register) -> Ident 
     format_ident!("{}_{}", peripheral.module_name(), register.module_name(),)
 }
 
+fn addrs<'hal>(
+    path: &Path,
+    parsed: &Parsed<'hal>,
+    overridden_base_addrs: &HashMap<Ident, Expr>,
+) -> TokenStream {
+    let register_offset = parsed.register.offset as usize;
+
+    if let Some(base_addr) = overridden_base_addrs.get(&parsed.peripheral.module_name()) {
+        quote! { (#base_addr + #register_offset) }
+    } else {
+        quote! { #path::ADDR }
+    }
+}
+
+fn returns(path: &Path, ident: &Ident, field: &Field) -> Option<TokenStream> {
+    Some(match field.access.get_read()?.numericity {
+        Numericity::Numeric => quote! { u32 },
+        Numericity::Enumerated { .. } => quote! {
+            #path::#ident::read::Variant
+        },
+    })
+}
+
+fn read_values<'hal>(
+    path: &Path,
+    parsed: &Parsed<'hal>,
+    ident: &Ident,
+    field: &Field,
+) -> Option<TokenStream> {
+    let reg = unique_register_ident(parsed.peripheral, parsed.register);
+    let mask = u32::MAX >> (32 - field.width);
+
+    let value = quote! {
+        (#reg >> #path::#ident::OFFSET) & #mask
+    };
+
+    Some(match field.access.get_read()?.numericity {
+        Numericity::Numeric => value,
+        Numericity::Enumerated { .. } => quote! {
+            unsafe { #path::#ident::read::Variant::from_bits(#value) }
+        },
+    })
+}
+
 pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
     let args = match syn::parse2::<Args>(tokens) {
         Ok(args) => args,
@@ -171,6 +215,24 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
     let (parsed, e) = parse(&args, &model);
     errors.extend(e);
     errors.extend(validate(&parsed));
+
+    let mut overridden_base_addrs: HashMap<Ident, Expr> = HashMap::new();
+
+    for override_ in &args.overrides {
+        match override_ {
+            Override::BaseAddress(ident, expr) => {
+                overridden_base_addrs.insert(ident.clone(), expr.clone());
+            }
+            Override::CriticalSection(expr) => errors.push(syn::Error::new_spanned(
+                &expr,
+                "stand-alone read access is atomic and doesn't require a critical section",
+            )),
+            Override::Unknown(ident) => errors.push(syn::Error::new_spanned(
+                &ident,
+                format!("unexpected override \"{}\"", ident),
+            )),
+        };
+    }
 
     let suggestions = if errors.is_empty() {
         None
@@ -205,81 +267,35 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
         }
     };
 
-    let mut overridden_base_addrs: HashMap<Ident, Expr> = HashMap::new();
-
-    for (ident, expr) in args
-        .overrides
+    let (reg_idents, addrs, returns, read_values) = parsed
         .iter()
-        .filter_map(|override_| match override_ {
-            Override::BaseAddress(ident, expr) => Some((ident.clone(), expr)),
-        })
-    {
-        overridden_base_addrs.insert(ident, expr.clone());
-    }
-
-    let returns = parsed.iter().flat_map(|(path, Parsed { fields, .. })| {
-        fields
-            .iter()
-            .filter_map(|(ident, field)| {
-                Some(match field.access.get_read()?.numericity {
-                    Numericity::Numeric => quote! { u32 },
-                    Numericity::Enumerated { .. } => quote! {
-                        #path::#ident::read::Variant
-                    },
+        .map(|(path, parsed)| {
+            let (returns, read_values) = parsed
+                .fields
+                .iter()
+                .filter_map(|(ident, field)| {
+                    Some((
+                        returns(path, ident, field)?,
+                        read_values(path, parsed, ident, field)?,
+                    ))
                 })
-            })
-            .collect::<Vec<_>>()
-    });
+                .collect::<(Vec<_>, Vec<_>)>();
 
-    let reg_idents = parsed
-        .values()
-        .map(|parsed| unique_register_ident(parsed.peripheral, parsed.register))
-        .collect::<Vec<_>>();
-
-    let addrs = parsed.iter().map(|(path, parsed)| {
-        let register_offset = parsed.register.offset as usize;
-
-        if let Some(base_addr) = overridden_base_addrs.get(&parsed.peripheral.module_name()) {
-            quote! { (#base_addr + #register_offset) }
-        } else {
-            quote! { #path::ADDR }
-        }
-    });
-
-    let values = parsed.iter().map(|(path, parsed)| {
-        parsed
-            .fields
-            .iter()
-            .map(|(ident, field)| {
-                let reg = unique_register_ident(parsed.peripheral, parsed.register);
-
-                let mask = u32::MAX >> (32 - field.width);
-
-                let value = quote! {
-                    (#reg >> #path::#ident::OFFSET) & #mask
-                };
-
-                match field
-                    .access
-                    .get_read()
-                    .expect("field should be readable")
-                    .numericity
-                {
-                    Numericity::Numeric => value,
-                    Numericity::Enumerated { .. } => quote! {
-                        unsafe { #path::#ident::read::Variant::from_bits(#value) }
-                    },
-                }
-            })
-            .collect::<Vec<_>>()
-    });
+            (
+                unique_register_ident(parsed.peripheral, parsed.register),
+                addrs(path, parsed, &overridden_base_addrs),
+                returns,
+                read_values,
+            )
+        })
+        .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
 
     quote! {
         #suggestions
         #errors
 
         {
-            unsafe fn gate() -> (#(#returns),*) {
+            unsafe fn gate() -> (#(#(#returns),*)*) {
                 #(
                     let #reg_idents = unsafe {
                         ::core::ptr::read_volatile(#addrs as *const u32)
@@ -288,7 +304,7 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
 
                 (
                     #(#(
-                        #values
+                        #read_values
                     )*),*
                 )
             }
