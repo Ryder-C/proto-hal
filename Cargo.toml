@@ -1,4 +1,4 @@
 [workspace]
 members = ["proto-hal", "proto-hal-build", "ir", "tests/g4/out", "tests/abstract/out", "proto-hal-macros"]
-exclude = ["debug-bin", "interpreter", "tests/abstract/macros"]
+exclude = ["debug-bin", "tests/abstract/macros"]
 resolver = "2"
