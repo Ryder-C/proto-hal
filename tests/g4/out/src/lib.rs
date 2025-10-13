@@ -21,7 +21,6 @@ mod tests {
 
         static mut MOCK_CORDIC: [u32; 3] = [0x0000_0050, 0, 0];
 
-        #[unsafe(export_name = "__PROTO_HAL_ADDR_OF_CORDIC")]
         fn addr_of_cordic() -> usize {
             (&raw const MOCK_CORDIC).addr()
         }
@@ -46,19 +45,28 @@ mod tests {
 
                 assert!({
                     let (func, scale) = unsafe {
-                        read_untracked! { cordic::csr { func, scale } }
+                        read_untracked! {
+                            cordic::csr { func, scale }
+                            @base_addr cordic addr_of_cordic()
+                        }
                     };
 
                     func.is_sqrt() && scale.is_n0()
                 });
 
                 unsafe {
-                    write_from_reset_untracked! { cordic::csr }
+                    write_from_reset_untracked! {
+                        cordic::csr
+                        @base_addr cordic addr_of_cordic()
+                    }
                 };
 
                 assert!({
                     let (func, scale, precision) = unsafe {
-                        read_untracked! { cordic::csr { func, scale, precision } }
+                        read_untracked! {
+                            cordic::csr { func, scale, precision }
+                            @base_addr cordic addr_of_cordic()
+                        }
                     };
 
                     func.is_cos() && scale.is_n0() && precision.is_p20()
@@ -128,7 +136,6 @@ mod tests {
 
         static mut MOCK_CRC: [u32; 2] = [0, 0];
 
-        #[unsafe(export_name = "__PROTO_HAL_ADDR_OF_CRC")]
         fn addr_of_crc() -> usize {
             (&raw const MOCK_CRC).addr()
         }

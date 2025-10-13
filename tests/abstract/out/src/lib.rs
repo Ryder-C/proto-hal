@@ -39,6 +39,10 @@ mod tests {
 
             static mut MOCK_FOO: u32 = u32::MAX;
 
+            fn addr_of_foo() -> usize {
+                (&raw const MOCK_FOO).addr()
+            }
+
             #[test]
             fn unsafe_read() {
                 critical_section::with(|_| {
@@ -50,7 +54,7 @@ mod tests {
                                 foo::foo0 {
                                     a,
                                 }
-                                @base_addr foo (&raw const MOCK_FOO).addr()
+                                @base_addr foo addr_of_foo()
                             }
                         }
                         .is_v1()
@@ -66,7 +70,7 @@ mod tests {
                             foo::foo0 {
                                 a => V2,
                             }
-                            @base_addr foo (&raw const MOCK_FOO).addr()
+                            @base_addr foo addr_of_foo()
                         }
                     };
                     assert!(unsafe {
@@ -74,7 +78,7 @@ mod tests {
                             foo::foo0 {
                                 a,
                             }
-                            @base_addr foo (&raw const MOCK_FOO).addr()
+                            @base_addr foo addr_of_foo()
                         }
                         .is_v2()
                     });
@@ -89,7 +93,7 @@ mod tests {
                             foo::foo0 {
                                 a => V3,
                             }
-                            @base_addr foo (&raw const MOCK_FOO).addr()
+                            @base_addr foo addr_of_foo()
                         }
                     }
 
@@ -99,7 +103,7 @@ mod tests {
                                 a => foo_foo0_a as u32 + 1,
                             }
                             @critical_section cs
-                            @base_addr foo (&raw const MOCK_FOO).addr()
+                            @base_addr foo addr_of_foo()
                         }
                     };
 
@@ -108,7 +112,7 @@ mod tests {
                             foo::foo0 {
                                 a,
                             }
-                            @base_addr foo (&raw const MOCK_FOO).addr()
+                            @base_addr foo addr_of_foo()
                         }
                         .is_v4()
                     });
