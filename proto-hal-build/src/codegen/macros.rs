@@ -16,6 +16,7 @@ use syn::{
 
 pub use gates::{
     modify_untracked::modify_untracked,
+    read::read,
     read_untracked::read_untracked,
     write::write,
     write_untracked::{write_from_reset_untracked, write_from_zero_untracked},
@@ -101,7 +102,7 @@ impl Parse for RegisterArgs {
 #[derive(Debug)]
 struct FieldArgs {
     ident: Ident,
-    binding: Option<Expr>,
+    binding: Option<BindingArgs>,
     transition: Option<TransitionArgs>,
 }
 
@@ -129,6 +130,8 @@ impl Parse for FieldArgs {
         })
     }
 }
+
+pub type BindingArgs = Expr;
 
 #[derive(Debug)]
 struct TransitionArgs {
@@ -207,12 +210,14 @@ fn get_field<'a>(ident: &Ident, register: &'a Register) -> syn::Result<&'a Field
     ))
 }
 
-pub fn reexports() -> TokenStream {
+pub fn reexports(args: TokenStream) -> TokenStream {
     let idents = vec![
-        "write",
-        "read_untracked",
-        "write_from_zero_untracked",
         "modify_untracked",
+        "read",
+        "read_untracked",
+        "write",
+        "write_from_reset_untracked",
+        "write_from_zero_untracked",
     ]
     .into_iter()
     .map(|name| Ident::new(name, Span::call_site()));
@@ -221,7 +226,7 @@ pub fn reexports() -> TokenStream {
         #(
             #[proc_macro]
             pub fn #idents(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
-                ::proto_hal_build::codegen::macros::#idents(&::model::generate(), tokens.into()).into()
+                ::proto_hal_build::codegen::macros::#idents(&::model::generate(#args), tokens.into()).into()
             }
         )*
 

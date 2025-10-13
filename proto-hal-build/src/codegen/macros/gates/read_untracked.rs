@@ -295,7 +295,7 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
         #errors
 
         {
-            unsafe fn gate() -> (#(#(#returns),*)*) {
+            unsafe fn gate() -> (#(#(#returns),*),*) {
                 #(
                     let #reg_idents = unsafe {
                         ::core::ptr::read_volatile(#addrs as *const u32)
@@ -305,7 +305,7 @@ pub fn read_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
                 (
                     #(#(
                         #read_values
-                    )*),*
+                    ),*),*
                 )
             }
 

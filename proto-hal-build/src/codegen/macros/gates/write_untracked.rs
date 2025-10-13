@@ -7,7 +7,7 @@ use ir::structures::{
     peripheral::Peripheral,
     register::Register,
 };
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
 use syn::{Expr, Ident, Path, spanned::Spanned};
 
@@ -64,13 +64,6 @@ fn parse_registers<'args, 'hal>(
     let mut registers = IndexMap::new();
     let mut errors = Vec::new();
 
-    if args.registers.is_empty() {
-        errors.push(syn::Error::new(
-            Span::call_site(),
-            "at least one register must be specified",
-        ));
-    }
-
     for register_args in &args.registers {
         let mut parse_register = || {
             let (peripheral, register) = get_register(&register_args.path, model)?;
@@ -106,13 +99,6 @@ fn parse_fields<'args, 'hal>(
 ) {
     let mut items = IndexMap::new();
     let mut errors = Vec::new();
-
-    if register_args.fields.is_empty() {
-        errors.push(syn::Error::new(
-            Span::call_site(),
-            "at least one field must be specified",
-        ));
-    }
 
     for field_args in &register_args.fields {
         let mut parse_field = || {
@@ -193,7 +179,7 @@ fn initials<'args, 'hal>(scheme: &Scheme, parsed: &Parsed<'args, 'hal>) -> u32 {
     match scheme {
         Scheme::FromZero => 0,
         Scheme::FromReset => {
-            let mask = parsed.register.fields.values().fold(0, |acc, field| {
+            let mask = parsed.items.values().fold(0, |acc, (field, ..)| {
                 acc | ((u32::MAX >> (32 - field.width)) << field.offset)
             });
 

@@ -1,6 +1,8 @@
 #![no_std]
 
-include!(concat!(env!("OUT_DIR"), "/hal.rs"));
+use macros::scaffolding;
+
+scaffolding!();
 
 #[cfg(test)]
 mod tests {
@@ -8,13 +10,12 @@ mod tests {
 
     static mut MOCK_RCC: [u32; 40] = [0; 40];
 
-    #[unsafe(export_name = "__PROTO_HAL_ADDR_OF_RCC")]
     fn addr_of_rcc() -> usize {
         (&raw const MOCK_RCC).addr()
     }
 
     mod cordic {
-        use proto_hal::stasis::Freeze;
+        use macros::{read, read_untracked, write_from_reset_untracked};
 
         use crate::{cordic, rcc};
 
@@ -44,17 +45,23 @@ mod tests {
                 });
 
                 assert!({
-                    let csr = unsafe { cordic::csr::read_untracked() };
+                    let (func, scale) = unsafe {
+                        read_untracked! { cordic::csr { func, scale } }
+                    };
 
-                    csr.func().is_sqrt() && csr.scale().is_n0()
+                    func.is_sqrt() && scale.is_n0()
                 });
 
-                unsafe { cordic::csr::write_from_reset_untracked(|w| w) };
+                unsafe {
+                    write_from_reset_untracked! { cordic::csr }
+                };
 
                 assert!({
-                    let csr = unsafe { cordic::csr::read_untracked() };
+                    let (func, scale, precision) = unsafe {
+                        read_untracked! { cordic::csr { func, scale, precision } }
+                    };
 
-                    csr.func().is_cos() && csr.scale().is_n0() && csr.precision().is_p20()
+                    func.is_cos() && scale.is_n0() && precision.is_p20()
                 });
             });
         }
@@ -103,8 +110,15 @@ mod tests {
                     cordic.rdata.res1.unmask(res1_nres_ent, res1_ressize_ent),
                 );
 
-                assert_eq!(cordic::rdata::read().res0(&mut res0), 0xbeef);
-                assert_eq!(cordic::rdata::read().res1(&mut res1), 0xdead);
+                let (r0, r1) = read! {
+                    cordic::rdata {
+                        res0: &res0,
+                        res1: &res1,
+                    }
+                };
+
+                assert_eq!(r0, 0xbeef);
+                assert_eq!(r1, 0xdead);
             });
         }
     }
