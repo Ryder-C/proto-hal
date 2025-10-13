@@ -28,6 +28,16 @@ impl Numericity {
             ),
         }
     }
+
+    /// View an inert variant if one exists. If there is more than one, the variant returned
+    /// is not guaranteed to be any particular one, nor consistent. If the numericity is
+    /// [`Numeric`](Numericity::Numeric), [`None`] is returned.
+    pub fn some_inert(&self) -> Option<&Variant> {
+        let Numericity::Enumerated { variants } = self else {
+            None?
+        };
+        variants.values().find(|variant| variant.inert)
+    }
 }
 
 #[derive(Debug, Clone)]

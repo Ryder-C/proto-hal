@@ -1,8 +1,6 @@
 pub mod modify;
 pub mod modify_in_place;
-pub mod modify_in_place_with_cs;
 pub mod modify_untracked;
-pub mod modify_with_cs;
 pub mod read;
 pub mod read_untracked;
 pub mod write;

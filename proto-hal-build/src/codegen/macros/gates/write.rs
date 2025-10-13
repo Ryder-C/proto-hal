@@ -1,73 +1,197 @@
-//! ```ignore
-//! use g4::cordic::{self, wdata};
-//!
-//! write! {
-//!     x::y::z::cordic::csr {
-//!         func: my_func => Sqrt,
-//!         scale: &some_scale,
-//!         precision: the_precision => P60,
-//!         argsize: &my_arg_size,
-//!     }
-//!     wdata {
-//!         arg: &mut an_arg => 0xdead_beef,
-//!     }
-//! }
-//! ```
+use std::collections::HashMap;
 
-use ir::structures::{hal::Hal, register::Register};
+use indexmap::IndexMap;
+use ir::structures::{field::Field, hal::Hal, peripheral::Peripheral, register::Register};
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote, quote_spanned};
+use syn::{Expr, Ident, Path, spanned::Spanned};
 
-use crate::codegen::macros::{Args, FieldArgs, RegisterArgs, get_register};
+use crate::codegen::macros::{
+    Args, BindingArgs, Override, RegisterArgs, StateArgs, get_field, get_register,
+};
 
-fn validate(args: &Args, model: &Hal) -> Result<(), Vec<syn::Error>> {
-    let mut diagnostics = Vec::new();
+/// A parsed unit of the provided tokens and corresponding model nodes which
+/// represents a single register.
+struct Parsed<'args, 'hal> {
+    peripheral: &'hal Peripheral,
+    register: &'hal Register,
+    items: IndexMap<Ident, (&'hal Field, &'args BindingArgs, Option<&'args StateArgs>)>,
+}
 
-    for register in &args.registers {
-        if let Err(e) = validate_register(&register, model) {
-            diagnostics.extend(e);
+fn parse<'args, 'hal>(
+    args: &'args Args,
+    model: &'hal Hal,
+) -> (IndexMap<Path, Parsed<'args, 'hal>>, Vec<syn::Error>) {
+    let mut out = IndexMap::new();
+    let mut errors = Vec::new();
+
+    let (registers, e) = parse_registers(args, model);
+    errors.extend(e);
+
+    for (register_ident, (register_args, peripheral, register)) in registers {
+        let (items, e) = parse_fields(register_args, register);
+        errors.extend(e);
+
+        out.insert(
+            register_ident.clone(),
+            Parsed {
+                peripheral,
+                register,
+                items,
+            },
+        );
+    }
+
+    (out, errors)
+}
+
+/// Lookup peripherals and registers from the model given provided register paths.
+fn parse_registers<'args, 'hal>(
+    args: &'args Args,
+    model: &'hal Hal,
+) -> (
+    IndexMap<Path, (&'args RegisterArgs, &'hal Peripheral, &'hal Register)>,
+    Vec<syn::Error>,
+) {
+    let mut registers = IndexMap::new();
+    let mut errors = Vec::new();
+
+    for register_args in &args.registers {
+        let mut parse_register = || {
+            let (peripheral, register) = get_register(&register_args.path, model)?;
+
+            if let Some(..) = registers.insert(
+                register_args.path.clone(),
+                (register_args, peripheral, register),
+            ) {
+                Err(syn::Error::new_spanned(
+                    &register_args.path,
+                    "register already specified",
+                ))?
+            }
+
+            Ok(())
+        };
+
+        if let Err(e) = parse_register() {
+            errors.push(e);
         }
     }
 
-    if diagnostics.is_empty() {
-        Ok(())
-    } else {
-        Err(diagnostics)
-    }
+    (registers, errors)
 }
 
-fn validate_register(args: &RegisterArgs, model: &Hal) -> Result<(), Vec<syn::Error>> {
-    let mut diagnostics = Vec::new();
+/// Lookup fields from a register given provided field idents and transitions.
+fn parse_fields<'args, 'hal>(
+    register_args: &'args RegisterArgs,
+    register: &'hal Register,
+) -> (
+    IndexMap<Ident, (&'hal Field, &'args BindingArgs, Option<&'args StateArgs>)>,
+    Vec<syn::Error>,
+) {
+    let mut items = IndexMap::new();
+    let mut errors = Vec::new();
 
-    let (.., register) = get_register(&args.path, model).map_err(|e| vec![e])?;
+    for field_args in &register_args.fields {
+        let mut parse_field = || {
+            let field = get_field(&field_args.ident, register)?;
 
-    for field in &args.fields {
-        if let Err(e) = validate_field(&field, register) {
-            diagnostics.extend(e);
+            let binding = field_args.binding.as_ref().ok_or(syn::Error::new_spanned(
+                &field_args.ident,
+                "expected binding",
+            ))?;
+
+            let transition = field_args
+                .transition
+                .as_ref()
+                .map(|transition| &transition.state);
+
+            if let Some(..) = items.insert(field_args.ident.clone(), (field, binding, transition)) {
+                Err(syn::Error::new_spanned(
+                    &field_args.ident,
+                    "field already specified",
+                ))?
+            }
+
+            Ok(())
+        };
+
+        if let Err(e) = parse_field() {
+            errors.push(e);
         }
     }
 
-    if diagnostics.is_empty() {
-        Ok(())
+    (items, errors)
+}
+
+fn validate<'args, 'hal>(parsed: &IndexMap<Path, Parsed<'args, 'hal>>) -> Vec<syn::Error> {
+    parsed
+        .values()
+        .flat_map(|Parsed { items, .. }| items.iter())
+        .filter_map(|(ident, (field, ..))| {
+            if field.access.get_write().is_none() {
+                Some(syn::Error::new_spanned(
+                    ident,
+                    format!("field \"{ident}\" is not writable"),
+                ))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+}
+
+fn unique_field_ident(peripheral: &Peripheral, register: &Register, field: &Ident) -> Ident {
+    format_ident!(
+        "{}_{}_{}",
+        peripheral.module_name(),
+        register.module_name(),
+        field
+    )
+}
+
+fn addrs<'args, 'hal>(
+    path: &Path,
+    parsed: &Parsed<'args, 'hal>,
+    overridden_base_addrs: &HashMap<Ident, Expr>,
+) -> TokenStream {
+    let register_offset = parsed.register.offset as usize;
+
+    if let Some(base_addr) = overridden_base_addrs.get(&parsed.peripheral.module_name()) {
+        quote! { (#base_addr + #register_offset) }
     } else {
-        Err(diagnostics)
+        quote! { #path::ADDR }
     }
 }
 
-fn validate_field(args: &FieldArgs, register: &Register) -> Result<(), Vec<syn::Error>> {
-    if !register.fields.contains_key(&args.ident) {
-        Err(vec![syn::Error::new_spanned(
-            &args.ident,
-            format!(
-                "field \"{}\" does not exist in register \"{}\"",
-                args.ident, register.ident
-            ),
-        )])?
+fn initials<'args, 'hal>(parsed: &Parsed<'args, 'hal>) -> u32 {
+    // start with inert field values (or zero)
+    let inert = parsed
+        .register
+        .fields
+        .values()
+        .filter_map(|field| Some((field, field.access.get_write()?.numericity.some_inert()?)))
+        .fold(0, |acc, (field, variant)| {
+            acc | (variant.bits << field.offset)
+        });
 
-        // TODO: show some registers the field *was* found in?
-    }
+    // mask out values to be filled in by user
+    let mask = parsed.items.values().fold(0, |acc, (field, ..)| {
+        acc | ((u32::MAX >> (32 - field.width)) << field.offset)
+    });
 
-    Ok(())
+    inert & !mask
+}
+
+fn write_values(path: &Path, transition: &StateArgs, ident: &Ident) -> Option<TokenStream> {
+    Some(match transition {
+        StateArgs::Expr(expr) => {
+            quote! {{
+                #path::#ident::write::Variant::#expr as u32
+            }}
+        }
+        StateArgs::Lit(lit_int) => quote! { #lit_int },
+    })
 }
 
 pub fn write(model: &Hal, tokens: TokenStream) -> TokenStream {
@@ -76,142 +200,109 @@ pub fn write(model: &Hal, tokens: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error(),
     };
 
-    let errors = if let Err(e) = validate(&args, &model) {
-        let errors = e.into_iter().map(|e| e.to_compile_error());
+    let mut errors = Vec::new();
 
-        Some(quote! {
+    let (parsed, e) = parse(&args, &model);
+    errors.extend(e);
+    errors.extend(validate(&parsed));
+
+    let mut overridden_base_addrs: HashMap<Ident, Expr> = HashMap::new();
+
+    for override_ in &args.overrides {
+        match override_ {
+            Override::BaseAddress(ident, expr) => {
+                overridden_base_addrs.insert(ident.clone(), expr.clone());
+            }
+            Override::CriticalSection(expr) => errors.push(syn::Error::new_spanned(
+                &expr,
+                "stand-alone read access is atomic and doesn't require a critical section",
+            )),
+            Override::Unknown(ident) => errors.push(syn::Error::new_spanned(
+                &ident,
+                format!("unexpected override \"{}\"", ident),
+            )),
+        };
+    }
+
+    let suggestions = if errors.is_empty() {
+        None
+    } else {
+        let imports = args
+            .registers
+            .iter()
+            .map(|register| {
+                let path = &register.path;
+                let fields = register.fields.iter().map(|field| &field.ident);
+
+                let span = path.span();
+
+                quote_spanned! { span =>
+                    #[allow(unused_imports)]
+                    use #path::{#(
+                        #fields as _,
+                    )*};
+                }
+            })
+            .collect::<TokenStream>();
+        Some(imports)
+    };
+
+    let errors = {
+        let errors = errors.into_iter().map(|e| e.to_compile_error());
+
+        quote! {
             #(
                 #errors
             )*
-        })
-    } else {
-        None
+        }
     };
 
-    let field_paths = args.registers.iter().flat_map(|register| {
-        let path = &register.path;
-
-        if register.fields.is_empty() {
-            vec![quote! {
-                use #path as _;
-            }]
-        } else {
-            register
-                .fields
+    let (addrs, initials, parameter_idents, parameter_tys, write_values, offsets) = parsed
+        .iter()
+        .map(|(path, parsed)| {
+            let (parameter_idents, parameter_tys, write_values, offsets) = parsed
+                .items
                 .iter()
-                .map(|field| {
-                    let ident = &field.ident;
-
-                    quote! {
-                        use #path::#ident as _;
-                    }
+                .filter_map(|(ident, (field, binding, transition))| {
+                    Some((
+                        unique_field_ident(parsed.peripheral, parsed.register, ident),
+                        quote! { u32 },
+                        write_values(path, transition, ident)?,
+                        quote! { #path::#ident::OFFSET },
+                    ))
                 })
-                .collect()
-        }
-    });
+                .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
+
+            (
+                addrs(path, parsed, &overridden_base_addrs),
+                initials(parsed),
+                parameter_idents,
+                parameter_tys,
+                write_values,
+                offsets,
+            )
+        })
+        .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
 
     quote! {
+        #suggestions
         #errors
 
         {
-            fn gate() {
+            unsafe fn gate(#(#(#parameter_idents: #parameter_tys,)*)*) {
                 #(
-                    #field_paths
+                    unsafe {
+                        ::core::ptr::write_volatile(
+                            #addrs as *mut u32,
+                            #initials #(
+                                | (#parameter_idents << #offsets)
+                            )*
+                        )
+                    };
                 )*
-
-                // unsafe { ::core::ptr::write_volatile(#addr as *mut u32, #reg) };
             }
-        }
-    }
-}
 
-#[cfg(test)]
-mod tests {
-    mod parsing {
-        use quote::quote;
-        use syn::Expr;
-
-        use crate::codegen::macros::{Args, FieldArgs, RegisterArgs, StateArgs};
-
-        fn get_register(write_args: &Args, ident: impl AsRef<str>) -> &RegisterArgs {
-            let ident = ident.as_ref();
-
-            write_args
-                .registers
-                .iter()
-                .find(|register| {
-                    register
-                        .path
-                        .segments
-                        .last()
-                        .expect("register paths should be non-empty")
-                        .ident
-                        == ident
-                })
-                .expect(&format!("expected register with ident \"{ident}\""))
-        }
-
-        fn get_field(register_args: &RegisterArgs, ident: impl AsRef<str>) -> &FieldArgs {
-            let ident = ident.as_ref();
-
-            register_args
-                .fields
-                .iter()
-                .find(|field| field.ident == ident)
-                .expect(&format!("expected field with ident \"{ident}\""))
-        }
-
-        #[test]
-        fn foo() {
-            let tokens = quote! {
-                foo::bar {
-                    baz: &my_baz,
-                }
-            };
-
-            let parsed = syn::parse2::<Args>(tokens).expect("parsing should succeed");
-            let baz = get_field(get_register(&parsed, "bar"), "baz");
-
-            assert!(
-                matches!(baz.binding, Some(Expr::Reference(..))),
-                "expected binding to be shared reference"
-            );
-
-            assert!(
-                baz.transition.is_none(),
-                "expected transition to not be present"
-            );
-        }
-
-        #[test]
-        fn basic() {
-            let tokens = quote! {
-                cordic::csr {
-                    func: my_func => Sqrt,
-                    precision: p => 0x10,
-                    scale: &some_scale,
-                }
-                cordic::wdata {
-                    arg: &mut my_arg => 0
-                }
-            };
-
-            let parsed = syn::parse2::<Args>(tokens).expect("parsing should succeed");
-            let func = get_field(get_register(&parsed, "csr"), "func");
-
-            assert!(
-                matches!(func.binding, Some(Expr::Path(..))),
-                "expected func binding to have no reference"
-            );
-
-            let StateArgs::Expr(..) = &func
-                .transition
-                .as_ref()
-                .expect("expected func transition to be present")
-                .state
-            else {
-                panic!("expected func target state to be a path")
-            };
+            gate(#(#(#write_values,)*)*)
         }
     }
 }

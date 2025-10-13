@@ -447,8 +447,6 @@ pub fn modify_untracked(model: &Hal, tokens: TokenStream) -> TokenStream {
                 #write_values,
             )*
         )*);
-
-        (#(#(#read_field_idents),*),*)
     };
 
     let body = if cs.is_none() {
